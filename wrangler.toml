@@ -12,7 +12,7 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "HR_DB"
 database_name = "hr-system"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "243cda59-fc89-41d7-ba57-73700dcd1fe3"
 migrations_dir = "migrations"
 
 # Non-secret vars (recruit / Google Sheets). Secrets (SA email/key, SESSION_SECRET)
