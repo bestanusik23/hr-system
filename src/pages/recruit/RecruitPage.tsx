@@ -130,7 +130,9 @@ export default function RecruitPage() {
           <div style={{ fontSize: 13 }}>{error}</div>
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>ไม่มีข้อมูล</div>
+        <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>
+          {user?.role === "head" ? "ยังไม่มีผู้มาสมัครงานในแผนกของคุณ" : "ไม่มีข้อมูล"}
+        </div>
       ) : (
         <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 4px rgba(0,0,0,.07)", overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>

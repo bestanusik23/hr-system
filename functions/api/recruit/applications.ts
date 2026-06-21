@@ -62,21 +62,26 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       return obj;
     });
 
-    // head: filter by department column in sheet (matches scope_department_id name)
+    // head: always scope to their department — return empty if not set or no match
     let scopedDepartment: string | null = null;
-    if (user.role === "head" && user.scope_department_id) {
+    if (user.role === "head") {
+      if (!user.scope_department_id) {
+        // head without assigned department sees nothing
+        return Response.json({ ok: true, applications: [], headers, scopedDepartment: null, scopedDivision: null });
+      }
       const dept = await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?")
         .bind(user.scope_department_id).first<{ name: string }>();
       scopedDepartment = dept?.name ?? null;
 
-      if (scopedDepartment) {
-        const deptColIdx = headers.findIndex(h =>
-          h.includes("แผนก") || h.toLowerCase().includes("department")
-        );
-        if (deptColIdx >= 0) {
-          const deptKey = headers[deptColIdx];
-          applications = applications.filter(a => a[deptKey] === scopedDepartment);
-        }
+      const deptColIdx = headers.findIndex(h =>
+        h.includes("แผนก") || h.toLowerCase().includes("department")
+      );
+      if (deptColIdx >= 0 && scopedDepartment) {
+        const deptKey = headers[deptColIdx];
+        applications = applications.filter(a => a[deptKey] === scopedDepartment);
+      } else {
+        // column not found in sheet → return empty
+        applications = [];
       }
     }
 
