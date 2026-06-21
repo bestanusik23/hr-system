@@ -12,19 +12,12 @@ const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
   "ไม่ผ่าน":          { bg: "#fee2e2", text: "#dc2626" },
 };
 
-// Columns to show in compact table (partial match against header)
-const TABLE_COLS = [
-  "ชื่อ-นามสกุล",
-  "ตำแหน่งที่สมัคร",
-  "วันที่สมัคร",
-  "เงินเดือนที่คาดหวัง",
-  "ทราบข่าวจาก",
-  "ระดับการศึกษา",
-  "ระยะเวลา",
-];
+// Internal columns that should never appear in the table
+const HIDDEN_COLS = new Set(["_row"]);
 
-function matchCol(header: string, keyword: string) {
-  return header.toLowerCase().includes(keyword.toLowerCase());
+// Columns that contain status/result — detected by keyword
+function isStatusCol(h: string) {
+  return h.includes("ผลการพิจารณา") || h.toLowerCase().includes("status") || h.toLowerCase().includes("result");
 }
 
 export default function RecruitPage() {
@@ -47,11 +40,7 @@ export default function RecruitPage() {
   const DEPUTY_STATUSES = Object.keys(STATUS_COLOR); // includes รับเข้างาน + ไม่ผ่าน
   const allowedStatuses = isDeputy ? DEPUTY_STATUSES : HR_STATUSES;
 
-  // Find column index by keyword
-  function colIdx(keyword: string) {
-    return headers.findIndex(h => matchCol(h, keyword));
-  }
-  const statusColIdx = colIdx("ผลการพิจารณา");
+  const statusColIdx = headers.findIndex(h => isStatusCol(h));
   const statusKey = statusColIdx >= 0 ? headers[statusColIdx] : "";
 
   async function load() {
@@ -80,11 +69,8 @@ export default function RecruitPage() {
     setUpdating(null);
   }
 
-  // Determine visible table columns
-  const visibleCols = TABLE_COLS.map(kw => {
-    const idx = headers.findIndex(h => matchCol(h, kw));
-    return idx >= 0 ? headers[idx] : null;
-  }).filter(Boolean) as string[];
+  // Show all sheet columns except internal fields and status column (shown separately)
+  const visibleCols = headers.filter(h => !HIDDEN_COLS.has(h) && h !== statusKey && h.trim() !== "");
 
   const allStatuses = statusKey
     ? [...new Set(applications.map(a => a[statusKey] ?? "").filter(Boolean))]
@@ -191,9 +177,8 @@ export default function RecruitPage() {
             <div style={{ padding: "22px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 800 }}>
-                  {detail[headers.find(h => matchCol(h, "ชื่อ-นามสกุล")) ?? ""] ?? detail[headers[0]] ?? "—"}
-                  {headers.find(h => matchCol(h, "ตำแหน่งที่สมัคร")) &&
-                    <span style={{ fontSize: 14, fontWeight: 400, color: "#64748b" }}> — {detail[headers.find(h => matchCol(h, "ตำแหน่งที่สมัคร"))!]}</span>}
+                  {detail[visibleCols[0] ?? ""] || detail[headers[0]] || "—"}
+                  {visibleCols[1] && <span style={{ fontSize: 14, fontWeight: 400, color: "#64748b" }}> — {detail[visibleCols[1]]}</span>}
                 </div>
                 {statusKey && <div style={{ marginTop: 8 }}><StatusBadge val={detail[statusKey] ?? ""} /></div>}
               </div>
@@ -203,7 +188,7 @@ export default function RecruitPage() {
             {/* Fields */}
             <div style={{ padding: "20px 28px" }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
-                {headers.filter(h => h !== statusKey).map(h => detail[h] ? (
+                {visibleCols.map(h => detail[h] ? (
                   <div key={h}>
                     <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>{h}</div>
                     <div style={{ fontSize: 13, color: "#1e293b" }}>{detail[h]}</div>
