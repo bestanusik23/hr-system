@@ -40,7 +40,7 @@ async function getGoogleAccessToken(env: Env): Promise<string> {
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "admin", "deputy", "deputyHR"].includes(user.role)) {
+  if (!["hr", "admin", "deputy", "deputyHR", "head"].includes(user.role)) {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
