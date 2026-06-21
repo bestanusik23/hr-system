@@ -1,0 +1,28 @@
+{
+  "name": "hr-system",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p functions/tsconfig.json --noEmit",
+    "db:apply:local": "wrangler d1 migrations apply HR_DB --local",
+    "db:apply:remote": "wrangler d1 migrations apply HR_DB --remote"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-router-dom": "6.28.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "4.20241127.0",
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.4",
+    "typescript": "5.6.3",
+    "vite": "5.4.11",
+    "wrangler": "3.90.0"
+  }
+}

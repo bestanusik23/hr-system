@@ -1,0 +1,8 @@
+# Copy to .dev.vars (gitignored) for local wrangler, or set as Cloudflare secrets.
+# Real secrets must NEVER be committed.
+
+SESSION_SECRET="change-me-to-a-long-random-string"
+
+# Google Sheets service account (recruit system)
+GOOGLE_SA_EMAIL="xxx@yyy.iam.gserviceaccount.com"
+GOOGLE_SA_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"

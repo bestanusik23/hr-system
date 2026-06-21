@@ -1,0 +1,27 @@
+:root {
+  --brand: #0038c6;
+  --brand-dark: #001d66;
+  --accent: #f2a33c;
+  font-family: "IBM Plex Sans Thai", -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  color: #0f172a;
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes drift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(30px, 20px); }
+}
+@keyframes floatUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}

@@ -1,0 +1,22 @@
+# Cloudflare Pages + Functions + D1 (HR system)
+# NOTE: This project builds in Cloudflare's cloud (this machine blocks the native
+# toolchain via Smart App Control). D1 bindings for the deployed site are also set
+# in the Pages dashboard; this file is used by wrangler in CI / on an unrestricted machine.
+
+name = "hr-system"
+pages_build_output_dir = "dist"
+compatibility_date = "2024-11-01"
+
+# D1 database — NEW instance, separate from CRR Asset.
+# Fill database_id after running:  wrangler d1 create hr-system
+[[d1_databases]]
+binding = "HR_DB"
+database_name = "hr-system"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# Non-secret vars (recruit / Google Sheets). Secrets (SA email/key, SESSION_SECRET)
+# are set via `wrangler secret put` or the dashboard — never committed here.
+[vars]
+SHEET_APPLICATIONS = "16fm5iBMg0pwTs23MUDhlibyQXhcZ42Uhit-ALVFNzoc"
+SHEET_MANPOWER = "1B-xB-vr8lDsi8F60vbw23q0YkcHWXRPjEWwZUb7kgLA"
