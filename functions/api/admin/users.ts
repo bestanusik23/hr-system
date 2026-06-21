@@ -8,9 +8,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const rows = await ctx.env.HR_DB.prepare(
-    `SELECT u.id, u.username, u.full_name, u.role, u.scope_division_id, u.is_active, u.created_at,
-            d.name AS division_name
-     FROM users u LEFT JOIN divisions d ON d.id = u.scope_division_id
+    `SELECT u.id, u.username, u.full_name, u.role, u.scope_division_id, u.scope_department_id, u.is_active, u.created_at,
+            dv.name AS division_name, dp.name AS department_name
+     FROM users u
+     LEFT JOIN divisions   dv ON dv.id = u.scope_division_id
+     LEFT JOIN departments dp ON dp.id = u.scope_department_id
      ORDER BY u.id`
   ).all();
   return Response.json({ ok: true, users: rows.results });
@@ -23,7 +25,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as Record<string, unknown>;
-  const { username, password, full_name, role, scope_division_id } = body;
+  const { username, password, full_name, role, scope_division_id, scope_department_id } = body;
 
   if (!username || !password || !full_name || !role) {
     return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบ" }, { status: 400 });
@@ -34,8 +36,8 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const hash = await hashPassword(password as string);
   const result = await ctx.env.HR_DB.prepare(
-    "INSERT INTO users (username, password_hash, full_name, role, scope_division_id, is_active) VALUES (?,?,?,?,?,1)"
-  ).bind(username, hash, full_name, role, scope_division_id ?? null).run();
+    "INSERT INTO users (username, password_hash, full_name, role, scope_division_id, scope_department_id, is_active) VALUES (?,?,?,?,?,?,1)"
+  ).bind(username, hash, full_name, role, scope_division_id ?? null, scope_department_id ?? null).run();
 
   await ctx.env.HR_DB.prepare(
     "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'admin','create_user','user',?)"

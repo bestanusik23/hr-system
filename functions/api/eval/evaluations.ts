@@ -1,8 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
-const SCOPED_ROLES = ["head", "deputy", "deputyHR"];
-
 // GET /api/eval/evaluations
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
@@ -26,8 +24,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (status) { sql += " AND ev.status = ?"; params.push(status); }
   if (empId)  { sql += " AND ev.employee_id = ?"; params.push(Number(empId)); }
 
-  // Scope by division for head/deputy/deputyHR
-  if (SCOPED_ROLES.includes(user.role) && user.scope_division_id) {
+  if (user.role === "head" && user.scope_department_id) {
+    sql += " AND e.department_id = ?"; params.push(user.scope_department_id);
+  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   }
 
@@ -47,10 +46,12 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const { employee_id, round } = body;
   if (!employee_id || !round) return Response.json({ ok: false, error: "Missing fields" }, { status: 400 });
 
-  // head: can only create eval for employees in their division
-  if (user.role === "head" && user.scope_division_id) {
-    const emp = await ctx.env.HR_DB.prepare("SELECT division_id FROM employees WHERE id = ?").bind(employee_id).first<{ division_id: number }>();
-    if (!emp || emp.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "ไม่มีสิทธิ์สร้างประเมินพนักงานฝ่ายอื่น" }, { status: 403 });
+  // head: can only create eval for employees in their department
+  if (user.role === "head" && user.scope_department_id) {
+    const emp = await ctx.env.HR_DB.prepare("SELECT department_id FROM employees WHERE id = ?").bind(employee_id).first<{ department_id: number }>();
+    if (!emp || emp.department_id !== user.scope_department_id) {
+      return Response.json({ ok: false, error: "ไม่มีสิทธิ์สร้างประเมินพนักงานแผนกอื่น" }, { status: 403 });
+    }
   }
 
   const existing = await ctx.env.HR_DB.prepare(

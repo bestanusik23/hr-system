@@ -4,7 +4,8 @@ import UserForm from "./UserForm";
 
 interface UserRow {
   id: number; username: string; full_name: string; role: string;
-  scope_division_id: number | null; division_name: string | null;
+  scope_division_id: number | null; scope_department_id: number | null;
+  division_name: string | null; department_name: string | null;
   is_active: number; created_at: string;
 }
 
@@ -91,7 +92,11 @@ export default function AdminPage() {
                       {ROLE_LABEL[u.role] ?? u.role}
                     </span>
                   </td>
-                  <td style={{ padding: "11px 16px", color: "#64748b" }}>{u.division_name ?? "—"}</td>
+                  <td style={{ padding: "11px 16px", color: "#64748b" }}>
+                    {u.role === "head"
+                      ? (u.department_name ?? "—")
+                      : (u.division_name ?? "—")}
+                  </td>
                   <td style={{ padding: "11px 16px" }}>
                     <span style={{ background: u.is_active ? "#dcfce7" : "#f1f5f9", color: u.is_active ? "#16a34a" : "#94a3b8", borderRadius: 7, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>
                       {u.is_active ? "ใช้งาน" : "ปิดใช้งาน"}

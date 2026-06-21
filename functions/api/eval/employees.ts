@@ -1,9 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
-// Roles that are scoped to their own division when scope_division_id is set
-const SCOPED_ROLES = ["head", "deputy", "deputyHR"];
-
 // GET /api/eval/employees
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
@@ -25,8 +22,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   if (status) { sql += " AND e.emp_status = ?"; params.push(status); }
 
-  // Scope by division for head/deputy/deputyHR if they have a division assigned
-  if (SCOPED_ROLES.includes(user.role) && user.scope_division_id) {
+  if (user.role === "head" && user.scope_department_id) {
+    // head: scoped to their own department (แผนก)
+    sql += " AND e.department_id = ?"; params.push(user.scope_department_id);
+  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+    // deputy: scoped to their own division (ฝ่าย)
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   } else if (divId) {
     sql += " AND e.division_id = ?"; params.push(Number(divId));

@@ -53,6 +53,10 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   if (action === "head_approve" || action === "head_reject") {
     if (!["head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
     if (req.overall_status !== "submitted") return Response.json({ ok: false, error: "ไม่อยู่ในสถานะที่อนุมัติได้" }, { status: 409 });
+    // head: can only approve requests from their own department
+    if (user.role === "head" && user.scope_department_id && req.from_department_id !== user.scope_department_id) {
+      return Response.json({ ok: false, error: "ไม่มีสิทธิ์รับรองคำขอแผนกอื่น" }, { status: 403 });
+    }
     const approved = action === "head_approve";
     await ctx.env.HR_DB.prepare(
       "UPDATE transfer_requests SET head_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"

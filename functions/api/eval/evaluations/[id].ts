@@ -1,7 +1,7 @@
 import type { Env } from "../../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../../lib/auth";
 
-// GET /api/eval/evaluations/:id  — full detail with scores
+// GET /api/eval/evaluations/:id
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -9,18 +9,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const id = ctx.params.id as string;
   const ev = await ctx.env.HR_DB.prepare(`
     SELECT ev.*, e.full_name, e.position, e.start_date, e.emp_status,
-           d.name AS department_name, dv.name AS division_name, e.division_id
+           d.name AS department_name, dv.name AS division_name,
+           e.division_id, e.department_id
     FROM evaluations ev
     JOIN employees e ON e.id = ev.employee_id
     LEFT JOIN departments d ON d.id = e.department_id
     LEFT JOIN divisions dv ON dv.id = e.division_id
     WHERE ev.id = ?
-  `).bind(id).first<{ division_id: number; status: string; employee_id: number; [key: string]: unknown }>();
+  `).bind(id).first<{ division_id: number; department_id: number; status: string; employee_id: number; [key: string]: unknown }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // Division scope check for head/deputy/deputyHR
-  if (["head","deputy","deputyHR"].includes(user.role) && user.scope_division_id) {
-    if (ev.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  // Scope check: head by department, deputy by division
+  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id && ev.division_id !== user.scope_division_id) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   const scores = await ctx.env.HR_DB.prepare(`
@@ -42,7 +46,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true, evaluation: ev, scores: scores.results, approvals: approvals.results });
 };
 
-// PUT /api/eval/evaluations/:id  — save scores (draft) or submit (head/hr) or approve (deputy)
+// PUT /api/eval/evaluations/:id
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -56,15 +60,18 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   };
 
   const ev = await ctx.env.HR_DB.prepare(`
-    SELECT ev.*, e.division_id FROM evaluations ev
+    SELECT ev.*, e.division_id, e.department_id FROM evaluations ev
     JOIN employees e ON e.id = ev.employee_id
     WHERE ev.id = ?
-  `).bind(id).first<{ status: string; employee_id: number; division_id: number }>();
+  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // Division scope check for scoped roles
-  if (["head","deputy","deputyHR"].includes(user.role) && user.scope_division_id) {
-    if (ev.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  // Scope check
+  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id && ev.division_id !== user.scope_division_id) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   if (action === "save" || action === "submit") {

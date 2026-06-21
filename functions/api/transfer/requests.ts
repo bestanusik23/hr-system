@@ -1,8 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
-const SCOPED_ROLES = ["head", "deputy", "deputyHR"];
-
 // GET /api/transfer/requests
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
@@ -26,8 +24,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   if (status) { sql += " AND tr.overall_status = ?"; params.push(status); }
 
-  // Scope by division for head/deputy/deputyHR
-  if (SCOPED_ROLES.includes(user.role) && user.scope_division_id) {
+  if (user.role === "head" && user.scope_department_id) {
+    // head: see only requests from their department
+    sql += " AND tr.from_department_id = ?"; params.push(user.scope_department_id);
+  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+    // deputy: see only requests from their division
     sql += " AND fdept.division_id = ?"; params.push(user.scope_division_id);
   }
 
