@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
 import Home from "./pages/Home";
 import EvalPage from "./pages/eval/EvalPage";
+import TransferPage from "./pages/transfer/TransferPage";
+import TrainingPage from "./pages/training/TrainingPage";
 import ComingSoon from "./pages/ComingSoon";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -25,8 +27,8 @@ export default function App() {
           <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
           <Route path="/eval" element={<RequireAuth><EvalPage /></RequireAuth>} />
           <Route path="/recruit" element={<RequireAuth><ComingSoon title="ระบบสรรหาบุคลากร" accent="#0038C6" /></RequireAuth>} />
-          <Route path="/training" element={<RequireAuth><ComingSoon title="ระบบข้อมูลฝึกอบรม" accent="#7C3AED" /></RequireAuth>} />
-          <Route path="/transfer" element={<RequireAuth><ComingSoon title="ระบบคำขอย้ายแผนก" accent="#E0533D" /></RequireAuth>} />
+          <Route path="/training" element={<RequireAuth><TrainingPage /></RequireAuth>} />
+          <Route path="/transfer" element={<RequireAuth><TransferPage /></RequireAuth>} />
           <Route path="/exec" element={<RequireAuth><ComingSoon title="Executive Dashboard" accent="#0891B2" /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
