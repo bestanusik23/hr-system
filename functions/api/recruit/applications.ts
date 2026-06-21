@@ -69,14 +69,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 };
 
 // PATCH /api/recruit/applications  — update a cell (e.g. status column)
+// Level 3 (hr): can set all statuses except รับเข้างาน
+// Level 2 (deputy/deputyHR): can set any status including รับเข้างาน (final hire decision)
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!["hr", "deputy", "deputyHR", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as { row: number; col: string; value: string };
   const { row, col, value } = body;
   if (!row || !col) return Response.json({ ok: false, error: "Missing row/col" }, { status: 400 });
+
+  // "รับเข้างาน" requires Level 2 (deputy) approval
+  const FINAL_STATUSES = ["รับเข้างาน", "ไม่ผ่าน"];
+  if (FINAL_STATUSES.includes(value) && !["deputy", "deputyHR", "admin"].includes(user.role)) {
+    return Response.json({ ok: false, error: "สถานะ \"รับเข้างาน\" และ \"ไม่ผ่าน\" ต้องการสิทธิ์รองผู้อำนวยการ" }, { status: 403 });
+  }
 
   try {
     const token = await getGoogleAccessToken(ctx.env);

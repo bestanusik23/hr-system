@@ -5,7 +5,7 @@ interface TransferRow {
   id: number; name: string; position: string | null; reason: string | null; new_position: string | null;
   from_dept_name: string | null; to_dept_name: string | null; from_department_id: number | null;
   to_division_id: number; to_department_id: number;
-  head_status: string; hr_status: string; overall_status: string;
+  head_status: string; deputy_status: string; hr_status: string; overall_status: string;
   requester_user_id: number | null; created_at: string;
 }
 
@@ -36,7 +36,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true, request: req, approvals: approvals.results });
 };
 
-// PUT /api/transfer/requests/:id  action: head_approve | head_reject | hr_approve | hr_reject
+// PUT /api/transfer/requests/:id
+// actions: head_approve | head_reject | deputy_approve | deputy_reject | hr_approve | hr_reject
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -48,6 +49,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const req = await ctx.env.HR_DB.prepare("SELECT * FROM transfer_requests WHERE id = ?").bind(id).first<TransferRow>();
   if (!req) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
+  // LEVEL 4 — Head: ขั้นแรก (verify)
   if (action === "head_approve" || action === "head_reject") {
     if (!["head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
     if (req.overall_status !== "submitted") return Response.json({ ok: false, error: "ไม่อยู่ในสถานะที่อนุมัติได้" }, { status: 409 });
@@ -58,9 +60,28 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     await ctx.env.HR_DB.prepare(
       "INSERT INTO transfer_approvals (request_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
     ).bind(id, "head", user.id, approved ? "approved" : "rejected", note ?? null).run();
+
+  // LEVEL 2 — Deputy/DeputyHR: ขั้นสอง (approve)
+  } else if (action === "deputy_approve" || action === "deputy_reject") {
+    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    if (req.overall_status !== "head_approved") return Response.json({ ok: false, error: "ยังไม่ผ่านการรับรองจากหัวหน้า" }, { status: 409 });
+    // Division scope check: deputy can only approve requests from their own division
+    if (user.scope_division_id && user.role !== "admin" && req.from_department_id) {
+      const dept = await ctx.env.HR_DB.prepare("SELECT division_id FROM departments WHERE id = ?").bind(req.from_department_id).first<{ division_id: number }>();
+      if (dept && dept.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "ไม่มีสิทธิ์อนุมัติคำขอฝ่ายอื่น" }, { status: 403 });
+    }
+    const approved = action === "deputy_approve";
+    await ctx.env.HR_DB.prepare(
+      "UPDATE transfer_requests SET deputy_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
+    ).bind(approved ? "approved" : "rejected", approved ? "deputy_approved" : "rejected", id).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO transfer_approvals (request_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "deputy", user.id, approved ? "approved" : "rejected", note ?? null).run();
+
+  // LEVEL 3 — HR: ขั้นสาม (process & update records)
   } else if (action === "hr_approve" || action === "hr_reject") {
     if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    if (req.overall_status !== "head_approved") return Response.json({ ok: false, error: "ยังไม่ผ่านการอนุมัติหัวหน้า" }, { status: 409 });
+    if (req.overall_status !== "deputy_approved") return Response.json({ ok: false, error: "ยังไม่ผ่านการอนุมัติจากรองผู้อำนวยการ" }, { status: 409 });
     const approved = action === "hr_approve";
     await ctx.env.HR_DB.prepare(
       "UPDATE transfer_requests SET hr_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
@@ -73,6 +94,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
         "UPDATE employees SET department_id=?, division_id=?, emp_status='transferred', updated_at=datetime('now') WHERE full_name=? AND emp_status != 'resigned'"
       ).bind(req.to_department_id, req.to_division_id, req.name).run();
     }
+
   } else {
     return Response.json({ ok: false, error: "Unknown action" }, { status: 400 });
   }

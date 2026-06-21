@@ -40,7 +40,14 @@ export default function RecruitPage() {
   const [detail, setDetail] = useState<Application | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
-  const isHR = user && ["hr", "admin"].includes(user.role);
+  const isHR      = user && ["hr", "admin"].includes(user.role);
+  const isDeputy  = user && ["deputy", "deputyHR", "admin"].includes(user.role);
+  const canUpdate = isHR || isDeputy;
+
+  // L3 (hr): can set preliminary statuses; L2 (deputy): can set final hiring decisions too
+  const HR_STATUSES     = ["รอพิจารณา", "รอกรอกใบสมัคร", "ผ่านการสัมภาษณ์"];
+  const DEPUTY_STATUSES = Object.keys(STATUS_COLOR); // includes รับเข้างาน + ไม่ผ่าน
+  const allowedStatuses = isDeputy ? DEPUTY_STATUSES : HR_STATUSES;
 
   // Find column index by keyword
   function colIdx(keyword: string) {
@@ -160,12 +167,12 @@ export default function RecruitPage() {
                         </td>
                       ))}
                       <td style={td}>
-                        {isHR ? (
+                        {canUpdate ? (
                           <select value={curStatus} onChange={e => updateStatus(app, e.target.value)}
                             disabled={updating === app._row}
                             style={{ padding: "4px 8px", borderRadius: 7, border: "1.5px solid #e2e8f0", fontSize: 12, fontFamily: "inherit", cursor: "pointer", background: "#fff" }}>
                             <option value="">-- เลือก --</option>
-                            {Object.keys(STATUS_COLOR).map(s => <option key={s} value={s}>{s}</option>)}
+                            {allowedStatuses.map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         ) : (
                           <StatusBadge val={curStatus} />
@@ -214,12 +221,16 @@ export default function RecruitPage() {
                 ) : null)}
               </div>
 
-              {/* Status update for HR */}
-              {isHR && statusKey && (
+              {/* Status update (hr = preliminary only, deputy = all including final hire) */}
+              {canUpdate && statusKey && (
                 <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #f1f5f9" }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8 }}>อัปเดตผลการพิจารณา</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#475569" }}>อัปเดตผลการพิจารณา</div>
+                    {!isDeputy && <span style={{ fontSize: 11, background: "#fef9c3", color: "#b45309", borderRadius: 6, padding: "2px 8px" }}>L3 HR — ไม่รวม "รับเข้างาน"</span>}
+                    {isDeputy  && <span style={{ fontSize: 11, background: "#ede9fe", color: "#7c3aed", borderRadius: 6, padding: "2px 8px" }}>L2 รองผู้อำนวยการ — อนุมัติรับเข้างาน</span>}
+                  </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {Object.keys(STATUS_COLOR).map(s => (
+                    {allowedStatuses.map(s => (
                       <button key={s} onClick={() => updateStatus(detail, s)} disabled={updating === detail._row}
                         style={{ padding: "7px 16px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, borderColor: detail[statusKey] === s ? STATUS_COLOR[s].text : "#e2e8f0", background: detail[statusKey] === s ? STATUS_COLOR[s].bg : "#fff", color: detail[statusKey] === s ? STATUS_COLOR[s].text : "#475569" }}>
                         {s}

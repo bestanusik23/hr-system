@@ -1,7 +1,10 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
-// GET /api/eval/employees  — list all employees (with dept/division)
+// Roles that are scoped to their own division when scope_division_id is set
+const SCOPED_ROLES = ["head", "deputy", "deputyHR"];
+
+// GET /api/eval/employees
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -21,12 +24,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const params: (string | number)[] = [];
 
   if (status) { sql += " AND e.emp_status = ?"; params.push(status); }
-  // head sees only their own division
-  if (user.role === "head" && user.scope_division_id) {
+
+  // Scope by division for head/deputy/deputyHR if they have a division assigned
+  if (SCOPED_ROLES.includes(user.role) && user.scope_division_id) {
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   } else if (divId) {
     sql += " AND e.division_id = ?"; params.push(Number(divId));
   }
+
   sql += " ORDER BY e.created_at DESC";
 
   const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();

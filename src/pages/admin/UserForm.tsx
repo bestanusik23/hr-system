@@ -54,7 +54,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
   }
 
   const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit" };
-  const needDiv = role === "head";
+  // Division scoping applies to head, deputy, and deputyHR
+  const needDiv = ["head", "deputy", "deputyHR"].includes(role);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
@@ -71,7 +72,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
               {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           )},
-          ...(needDiv ? [{ label: "ฝ่าย/แผนก (สำหรับ Head) *", el: (
+          ...(needDiv ? [{ label: "ฝ่าย/แผนกที่รับผิดชอบ *", el: (
             <select value={divisionId} onChange={e => setDivisionId(Number(e.target.value))} style={inp}>
               <option value="">-- เลือกฝ่าย --</option>
               {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}

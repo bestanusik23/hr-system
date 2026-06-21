@@ -6,16 +6,20 @@ interface TransferRequest {
   id: number; name: string; position: string | null; reason: string | null;
   from_dept_name: string | null; to_dept_name: string | null;
   from_division_name: string | null; to_division_name: string | null;
-  head_status: string; hr_status: string; overall_status: string;
+  head_status: string; deputy_status: string; hr_status: string; overall_status: string;
   new_position: string | null; created_at: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  submitted: "รอหัวหน้าอนุมัติ", head_approved: "รอ HR อนุมัติ",
-  completed: "เสร็จสมบูรณ์", rejected: "ไม่อนุมัติ",
+  submitted:       "① รอหัวหน้าแผนกรับรอง",
+  head_approved:   "② รอรองผู้อำนวยการอนุมัติ",
+  deputy_approved: "③ รอ HR ดำเนินการ",
+  completed:       "เสร็จสมบูรณ์",
+  rejected:        "ไม่อนุมัติ",
 };
 const STATUS_COLOR: Record<string, string> = {
-  submitted: "#f59e0b", head_approved: "#0891b2", completed: "#16a34a", rejected: "#ef4444",
+  submitted: "#f59e0b", head_approved: "#7c3aed", deputy_approved: "#0891b2",
+  completed: "#16a34a", rejected: "#ef4444",
 };
 
 export default function TransferList() {
@@ -35,20 +39,22 @@ export default function TransferList() {
 
   useEffect(() => { load(); }, [filter]);
 
-  const isHR = user && ["hr", "admin"].includes(user.role);
-  const isHead = user?.role === "head";
+  const isHR      = user && ["hr", "admin"].includes(user.role);
+  const isHead    = user?.role === "head";
+  const isDeputy  = user && ["deputy", "deputyHR", "admin"].includes(user.role);
 
-  const filters = [
+  const filters: [string, string][] = [
     ["", "ทั้งหมด"],
-    ...(isHead ? [["submitted", "รอฉันอนุมัติ"]] : []),
-    ...(isHR ? [["head_approved", "รอ HR อนุมัติ"]] : []),
+    ...(isHead    ? [["submitted",       "รอฉันรับรอง"] as [string,string]] : []),
+    ...(isDeputy  ? [["head_approved",   "รอฉันอนุมัติ"] as [string,string]] : []),
+    ...(isHR      ? [["deputy_approved", "รอดำเนินการ"] as [string,string]] : []),
     ["completed", "เสร็จสมบูรณ์"],
-    ["rejected", "ไม่อนุมัติ"],
+    ["rejected",  "ไม่อนุมัติ"],
   ];
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         {filters.map(([k, v]) => (
           <button key={k} onClick={() => setFilter(k)} style={{
             padding: "6px 14px", borderRadius: 8, border: "1.5px solid", fontFamily: "inherit",
@@ -79,8 +85,8 @@ export default function TransferList() {
                 {req.reason && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>เหตุผล: {req.reason}</div>}
               </div>
               <div style={{ textAlign: "right" }}>
-                <span style={{ background: STATUS_COLOR[req.overall_status] + "22", color: STATUS_COLOR[req.overall_status], borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>
-                  {STATUS_LABEL[req.overall_status]}
+                <span style={{ background: (STATUS_COLOR[req.overall_status] ?? "#94a3b8") + "22", color: STATUS_COLOR[req.overall_status] ?? "#94a3b8", borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600 }}>
+                  {STATUS_LABEL[req.overall_status] ?? req.overall_status}
                 </span>
                 <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
                   {new Date(req.created_at).toLocaleDateString("th-TH")}

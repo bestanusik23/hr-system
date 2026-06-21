@@ -15,8 +15,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     LEFT JOIN departments d ON d.id = e.department_id
     LEFT JOIN divisions dv ON dv.id = e.division_id
     WHERE ev.id = ?
-  `).bind(id).first();
+  `).bind(id).first<{ division_id: number; status: string; employee_id: number; [key: string]: unknown }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+
+  // Division scope check for head/deputy/deputyHR
+  if (["head","deputy","deputyHR"].includes(user.role) && user.scope_division_id) {
+    if (ev.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   const scores = await ctx.env.HR_DB.prepare(`
     SELECT es.topic_id, es.score, et.text, et.owner, et.sort_order
@@ -37,7 +42,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true, evaluation: ev, scores: scores.results, approvals: approvals.results });
 };
 
-// PUT /api/eval/evaluations/:id  — save scores (draft) or submit (head)
+// PUT /api/eval/evaluations/:id  — save scores (draft) or submit (head/hr) or approve (deputy)
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -50,12 +55,20 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     suggestion?: string; decision?: string; grade?: string; note?: string;
   };
 
-  const ev = await ctx.env.HR_DB.prepare("SELECT * FROM evaluations WHERE id = ?").bind(id).first<{ status: string; employee_id: number }>();
+  const ev = await ctx.env.HR_DB.prepare(`
+    SELECT ev.*, e.division_id FROM evaluations ev
+    JOIN employees e ON e.id = ev.employee_id
+    WHERE ev.id = ?
+  `).bind(id).first<{ status: string; employee_id: number; division_id: number }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+
+  // Division scope check for scoped roles
+  if (["head","deputy","deputyHR"].includes(user.role) && user.scope_division_id) {
+    if (ev.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   if (action === "save" || action === "submit") {
     if (!["hr", "head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    // upsert scores
     if (scores) {
       for (const [topicId, score] of Object.entries(scores)) {
         await ctx.env.HR_DB.prepare(
@@ -65,12 +78,10 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     }
     const total = scores ? Object.values(scores).reduce((a, b) => a + (b as number), 0) : null;
     const newStatus = action === "submit" ? "pending_deputy" : "draft";
-
     await ctx.env.HR_DB.prepare(`
       UPDATE evaluations SET status=?, suggestion=?, decision=?, grade=?, total_score=?,
         head_user_id=?, updated_at=datetime('now') WHERE id=?
     `).bind(newStatus, suggestion ?? null, decision ?? null, grade ?? null, total, user.id, id).run();
-
     if (action === "submit") {
       await ctx.env.HR_DB.prepare(
         "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status) VALUES (?,?,?,?)"
@@ -88,16 +99,13 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
     const note = (body as { note?: string }).note ?? null;
     const newStatus = action === "approve" ? "approved" : "rejected";
-    await ctx.env.HR_DB.prepare(
-      "UPDATE evaluations SET status=?, updated_at=datetime('now') WHERE id=?"
-    ).bind(newStatus, id).run();
+    await ctx.env.HR_DB.prepare("UPDATE evaluations SET status=?, updated_at=datetime('now') WHERE id=?").bind(newStatus, id).run();
     await ctx.env.HR_DB.prepare(
       "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
     ).bind(id, "deputy", user.id, action === "approve" ? "approved" : "rejected", note).run();
     await ctx.env.HR_DB.prepare(
-      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id, detail) VALUES (?,?,'eval',?,?, ?,?)"
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id, detail) VALUES (?,?,'eval',?,?,?,?)"
     ).bind(user.id, user.full_name, `${action}_eval`, "evaluation", id, note).run();
-
     return Response.json({ ok: true });
   }
 

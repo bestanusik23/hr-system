@@ -1,6 +1,8 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
+const SCOPED_ROLES = ["head", "deputy", "deputyHR"];
+
 // GET /api/transfer/requests
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
@@ -12,7 +14,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   let sql = `
     SELECT tr.id, tr.name, tr.position, tr.reason, tr.new_position,
            tr.from_dept_name, tr.to_dept_name,
-           tr.head_status, tr.hr_status, tr.overall_status,
+           tr.head_status, tr.deputy_status, tr.hr_status, tr.overall_status,
            tr.created_at, tr.updated_at,
            fd.name AS from_division_name, td.name AS to_division_name
     FROM transfer_requests tr
@@ -23,9 +25,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const params: (string | number)[] = [];
 
   if (status) { sql += " AND tr.overall_status = ?"; params.push(status); }
-  if (user.role === "head" && user.scope_division_id) {
+
+  // Scope by division for head/deputy/deputyHR
+  if (SCOPED_ROLES.includes(user.role) && user.scope_division_id) {
     sql += " AND fdept.division_id = ?"; params.push(user.scope_division_id);
   }
+
   sql += " ORDER BY tr.updated_at DESC";
 
   const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
@@ -44,7 +49,6 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบ" }, { status: 400 });
   }
 
-  // snapshot dept names
   const fromDept = from_department_id
     ? await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?").bind(from_department_id).first<{ name: string }>()
     : null;

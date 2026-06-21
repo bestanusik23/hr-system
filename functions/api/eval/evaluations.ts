@@ -1,6 +1,8 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
+const SCOPED_ROLES = ["head", "deputy", "deputyHR"];
+
 // GET /api/eval/evaluations
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
@@ -23,16 +25,19 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   if (status) { sql += " AND ev.status = ?"; params.push(status); }
   if (empId)  { sql += " AND ev.employee_id = ?"; params.push(Number(empId)); }
-  if (user.role === "head" && user.scope_division_id) {
+
+  // Scope by division for head/deputy/deputyHR
+  if (SCOPED_ROLES.includes(user.role) && user.scope_division_id) {
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   }
+
   sql += " ORDER BY ev.updated_at DESC";
 
   const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
   return Response.json({ ok: true, evaluations: rows.results });
 };
 
-// POST /api/eval/evaluations — create new evaluation (hr or head)
+// POST /api/eval/evaluations — create new evaluation (hr, head, admin)
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -41,6 +46,12 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const body = await ctx.request.json() as Record<string, unknown>;
   const { employee_id, round } = body;
   if (!employee_id || !round) return Response.json({ ok: false, error: "Missing fields" }, { status: 400 });
+
+  // head: can only create eval for employees in their division
+  if (user.role === "head" && user.scope_division_id) {
+    const emp = await ctx.env.HR_DB.prepare("SELECT division_id FROM employees WHERE id = ?").bind(employee_id).first<{ division_id: number }>();
+    if (!emp || emp.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "ไม่มีสิทธิ์สร้างประเมินพนักงานฝ่ายอื่น" }, { status: 403 });
+  }
 
   const existing = await ctx.env.HR_DB.prepare(
     "SELECT id FROM evaluations WHERE employee_id = ? AND round = ?"
