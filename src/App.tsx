@@ -5,7 +5,8 @@ import Home from "./pages/Home";
 import EvalPage from "./pages/eval/EvalPage";
 import TransferPage from "./pages/transfer/TransferPage";
 import TrainingPage from "./pages/training/TrainingPage";
-import ComingSoon from "./pages/ComingSoon";
+import ExecPage from "./pages/exec/ExecPage";
+import RecruitPage from "./pages/recruit/RecruitPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -26,10 +27,10 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
           <Route path="/eval" element={<RequireAuth><EvalPage /></RequireAuth>} />
-          <Route path="/recruit" element={<RequireAuth><ComingSoon title="ระบบสรรหาบุคลากร" accent="#0038C6" /></RequireAuth>} />
+          <Route path="/recruit" element={<RequireAuth><RecruitPage /></RequireAuth>} />
           <Route path="/training" element={<RequireAuth><TrainingPage /></RequireAuth>} />
           <Route path="/transfer" element={<RequireAuth><TransferPage /></RequireAuth>} />
-          <Route path="/exec" element={<RequireAuth><ComingSoon title="Executive Dashboard" accent="#0891B2" /></RequireAuth>} />
+          <Route path="/exec" element={<RequireAuth><ExecPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

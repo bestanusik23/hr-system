@@ -10,8 +10,8 @@ export interface Env {
   SESSION_SECRET?: string;
 
   // Google Sheets service account (recruit system — set as secrets, not committed).
-  GOOGLE_SA_EMAIL?: string;
-  GOOGLE_SA_PRIVATE_KEY?: string;
+  GOOGLE_SA_EMAIL: string;
+  GOOGLE_SA_PRIVATE_KEY: string;
   // Spreadsheet IDs (not secret — can be plain vars).
   SHEET_APPLICATIONS?: string;
   SHEET_MANPOWER?: string;
