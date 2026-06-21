@@ -56,13 +56,49 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     if (rows.length <= 1) return Response.json({ ok: true, applications: [], headers: rows[0] ?? [] });
 
     const headers = rows[0];
-    const applications = rows.slice(1).map((row, i) => {
+    let applications = rows.slice(1).map((row, i) => {
       const obj: Record<string, string> = { _row: String(i + 2) };
       headers.forEach((h, j) => { obj[h] = row[j] ?? ""; });
       return obj;
     });
 
-    return Response.json({ ok: true, applications, headers });
+    // head: filter by department column in sheet (matches scope_department_id name)
+    let scopedDepartment: string | null = null;
+    if (user.role === "head" && user.scope_department_id) {
+      const dept = await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?")
+        .bind(user.scope_department_id).first<{ name: string }>();
+      scopedDepartment = dept?.name ?? null;
+
+      if (scopedDepartment) {
+        const deptColIdx = headers.findIndex(h =>
+          h.includes("แผนก") || h.toLowerCase().includes("department")
+        );
+        if (deptColIdx >= 0) {
+          const deptKey = headers[deptColIdx];
+          applications = applications.filter(a => a[deptKey] === scopedDepartment);
+        }
+      }
+    }
+
+    // deputy/deputyHR: filter by division column if scoped
+    let scopedDivision: string | null = null;
+    if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+      const div = await ctx.env.HR_DB.prepare("SELECT name FROM divisions WHERE id = ?")
+        .bind(user.scope_division_id).first<{ name: string }>();
+      scopedDivision = div?.name ?? null;
+
+      if (scopedDivision) {
+        const divColIdx = headers.findIndex(h =>
+          h.includes("ฝ่าย") || h.toLowerCase().includes("division")
+        );
+        if (divColIdx >= 0) {
+          const divKey = headers[divColIdx];
+          applications = applications.filter(a => a[divKey] === scopedDivision);
+        }
+      }
+    }
+
+    return Response.json({ ok: true, applications, headers, scopedDepartment, scopedDivision });
   } catch (e) {
     return Response.json({ ok: false, error: "ไม่สามารถดึงข้อมูลจาก Google Sheets ได้: " + String(e) }, { status: 500 });
   }
