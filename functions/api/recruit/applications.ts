@@ -47,8 +47,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   try {
     const token = await getGoogleAccessToken(ctx.env);
     const sheetId = ctx.env.SHEET_APPLICATIONS;
-    // Read columns A:J (adjust range as needed)
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A:J`;
+    const tab = encodeURIComponent("การตอบแบบฟอร์ม 1");
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:Z`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     const data = await res.json() as { values?: string[][] };
 
