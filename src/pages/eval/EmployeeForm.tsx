@@ -1,0 +1,119 @@
+import { useEffect, useState } from "react";
+
+interface Division { id: number; name: string; }
+interface Department { id: number; division_id: number; name: string; }
+interface Employee {
+  id: number; full_name: string; position: string | null; start_date: string | null;
+  emp_status: string; department_id: number | null; division_id: number | null;
+  color: string | null; initial: string | null;
+}
+
+interface Props { employee: Employee | null; onClose: () => void; onSaved: () => void; }
+
+const COLORS = ["#0038C6","#16A34A","#7C3AED","#E0533D","#0891B2","#D97706","#DB2777","#059669"];
+
+export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
+  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [divId, setDivId] = useState<number | "">(employee?.division_id ?? "");
+  const [deptId, setDeptId] = useState<number | "">(employee?.department_id ?? "");
+  const [fullName, setFullName] = useState(employee?.full_name ?? "");
+  const [position, setPosition] = useState(employee?.position ?? "");
+  const [startDate, setStartDate] = useState(employee?.start_date ?? "");
+  const [empStatus, setEmpStatus] = useState(employee?.emp_status ?? "probation");
+  const [color, setColor] = useState(employee?.color ?? COLORS[0]);
+  const [initial, setInitial] = useState(employee?.initial ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/eval/org").then(r => r.json()).then((d: { divisions: Division[]; departments: Department[] }) => {
+      setDivisions(d.divisions); setDepartments(d.departments);
+    });
+  }, []);
+
+  const filteredDepts = departments.filter(d => d.division_id === Number(divId));
+
+  async function save() {
+    if (!fullName.trim()) { setError("กรุณากรอกชื่อ"); return; }
+    setSaving(true); setError("");
+    const body = { full_name: fullName, position: position || null, department_id: deptId || null, division_id: divId || null, start_date: startDate || null, emp_status: empStatus, color, initial: initial || null };
+    const url = employee ? `/api/eval/employees/${employee.id}` : "/api/eval/employees";
+    const method = employee ? "PUT" : "POST";
+    const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const d = await r.json() as { ok: boolean; error?: string };
+    setSaving(false);
+    if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+    onSaved();
+  }
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.2)" }}>
+        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 22 }}>{employee ? "แก้ไขข้อมูลพนักงาน" : "เพิ่มพนักงานใหม่"}</div>
+
+        <Field label="ชื่อ-นามสกุล *">
+          <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" />
+        </Field>
+        <Field label="ตำแหน่ง">
+          <input value={position} onChange={e => setPosition(e.target.value)} style={inp} placeholder="ตำแหน่งงาน" />
+        </Field>
+        <Field label="ฝ่าย">
+          <select value={divId} onChange={e => { setDivId(Number(e.target.value)); setDeptId(""); }} style={inp}>
+            <option value="">-- เลือกฝ่าย --</option>
+            {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </Field>
+        <Field label="แผนก">
+          <select value={deptId} onChange={e => setDeptId(Number(e.target.value))} style={inp} disabled={!divId}>
+            <option value="">-- เลือกแผนก --</option>
+            {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </Field>
+        <Field label="วันที่เริ่มงาน">
+          <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inp} />
+        </Field>
+        {employee && (
+          <Field label="สถานะ">
+            <select value={empStatus} onChange={e => setEmpStatus(e.target.value)} style={inp}>
+              <option value="probation">ทดลองงาน</option>
+              <option value="passed">ผ่านทดลองงาน</option>
+              <option value="transferred">ย้ายแผนก</option>
+              <option value="resigned">ลาออก</option>
+            </select>
+          </Field>
+        )}
+        <Field label="ชื่อย่อ (สำหรับ Avatar)">
+          <input value={initial} onChange={e => setInitial(e.target.value.slice(0,2).toUpperCase())} style={inp} placeholder="2 ตัวอักษร" maxLength={2} />
+        </Field>
+        <Field label="สีประจำตัว">
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {COLORS.map(c => (
+              <button key={c} onClick={() => setColor(c)} style={{ width: 28, height: 28, borderRadius: "50%", background: c, border: color === c ? "3px solid #0f172a" : "2px solid transparent", cursor: "pointer" }} />
+            ))}
+          </div>
+        </Field>
+
+        {error && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #e2e8f0", background: "#fff", cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>ยกเลิก</button>
+          <button onClick={save} disabled={saving} style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: "#16A34A", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+            {saving ? "กำลังบันทึก…" : "บันทึก"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 6 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit", outline: "none" };
