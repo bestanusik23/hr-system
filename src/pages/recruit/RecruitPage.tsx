@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
-import ManpowerTab from "./ManpowerTab";
 
 interface Application { _row: string; [key: string]: string; }
 
@@ -36,7 +35,6 @@ export default function RecruitPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [tab, setTab] = useState<"applications" | "manpower">("applications");
   const [detail, setDetail] = useState<Application | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
@@ -109,17 +107,7 @@ export default function RecruitPage() {
 
   return (
     <PageLayout title="ระบบสรรหาบุคลากร" accent="#0038C6">
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: "2px solid #e2e8f0", paddingBottom: 0 }}>
-        {([["applications","📋 ใบสมัครงาน"], ["manpower","📊 อัตรากำลัง"]] as const).map(([k, label]) => (
-          <button key={k} onClick={() => setTab(k)} style={{ padding: "10px 20px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 14, fontWeight: 700, color: tab === k ? "#0038C6" : "#94a3b8", borderBottom: tab === k ? "3px solid #0038C6" : "3px solid transparent", marginBottom: -2 }}>
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "manpower" ? <ManpowerTab /> : null}
-      {tab !== "manpower" && <>
+      <>
       {/* Toolbar */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ค้นหาชื่อ ตำแหน่ง..."
@@ -243,7 +231,7 @@ export default function RecruitPage() {
           </div>
         </div>
       )}
-      </>}
+      </>
     </PageLayout>
   );
 }
