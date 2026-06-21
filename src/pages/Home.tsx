@@ -12,6 +12,7 @@ const SYSTEMS: SystemCard[] = [
   { key: "training", no: "3", icon: "🎓", title: "ระบบข้อมูลฝึกอบรม", desc: "แผนอบรมประจำเดือน บันทึกผลการอบรม และ Dashboard เปรียบเทียบแผนกับผลจริง", tags: ["แผนอบรม", "Dashboard"], accent: "#7C3AED", roles: ["hr","head","deputy","deputyHR","admin"] },
   { key: "transfer", no: "4", icon: "📑", title: "ระบบคำขอย้ายแผนก", desc: "ส่งคำขอย้ายแผนก อนุมัติโดยหัวหน้าแผนก และอนุมัติขั้นสุดท้ายโดย HR", tags: ["Workflow 3 ขั้น", "อนุมัติ"], accent: "#E0533D", roles: ["hr","head","deputy","deputyHR","admin"] },
   { key: "exec", no: "5", icon: "📈", title: "Executive Dashboard", desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม", tags: ["ภาพรวมองค์กร", "KPI"], accent: "#0891B2", roles: ["hr","deputy","deputyHR","admin"] },
+  { key: "admin", no: "6", icon: "⚙️", title: "จัดการผู้ใช้งาน", desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ", tags: ["เพิ่มผู้ใช้", "กำหนดสิทธิ์"], accent: "#16a34a", roles: ["admin"] },
 ];
 
 export default function Home() {
