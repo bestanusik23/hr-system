@@ -2,18 +2,30 @@ import { useEffect, useState } from "react";
 import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 
-interface Application {
-  _row: string;
-  [key: string]: string;
-}
+interface Application { _row: string; [key: string]: string; }
 
-const STATUS_COLOR: Record<string, string> = {
-  "รอสัมภาษณ์": "#f59e0b",
-  "ผ่านสัมภาษณ์": "#16a34a",
-  "ไม่ผ่าน": "#ef4444",
-  "รับเข้างาน": "#0891b2",
-  "": "#94a3b8",
+const STATUS_COLOR: Record<string, { bg: string; text: string }> = {
+  "รอพิจารณา":        { bg: "#fef9c3", text: "#b45309" },
+  "รอกรอกใบสมัคร":   { bg: "#ede9fe", text: "#7c3aed" },
+  "ผ่านการสัมภาษณ์": { bg: "#dcfce7", text: "#16a34a" },
+  "รับเข้างาน":       { bg: "#dbeafe", text: "#1d4ed8" },
+  "ไม่ผ่าน":          { bg: "#fee2e2", text: "#dc2626" },
 };
+
+// Columns to show in compact table (partial match against header)
+const TABLE_COLS = [
+  "ชื่อ-นามสกุล",
+  "ตำแหน่งที่สมัคร",
+  "วันที่สมัคร",
+  "เงินเดือนที่คาดหวัง",
+  "ทราบข่าวจาก",
+  "ระดับการศึกษา",
+  "ระยะเวลา",
+];
+
+function matchCol(header: string, keyword: string) {
+  return header.toLowerCase().includes(keyword.toLowerCase());
+}
 
 export default function RecruitPage() {
   const { user } = useAuth();
@@ -23,10 +35,17 @@ export default function RecruitPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [detail, setDetail] = useState<Application | null>(null);
   const [updating, setUpdating] = useState<string | null>(null);
 
   const isHR = user && ["hr", "admin"].includes(user.role);
-  const statusCol = headers.findIndex(h => h.toLowerCase().includes("สถานะ") || h.toLowerCase() === "status");
+
+  // Find column index by keyword
+  function colIdx(keyword: string) {
+    return headers.findIndex(h => matchCol(h, keyword));
+  }
+  const statusColIdx = colIdx("ผลการพิจารณา");
+  const statusKey = statusColIdx >= 0 ? headers[statusColIdx] : "";
 
   async function load() {
     setLoading(true); setError("");
@@ -40,46 +59,59 @@ export default function RecruitPage() {
 
   useEffect(() => { load(); }, []);
 
-  async function updateStatus(row: string, value: string) {
-    if (statusCol < 0) return;
-    const colLetter = String.fromCharCode(65 + statusCol);
-    setUpdating(row);
+  async function updateStatus(app: Application, value: string) {
+    if (statusColIdx < 0) return;
+    const colLetter = String.fromCharCode(65 + statusColIdx);
+    setUpdating(app._row);
     await fetch("/api/recruit/applications", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ row: Number(row), col: colLetter, value }),
+      body: JSON.stringify({ row: Number(app._row), col: colLetter, value }),
     });
-    setApplications(prev => prev.map(a => a._row === row ? { ...a, [headers[statusCol]]: value } : a));
+    const updated = { ...app, [statusKey]: value };
+    setApplications(prev => prev.map(a => a._row === app._row ? updated : a));
+    if (detail?._row === app._row) setDetail(updated);
     setUpdating(null);
   }
 
+  // Determine visible table columns
+  const visibleCols = TABLE_COLS.map(kw => {
+    const idx = headers.findIndex(h => matchCol(h, kw));
+    return idx >= 0 ? headers[idx] : null;
+  }).filter(Boolean) as string[];
+
+  const allStatuses = statusKey
+    ? [...new Set(applications.map(a => a[statusKey] ?? "").filter(Boolean))]
+    : [];
+
   const filtered = applications.filter(a => {
     const matchSearch = !search || Object.values(a).some(v => v.toLowerCase().includes(search.toLowerCase()));
-    const matchStatus = !statusFilter || a[headers[statusCol]] === statusFilter;
+    const matchStatus = !statusFilter || a[statusKey] === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const allStatuses = statusCol >= 0
-    ? [...new Set(applications.map(a => a[headers[statusCol]] ?? "").filter(Boolean))]
-    : [];
+  const StatusBadge = ({ val }: { val: string }) => {
+    const c = STATUS_COLOR[val] ?? { bg: "#f1f5f9", text: "#64748b" };
+    return (
+      <span style={{ background: c.bg, color: c.text, borderRadius: 7, padding: "3px 10px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+        {val || "—"}
+      </span>
+    );
+  };
 
   return (
     <PageLayout title="ระบบสรรหาบุคลากร" accent="#0038C6">
       {/* Toolbar */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 20, alignItems: "center", flexWrap: "wrap" }}>
-        <input
-          value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="ค้นหา..."
-          style={{ padding: "9px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit", width: 220 }}
-        />
-        {allStatuses.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button onClick={() => setStatusFilter("")} style={{ padding: "6px 12px", borderRadius: 8, border: "1.5px solid", borderColor: !statusFilter ? "#0038C6" : "#e2e8f0", background: !statusFilter ? "#0038C6" : "#fff", color: !statusFilter ? "#fff" : "#475569", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>ทั้งหมด</button>
-            {allStatuses.map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "6px 12px", borderRadius: 8, border: "1.5px solid", borderColor: statusFilter === s ? "#0038C6" : "#e2e8f0", background: statusFilter === s ? "#0038C6" : "#fff", color: statusFilter === s ? "#fff" : "#475569", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>{s}</button>
-            ))}
-          </div>
-        )}
-        <div style={{ marginLeft: "auto", fontSize: 13, color: "#94a3b8" }}>ทั้งหมด {filtered.length} รายการ</div>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ค้นหาชื่อ ตำแหน่ง..."
+          style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", width: 220 }} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button onClick={() => setStatusFilter("")} style={filterBtn(!statusFilter)}>ทั้งหมด ({applications.length})</button>
+          {allStatuses.map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)} style={filterBtn(statusFilter === s)}>
+              {s} ({applications.filter(a => a[statusKey] === s).length})
+            </button>
+          ))}
+        </div>
       </div>
 
       {loading ? (
@@ -88,49 +120,50 @@ export default function RecruitPage() {
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: 24, color: "#dc2626" }}>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>ไม่สามารถโหลดข้อมูลได้</div>
           <div style={{ fontSize: 13 }}>{error}</div>
-          <div style={{ fontSize: 12, color: "#ef4444", marginTop: 12 }}>ตรวจสอบว่า:<br/>• ตั้งค่า GOOGLE_SA_EMAIL และ GOOGLE_SA_PRIVATE_KEY ใน Cloudflare Variables แล้ว<br/>• Service Account มีสิทธิ์ Editor บน Google Sheet</div>
         </div>
-      ) : applications.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>ไม่มีข้อมูลใน Google Sheets (หรือยังไม่มีแถวข้อมูล)</div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>ไม่มีข้อมูล</div>
       ) : (
         <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 4px rgba(0,0,0,.07)", overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  {headers.map((h, i) => (
-                    <th key={i} style={{ padding: "12px 14px", textAlign: "left", fontWeight: 600, color: "#475569", borderBottom: "2px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                  {isHR && statusCol >= 0 && <th style={{ padding: "12px 14px", color: "#475569", fontWeight: 600, borderBottom: "2px solid #e2e8f0" }}>อัปเดตสถานะ</th>}
+                  <th style={th}>#</th>
+                  {visibleCols.map(h => <th key={h} style={th}>{h}</th>)}
+                  <th style={th}>ผลการพิจารณา</th>
+                  <th style={th}>รายละเอียด</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((app, ri) => {
-                  const curStatus = statusCol >= 0 ? (app[headers[statusCol]] ?? "") : "";
+                  const curStatus = statusKey ? (app[statusKey] ?? "") : "";
                   return (
                     <tr key={app._row} style={{ borderBottom: "1px solid #f1f5f9", background: ri % 2 === 0 ? "#fff" : "#fafafa" }}>
-                      {headers.map((h, ci) => (
-                        <td key={ci} style={{ padding: "11px 14px", color: "#1e293b", verticalAlign: "middle" }}>
-                          {ci === statusCol ? (
-                            <span style={{ background: (STATUS_COLOR[app[h]] ?? "#94a3b8") + "22", color: STATUS_COLOR[app[h]] ?? "#94a3b8", borderRadius: 8, padding: "3px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>{app[h] || "—"}</span>
-                          ) : app[h]}
+                      <td style={{ ...td, color: "#94a3b8", width: 36 }}>{ri + 1}</td>
+                      {visibleCols.map(h => (
+                        <td key={h} style={{ ...td, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {app[h] ?? "—"}
                         </td>
                       ))}
-                      {isHR && statusCol >= 0 && (
-                        <td style={{ padding: "8px 14px" }}>
-                          <select
-                            value={curStatus}
-                            onChange={e => updateStatus(app._row, e.target.value)}
+                      <td style={td}>
+                        {isHR ? (
+                          <select value={curStatus} onChange={e => updateStatus(app, e.target.value)}
                             disabled={updating === app._row}
-                            style={{ padding: "5px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}
-                          >
+                            style={{ padding: "4px 8px", borderRadius: 7, border: "1.5px solid #e2e8f0", fontSize: 12, fontFamily: "inherit", cursor: "pointer", background: "#fff" }}>
                             <option value="">-- เลือก --</option>
-                            {["รอสัมภาษณ์", "ผ่านสัมภาษณ์", "ไม่ผ่าน", "รับเข้างาน"].map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
+                            {Object.keys(STATUS_COLOR).map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
-                        </td>
-                      )}
+                        ) : (
+                          <StatusBadge val={curStatus} />
+                        )}
+                      </td>
+                      <td style={td}>
+                        <button onClick={() => setDetail(app)}
+                          style={{ padding: "5px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", background: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#0038C6", fontWeight: 600 }}>
+                          🔍 ดูข้อมูล
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
@@ -140,11 +173,58 @@ export default function RecruitPage() {
         </div>
       )}
 
-      {/* Setup hint if no Google credentials */}
-      <div style={{ marginTop: 20, background: "#eff6ff", borderRadius: 12, padding: "14px 18px", fontSize: 12, color: "#1d4ed8" }}>
-        <b>หมายเหตุ:</b> ระบบนี้ดึงข้อมูลจาก Google Sheets (ID: {import.meta.env.VITE_SHEET_ID ?? "ตั้งค่าใน wrangler.toml"})<br/>
-        หากต้องการเปลี่ยน Sheet ให้อัปเดต SHEET_APPLICATIONS ใน wrangler.toml
-      </div>
+      {/* Detail Modal */}
+      {detail && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.3)" }}>
+            {/* Header */}
+            <div style={{ padding: "22px 28px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800 }}>
+                  {detail[headers.find(h => matchCol(h, "ชื่อ-นามสกุล")) ?? ""] ?? detail[headers[0]] ?? "—"}
+                  {headers.find(h => matchCol(h, "ตำแหน่งที่สมัคร")) &&
+                    <span style={{ fontSize: 14, fontWeight: 400, color: "#64748b" }}> — {detail[headers.find(h => matchCol(h, "ตำแหน่งที่สมัคร"))!]}</span>}
+                </div>
+                {statusKey && <div style={{ marginTop: 8 }}><StatusBadge val={detail[statusKey] ?? ""} /></div>}
+              </div>
+              <button onClick={() => setDetail(null)} style={{ border: "none", background: "#f1f5f9", borderRadius: 8, width: 32, height: 32, cursor: "pointer", fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center" }}>×</button>
+            </div>
+
+            {/* Fields */}
+            <div style={{ padding: "20px 28px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
+                {headers.filter(h => h !== statusKey).map(h => detail[h] ? (
+                  <div key={h}>
+                    <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", marginBottom: 2 }}>{h}</div>
+                    <div style={{ fontSize: 13, color: "#1e293b" }}>{detail[h]}</div>
+                  </div>
+                ) : null)}
+              </div>
+
+              {/* Status update for HR */}
+              {isHR && statusKey && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #f1f5f9" }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 8 }}>อัปเดตผลการพิจารณา</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    {Object.keys(STATUS_COLOR).map(s => (
+                      <button key={s} onClick={() => updateStatus(detail, s)} disabled={updating === detail._row}
+                        style={{ padding: "7px 16px", borderRadius: 9, border: "1.5px solid", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600, borderColor: detail[statusKey] === s ? STATUS_COLOR[s].text : "#e2e8f0", background: detail[statusKey] === s ? STATUS_COLOR[s].bg : "#fff", color: detail[statusKey] === s ? STATUS_COLOR[s].text : "#475569" }}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </PageLayout>
   );
+}
+
+const th: React.CSSProperties = { padding: "10px 14px", textAlign: "left", fontWeight: 600, color: "#475569", borderBottom: "2px solid #e2e8f0", whiteSpace: "nowrap", fontSize: 12 };
+const td: React.CSSProperties = { padding: "10px 14px", color: "#1e293b", verticalAlign: "middle" };
+function filterBtn(active: boolean): React.CSSProperties {
+  return { padding: "5px 12px", borderRadius: 8, border: "1.5px solid", fontFamily: "inherit", fontSize: 12, cursor: "pointer", borderColor: active ? "#0038C6" : "#e2e8f0", background: active ? "#0038C6" : "#fff", color: active ? "#fff" : "#475569" };
 }
