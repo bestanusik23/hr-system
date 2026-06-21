@@ -18,23 +18,47 @@ async function getGoogleAccessToken(env: Env): Promise<string> {
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr","admin","deputy","deputyHR","head"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!["hr","admin","deputy","deputyHR","head"].includes(user.role)) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
+
+  // Get division name for head scoping
+  let scopeDivisionName: string | null = null;
+  if (user.role === "head" && user.scope_division_id) {
+    const div = await ctx.env.HR_DB.prepare("SELECT name FROM divisions WHERE id = ?")
+      .bind(user.scope_division_id).first<{ name: string }>();
+    scopeDivisionName = div?.name ?? null;
+  }
 
   try {
     const token   = await getGoogleAccessToken(ctx.env);
     const sheetId = ctx.env.SHEET_MANPOWER;
-    const tab     = encodeURIComponent("Sheet1");
-    const res     = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:Z`, { headers: { Authorization: `Bearer ${token}` } });
+    const res     = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A:Z`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
     const data    = await res.json() as { values?: string[][] };
     const rows    = data.values ?? [];
-    if (rows.length <= 1) return Response.json({ ok: true, rows: [], headers: rows[0] ?? [] });
+    if (rows.length <= 1) return Response.json({ ok: true, records: [], headers: rows[0] ?? [], scopedDivision: scopeDivisionName });
+
     const headers = rows[0];
-    const records = rows.slice(1).map(row => {
+
+    // Find the division column (looks for "ฝ่าย" in header)
+    const divColIdx = headers.findIndex(h => h.includes("ฝ่าย") || h.toLowerCase().includes("division"));
+
+    let records = rows.slice(1).map(row => {
       const obj: Record<string,string> = {};
       headers.forEach((h,j) => { obj[h] = row[j] ?? ""; });
       return obj;
     });
-    return Response.json({ ok: true, records, headers });
+
+    // Filter for head role — only show their own division
+    if (scopeDivisionName && divColIdx >= 0) {
+      const divKey = headers[divColIdx];
+      records = records.filter(r => r[divKey] === scopeDivisionName);
+    }
+
+    return Response.json({ ok: true, records, headers, scopedDivision: scopeDivisionName, divColIdx });
   } catch(e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500 });
   }
