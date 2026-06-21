@@ -1,24 +1,35 @@
 import { useEffect, useState } from "react";
 
 interface ManpowerRow { [key: string]: string; }
+interface ApiResp { ok: boolean; records: ManpowerRow[]; headers: string[]; allTabs: string[]; currentTab: string; scopedDivision: string | null; error?: string; }
 
 export default function ManpowerTab() {
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [records, setRecords] = useState<ManpowerRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+  const [headers, setHeaders]   = useState<string[]>([]);
+  const [records, setRecords]   = useState<ManpowerRow[]>([]);
+  const [allTabs, setAllTabs]   = useState<string[]>([]);
+  const [currentTab, setCurrentTab] = useState("");
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
+  const [search, setSearch]     = useState("");
 
-  useEffect(() => {
-    fetch("/api/recruit/manpower").then(r => r.json())
-      .then((d: { ok: boolean; records: ManpowerRow[]; headers: string[]; error?: string }) => {
+  function load(tab?: string) {
+    setLoading(true); setError("");
+    const url = tab ? `/api/recruit/manpower?tab=${encodeURIComponent(tab)}` : "/api/recruit/manpower";
+    fetch(url).then(r => r.json())
+      .then((d: ApiResp) => {
         if (!d.ok) { setError(d.error ?? "ไม่สามารถโหลดข้อมูลได้"); }
-        else { setHeaders(d.headers ?? []); setRecords(d.records ?? []); }
+        else {
+          setHeaders(d.headers ?? []);
+          setRecords(d.records ?? []);
+          setAllTabs(d.allTabs ?? []);
+          setCurrentTab(d.currentTab ?? "");
+        }
         setLoading(false);
       });
-  }, []);
+  }
 
-  // Try to detect target vs actual columns for progress bar
+  useEffect(() => { load(); }, []);
+
   const targetCol = headers.find(h => h.includes("เป้า") || h.includes("อัตรา") || h.toLowerCase().includes("target"));
   const actualCol = headers.find(h => h.includes("จริง") || h.includes("ปัจจุบัน") || h.toLowerCase().includes("actual") || h.toLowerCase().includes("current"));
 
@@ -28,9 +39,18 @@ export default function ManpowerTab() {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ค้นหา…"
-          style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", width: 220 }} />
+          style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", width: 200 }} />
+
+        {/* Month selector — shown once tabs are loaded */}
+        {allTabs.length > 0 && (
+          <select value={currentTab} onChange={e => load(e.target.value)}
+            style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", background: "#fff", cursor: "pointer" }}>
+            {allTabs.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
+
         <span style={{ fontSize: 13, color: "#94a3b8", marginLeft: "auto" }}>ทั้งหมด {filtered.length} แถว</span>
       </div>
 
