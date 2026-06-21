@@ -33,8 +33,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   try {
     const token   = await getGoogleAccessToken(ctx.env);
     const sheetId = ctx.env.SHEET_MANPOWER;
+    const tab = encodeURIComponent("เดือนมิถุนายน 2569");
     const res     = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A:Z`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${tab}!A:Z`,
       { headers: { Authorization: `Bearer ${token}` } }
     );
     const data    = await res.json() as { values?: string[][] };
