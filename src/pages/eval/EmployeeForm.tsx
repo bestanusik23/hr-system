@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Division { id: number; name: string; }
 interface Department { id: number; division_id: number; name: string; }
+interface Template { id: number; name: string; }
 interface Employee {
   id: number; full_name: string; position: string | null; start_date: string | null;
   emp_status: string; department_id: number | null; division_id: number | null;
@@ -15,22 +16,43 @@ const COLORS = ["#0038C6","#16A34A","#7C3AED","#E0533D","#0891B2","#D97706","#DB
 export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
   const [divisions, setDivisions] = useState<Division[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [divId, setDivId] = useState<number | "">(employee?.division_id ?? "");
   const [deptId, setDeptId] = useState<number | "">(employee?.department_id ?? "");
   const [fullName, setFullName] = useState(employee?.full_name ?? "");
   const [position, setPosition] = useState(employee?.position ?? "");
+  const [posSearch, setPosSearch] = useState(employee?.position ?? "");
+  const [posOpen, setPosOpen] = useState(false);
   const [startDate, setStartDate] = useState(employee?.start_date ?? "");
   const [empStatus, setEmpStatus] = useState(employee?.emp_status ?? "probation");
   const [color, setColor] = useState(employee?.color ?? COLORS[0]);
   const [initial, setInitial] = useState(employee?.initial ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const posRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/eval/org").then(r => r.json()).then((d: { divisions: Division[]; departments: Department[] }) => {
-      setDivisions(d.divisions); setDepartments(d.departments);
+    Promise.all([
+      fetch("/api/eval/org").then(r => r.json()),
+      fetch("/api/eval/templates").then(r => r.json()),
+    ]).then(([od, td]) => {
+      setDivisions((od as { divisions: Division[] }).divisions);
+      setDepartments((od as { departments: Department[] }).departments);
+      setTemplates((td as { templates: Template[] }).templates ?? []);
     });
   }, []);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (posRef.current && !posRef.current.contains(e.target as Node)) setPosOpen(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  const filteredPos = posSearch.trim()
+    ? templates.filter(t => t.name.toLowerCase().includes(posSearch.toLowerCase()))
+    : templates;
 
   const filteredDepts = departments.filter(d => d.division_id === Number(divId));
 
@@ -56,7 +78,26 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
           <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" />
         </Field>
         <Field label="ตำแหน่ง">
-          <input value={position} onChange={e => setPosition(e.target.value)} style={inp} placeholder="ตำแหน่งงาน" />
+          <div ref={posRef} style={{ position: "relative" }}>
+            <input
+              value={posSearch}
+              onChange={e => { setPosSearch(e.target.value); setPosition(e.target.value); setPosOpen(true); }}
+              onFocus={() => setPosOpen(true)}
+              style={inp} placeholder="🔍 ค้นหาหรือพิมพ์ตำแหน่ง…"
+            />
+            {posOpen && filteredPos.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 9, boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 200, maxHeight: 200, overflowY: "auto" }}>
+                {filteredPos.slice(0, 30).map(t => (
+                  <div key={t.id} onClick={() => { setPosition(t.name); setPosSearch(t.name); setPosOpen(false); }}
+                    style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13 }}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#f0fdf4")}
+                    onMouseLeave={e => (e.currentTarget.style.background = "")}>
+                    {t.name}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </Field>
         <Field label="ฝ่าย">
           <select value={divId} onChange={e => { setDivId(Number(e.target.value)); setDeptId(""); }} style={inp}>
