@@ -42,7 +42,6 @@ const TABLE_COL_DEFS = [
   { label: "แผนกที่สมัคร",        keys: ["แผนก", "ตำแหน่งที่สมัคร", "สมัครงาน", "สมัคร", "department"] },
   { label: "อัตราจ้างที่คาดหวัง",  keys: ["อัตราจ้าง", "อัตรา", "เงินเดือน", "ค่าจ้าง", "salary", "คาดหวัง"] },
   { label: "ชื่อ-นามสกุล",         keys: ["ชื่อ-นามสกุล", "ชื่อและนามสกุล", "ชื่อ นามสกุล", "full name", "fullname", "ชื่อ"] },
-  { label: "ระยะเวลาลาออก",        keys: ["ระยะเวลาลาออก", "ลาออก", "notice period", "notice", "ระยะเวลา"] },
 ] as const;
 
 function findColKey(dataCols: string[], keys: readonly string[]): string | undefined {
