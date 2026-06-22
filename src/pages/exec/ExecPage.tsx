@@ -14,6 +14,10 @@ interface Summary {
     cert_count: number; satisfaction_avg: number | null; total_responses: number;
   };
   users: { total: number; active: number; inactive: number; admin_count: number; new_this_month: number };
+  recruit: {
+    total: number; pending: number; interview: number; passed: number;
+    hired: number; rejected: number; hiring_rate: number; no_data: boolean;
+  };
   recent_activity: { actor_name: string; module: string; action: string; created_at: string }[];
 }
 
@@ -64,7 +68,11 @@ function calcAlerts(d: Summary) {
     d.transfers.pending > 3  ? "yellow" : "green";
   const us: AlertLevel =
     (d.users.total > 0 && d.users.inactive / d.users.total > 0.5) ? "yellow" : "green";
-  return { emp, ev, tr, tx, us };
+  const rc: AlertLevel =
+    d.recruit.no_data ? "yellow" :
+    d.recruit.pending > 20 ? "red" :
+    d.recruit.pending > 5  ? "yellow" : "green";
+  return { emp, ev, tr, tx, us, rc };
 }
 
 function buildAISummary(d: Summary): string[] {
@@ -73,12 +81,14 @@ function buildAISummary(d: Summary): string[] {
   const satText = sat !== null ? ` ความพึงพอใจ ${sat}% (${satInfo(sat).label})` : "";
   const lines: string[] = [
     `📊 Workforce: พนักงานทั้งหมด ${d.employees.total} ราย — ทดลองงาน ${d.employees.probation} / ผ่านทดลองงาน ${d.employees.passed}${d.employees.due_eval > 0 ? ` — ⚠ ค้างประเมิน ${d.employees.due_eval} ราย` : ""}`,
+    `📄 สรรหา: ใบสมัครทั้งหมด ${d.recruit.total} ราย — รอพิจารณา ${d.recruit.pending} / บรรจุ ${d.recruit.hired} (Hiring Rate ${d.recruit.hiring_rate}%)`,
     `📝 ประเมินผล: ใบประเมินทั้งหมด ${d.evaluations.total} ราย — อนุมัติแล้ว ${d.evaluations.approved} / รออนุมัติ ${d.evaluations.pending}${d.evaluations.rejected > 0 ? ` / ไม่ผ่าน ${d.evaluations.rejected}` : ""}`,
     `🎓 ฝึกอบรม: จัดแล้ว ${d.training.done}/${d.training.total} หลักสูตร — ผู้เข้าร่วม ${d.training.actual} ราย (${trainPct}% ของเป้า ${d.training.target} คน)${satText}`,
     `🔄 โอนย้าย: ทั้งหมด ${d.transfers.total} รายการ — รออนุมัติ ${d.transfers.pending} / เสร็จสิ้น ${d.transfers.completed}`,
   ];
   const issues: string[] = [];
   if (d.employees.due_eval > 0) issues.push(`เร่งประเมินพนักงานทดลองงาน ${d.employees.due_eval} ราย`);
+  if (!d.recruit.no_data && d.recruit.pending > 5) issues.push(`ตรวจสอบใบสมัครค้างพิจารณา ${d.recruit.pending} ราย`);
   if (d.evaluations.pending > 3) issues.push(`ตรวจสอบใบประเมินค้างอนุมัติ ${d.evaluations.pending} ราย`);
   if (d.training.target > 0 && trainPct < 80) issues.push("ส่งเสริมการเข้าอบรมให้ถึงเป้าหมาย");
   if (sat !== null && sat < 80) issues.push("ทบทวนคุณภาพหลักสูตร (ความพึงพอใจต่ำกว่าเกณฑ์)");
@@ -163,7 +173,7 @@ export default function ExecPage() {
     </PageLayout>
   );
 
-  const { employees, evaluations, transfers, training, users, recent_activity } = data;
+  const { employees, evaluations, transfers, training, users, recruit, recent_activity } = data;
   const trainPct   = training.target > 0 ? Math.round(training.actual / training.target * 100) : 0;
   const alerts     = calcAlerts(data);
   const summary    = buildAISummary(data);
@@ -220,6 +230,8 @@ export default function ExecPage() {
           detail={alerts.tx === "green" ? "ปกติ" : `รออนุมัติ ${transfers.pending} รายการ`} />
         <AlertChip level={alerts.us} label="ผู้ใช้งาน"
           detail={`Active ${activeRate}% (${users.active}/${users.total})`} />
+        <AlertChip level={alerts.rc} label="สรรหา"
+          detail={recruit.no_data ? "ไม่สามารถโหลดข้อมูล" : `รอพิจารณา ${recruit.pending} / บรรจุ ${recruit.hired}`} />
       </div>
 
       {/* บุคลากร */}
@@ -387,18 +399,51 @@ export default function ExecPage() {
         <KPI label="ใหม่เดือนนี้"     value={users.new_this_month} color="#0891b2" />
       </div>
 
-      {/* Recruitment note */}
-      <div style={{ ...cardBox, marginBottom: 28, borderLeft: "4px solid #d97706",
-        display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ fontSize: 28 }}>📄</div>
-        <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>ระบบสรรหาบุคลากร (Recruitment)</div>
-          <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
-            ข้อมูลใบสมัครและกำลังคนเชื่อมต่อกับ Google Sheets — ดูรายละเอียดได้ที่เมนู{" "}
-            <a href="/recruit" style={{ color: "#0038C6", fontWeight: 700 }}>สรรหาบุคลากร</a>
+      {/* Recruitment */}
+      <SectionTitle icon="📄">ระบบสรรหาบุคลากร</SectionTitle>
+      {recruit.no_data ? (
+        <div style={{ ...cardBox, marginBottom: 28, borderLeft: "4px solid #d97706",
+          display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ fontSize: 28 }}>⚠️</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#475569" }}>ไม่สามารถโหลดข้อมูลจาก Google Sheets ได้</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>
+              ดูข้อมูลโดยตรงได้ที่{" "}
+              <a href="/recruit" style={{ color: "#0038C6", fontWeight: 700 }}>ระบบสรรหาบุคลากร</a>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))", gap: 12, marginBottom: 16 }}>
+            <KPI label="ใบสมัครทั้งหมด"    value={recruit.total}      color="#0038C6" />
+            <KPI label="รอพิจารณา"          value={recruit.pending}    color="#d97706"
+              sub={recruit.pending > 10 ? "⚠ มากผิดปกติ" : undefined} />
+            <KPI label="รอนัดสัมภาษณ์"     value={recruit.interview}  color="#0891b2" />
+            <KPI label="ผ่านการสัมภาษณ์"   value={recruit.passed}     color="#7c3aed" />
+            <KPI label="รับเข้างาน"         value={recruit.hired}      color="#16a34a" />
+            <KPI label="ไม่ผ่าน"            value={recruit.rejected}   color="#dc2626" />
+          </div>
+          {recruit.total > 0 && (
+            <div style={{ ...cardBox, marginBottom: 28, display: "flex", gap: 20, alignItems: "center" }}>
+              <div style={{ fontSize: 12, color: "#64748b", whiteSpace: "nowrap" }}>Hiring Rate</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#16a34a", whiteSpace: "nowrap" }}>
+                {recruit.hiring_rate}%
+              </div>
+              <div style={{ flex: 1, height: 8, background: "#e8eeff", borderRadius: 4 }}>
+                <div style={{
+                  height: 8, background: "#16a34a", borderRadius: 4, transition: "width .4s",
+                  width: `${recruit.hiring_rate}%`,
+                }} />
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                {recruit.hired}/{recruit.total} คน ·{" "}
+                <a href="/recruit" style={{ color: "#0038C6", fontWeight: 700 }}>ดูรายละเอียด</a>
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Activity log */}
       <SectionTitle icon="📌">กิจกรรมล่าสุด</SectionTitle>
