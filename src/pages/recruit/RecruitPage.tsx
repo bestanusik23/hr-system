@@ -42,8 +42,10 @@ const TABLE_COL_DEFS = [
   { label: "แผนกที่สมัคร",        keys: ["แผนก", "ตำแหน่งที่สมัคร", "สมัครงาน", "สมัคร", "department"] },
   { label: "อัตราจ้างที่คาดหวัง",  keys: ["อัตราจ้าง", "อัตรา", "เงินเดือน", "ค่าจ้าง", "salary", "คาดหวัง"] },
   { label: "ชื่อ-นามสกุล",         keys: ["ชื่อ-นามสกุล", "ชื่อและนามสกุล", "ชื่อ นามสกุล", "full name", "fullname", "ชื่อ"] },
-  { label: "ระยะเวลาลาออก",        keys: ["ระยะเวลาในการลาออก", "ระยะเวลาลาออก", "ลาออกให้ถูกต้อง", "กี่วัน", "notice"] },
 ] as const;
+
+// คอลัมน์ระยะเวลาลาออก — แสดงใน detail modal เท่านั้น (ไม่แสดงในตาราง)
+const NOTICE_KEYS = ["ระยะเวลาในการลาออก", "ระยะเวลาลาออก", "ลาออกให้ถูกต้อง", "กี่วัน", "notice"];
 
 function findColKey(dataCols: string[], keys: readonly string[]): string | undefined {
   for (const kw of keys) {
@@ -113,6 +115,11 @@ export default function RecruitPage() {
   // Detect phone/contact column dynamically
   const phoneKey = allDataCols.find(h =>
     h.includes("โทร") || h.toLowerCase().includes("phone") || h.toLowerCase().includes("tel") || h.includes("ติดต่อ")
+  );
+
+  // คอลัมน์ระยะเวลาลาออก — ใช้ใน detail modal
+  const noticeKey = allDataCols.find(h =>
+    NOTICE_KEYS.some(kw => h.toLowerCase().includes(kw.toLowerCase()))
   );
 
   const interviewQueue = statusKey
@@ -376,10 +383,33 @@ export default function RecruitPage() {
 
             {/* All Fields */}
             <div style={{ padding: "20px 28px" }}>
+
+              {/* เริ่มงานได้ภายในกี่วัน — highlight card */}
+              {noticeKey && (
+                <div style={{ marginBottom: 20,
+                  background: detail[noticeKey] ? "#f0f5ff" : "#f8fafc",
+                  border: `1.5px solid ${detail[noticeKey] ? "#c4cfee" : "#e2e8f0"}`,
+                  borderLeft: `4px solid ${detail[noticeKey] ? "#0038C6" : "#cbd5e1"}`,
+                  borderRadius: 8, padding: "14px 18px",
+                  display: "flex", alignItems: "center", gap: 14 }}>
+                  <span style={{ fontSize: 22 }}>⏱️</span>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#475569",
+                      letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 4 }}>
+                      เริ่มงานได้ภายในกี่วัน
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 800,
+                      color: detail[noticeKey] ? "#0038C6" : "#94a3b8" }}>
+                      {detail[noticeKey] || "ไม่ได้ระบุ"}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 28px" }}>
                 {allDataCols.map(h => (
                   <div key={h} style={{ borderBottom: "1px solid #f8fafc", paddingBottom: 10 }}>
-                    <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase",
+                    <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase" as const,
                       letterSpacing: "0.05em", marginBottom: 4 }}>{h}</div>
                     <div style={{ fontSize: 13, color: "#1e293b", fontWeight: 500, wordBreak: "break-word" }}>
                       {detail[h] || <span style={{ color: "#cbd5e1" }}>—</span>}
