@@ -12,6 +12,7 @@ import OrgPage from "./pages/admin/OrgPage";
 import CheckinPage from "./pages/CheckinPage";
 import CertVerifyPage from "./pages/CertVerifyPage";
 import SurveyPage from "./pages/SurveyPage";
+import WorkflowPage from "./pages/WorkflowPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -43,6 +44,7 @@ export default function App() {
           <Route path="/exec" element={<RequireAuth><ExecPage /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
           <Route path="/admin/org" element={<RequireAuth><OrgPage /></RequireAuth>} />
+          <Route path="/workflow" element={<RequireAuth><WorkflowPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

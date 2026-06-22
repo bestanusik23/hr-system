@@ -14,6 +14,7 @@ const SYSTEMS: SystemCard[] = [
   { key: "exec", no: "5", icon: "📈", title: "Executive Dashboard", desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม", tags: ["ภาพรวมองค์กร", "KPI"], accent: "#0038C6", roles: ["hr","deputy","deputyHR","admin"] },
   { key: "admin", no: "6", icon: "⚙️", title: "จัดการผู้ใช้งาน", desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ", tags: ["เพิ่มผู้ใช้", "กำหนดสิทธิ์"], accent: "#0038C6", roles: ["admin"] },
   { key: "admin/org", no: "7", icon: "🏢", title: "จัดการฝ่าย/แผนก/ตำแหน่ง", desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบ", tags: ["ฝ่าย", "แผนก", "ตำแหน่ง"], accent: "#0038C6", roles: ["hr", "admin"] },
+  { key: "workflow", no: "8", icon: "📊", title: "Workflow & สิทธิ์การอนุมัติ", desc: "ดูขั้นตอนการอนุมัติและสิทธิ์ของแต่ละ Role ในทุกระบบ", tags: ["Flow chart", "RBAC"], accent: "#0038C6", roles: ["hr", "head", "deputy", "deputyHR", "admin"] },
 ];
 
 export default function Home() {
