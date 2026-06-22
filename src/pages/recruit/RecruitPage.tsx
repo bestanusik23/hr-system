@@ -36,7 +36,22 @@ function isStatusCol(h: string) {
   return h.includes("ผลการพิจารณา") || h.toLowerCase().includes("status") || h.toLowerCase().includes("result");
 }
 
-const TABLE_MAX_COLS = 6;
+// Fixed 5 table columns with keyword matching against Sheets headers
+const TABLE_COL_DEFS = [
+  { label: "วันที่เขียนใบสมัคร", keys: ["วันที่เขียน", "วันที่สมัคร", "วันที่", "date"] },
+  { label: "แผนกที่สมัคร",        keys: ["แผนก", "ตำแหน่งที่สมัคร", "สมัครงาน", "สมัคร", "department"] },
+  { label: "อัตราจ้างที่คาดหวัง",  keys: ["อัตราจ้าง", "อัตรา", "เงินเดือน", "ค่าจ้าง", "salary", "คาดหวัง"] },
+  { label: "ชื่อ-นามสกุล",         keys: ["ชื่อ-นามสกุล", "ชื่อและนามสกุล", "ชื่อ นามสกุล", "full name", "fullname", "ชื่อ"] },
+  { label: "ระยะเวลาลาออก",        keys: ["ระยะเวลาลาออก", "ลาออก", "notice period", "notice", "ระยะเวลา"] },
+] as const;
+
+function findColKey(dataCols: string[], keys: readonly string[]): string | undefined {
+  for (const kw of keys) {
+    const match = dataCols.find(h => h.toLowerCase().includes(kw.toLowerCase()));
+    if (match) return match;
+  }
+  return undefined;
+}
 
 export default function RecruitPage() {
   const { user } = useAuth();
@@ -87,8 +102,13 @@ export default function RecruitPage() {
     setUpdating(null);
   }
 
-  const allDataCols  = headers.filter(h => !isHiddenCol(h) && h !== statusKey && h.trim() !== "");
-  const tableCols    = allDataCols.slice(0, TABLE_MAX_COLS);
+  const allDataCols = headers.filter(h => !isHiddenCol(h) && h !== statusKey && h.trim() !== "");
+
+  // Resolve the 5 fixed columns to their actual Sheets header keys
+  const resolvedTableCols = TABLE_COL_DEFS.map(def => ({
+    label: def.label,
+    key: findColKey(allDataCols, def.keys),
+  }));
 
   // Detect phone/contact column dynamically
   const phoneKey = allDataCols.find(h =>
@@ -207,11 +227,11 @@ export default function RecruitPage() {
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>
-                    {app[allDataCols[0] ?? ""] || "—"}
+                    {resolvedTableCols[3].key ? app[resolvedTableCols[3].key] || "—" : "—"}
                   </div>
-                  {allDataCols[1] && (
+                  {resolvedTableCols[1].key && (
                     <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
-                      {allDataCols[1]}: <span style={{ fontWeight: 600, color: "#334155" }}>{app[allDataCols[1]] || "—"}</span>
+                      แผนก: <span style={{ fontWeight: 600, color: "#334155" }}>{app[resolvedTableCols[1].key] || "—"}</span>
                     </div>
                   )}
                   {phoneKey && app[phoneKey] && (
@@ -265,9 +285,9 @@ export default function RecruitPage() {
               <thead>
                 <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0" }}>
                   <th style={TH}>#</th>
-                  {tableCols.map(h => <th key={h} style={TH}>{h}</th>)}
-                  <th style={TH}>ผลการพิจารณา</th>
-                  <th style={{ ...TH, textAlign: "center" }}>รายละเอียด</th>
+                  {resolvedTableCols.map(col => <th key={col.label} style={TH}>{col.label}</th>)}
+                  <th style={TH}>ผลพิจารณา</th>
+                  <th style={{ ...TH, textAlign: "center" }}>ข้อมูล</th>
                 </tr>
               </thead>
               <tbody>
@@ -279,11 +299,16 @@ export default function RecruitPage() {
                       style={{ borderBottom: "1px solid #f1f5f9", background: ri % 2 === 0 ? "#fff" : "#fafbff", transition: "background .15s" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#f0f6ff")}
                       onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? "#fff" : "#fafbff")}>
-                      <td style={{ ...TD, color: "#94a3b8", width: 40, textAlign: "center", fontWeight: 600 }}>{ri + 1}</td>
-                      {tableCols.map((h, ci) => (
-                        <td key={h} style={{ ...TD, fontWeight: ci === 0 ? 600 : 400, color: ci === 0 ? "#1e293b" : "#475569",
-                          maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {app[h] || "—"}
+                      <td style={{ ...TD, color: "#94a3b8", width: 36, textAlign: "center", fontWeight: 600 }}>{ri + 1}</td>
+                      {resolvedTableCols.map((col, ci) => (
+                        <td key={col.label} style={{
+                          ...TD,
+                          fontWeight: ci === 3 ? 700 : 400,
+                          color: ci === 3 ? "#1e293b" : "#475569",
+                          maxWidth: ci === 3 ? 200 : 150,
+                          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        }}>
+                          {col.key ? (app[col.key] || "—") : <span style={{ color: "#cbd5e1" }}>—</span>}
                         </td>
                       ))}
                       <td style={TD}>
@@ -303,10 +328,11 @@ export default function RecruitPage() {
                       </td>
                       <td style={{ ...TD, textAlign: "center" }}>
                         <button onClick={() => setDetail(app)}
-                          style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid #dbeafe",
-                            background: "#eff6ff", fontSize: 12, cursor: "pointer",
-                            fontFamily: "inherit", color: "#1d4ed8", fontWeight: 600, whiteSpace: "nowrap" }}>
-                          🔍 ดูข้อมูล
+                          title="ดูข้อมูลเพิ่มเติม"
+                          style={{ width: 34, height: 34, borderRadius: 9, border: "1.5px solid #dbeafe",
+                            background: "#eff6ff", fontSize: 16, cursor: "pointer",
+                            display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+                          🔍
                         </button>
                       </td>
                     </tr>
@@ -333,14 +359,13 @@ export default function RecruitPage() {
             <div style={{ padding: "22px 28px 18px", borderBottom: "1px solid #f1f5f9",
               display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
               <div>
-                <div style={{ fontSize: 19, fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>
-                  {detail[allDataCols[0] ?? ""] || "—"}
+                <div style={{ fontSize: 19, fontWeight: 800, color: "#0f172a", marginBottom: 6 }}>
+                  {resolvedTableCols[3].key ? detail[resolvedTableCols[3].key] || "—" : "—"}
                 </div>
-                {allDataCols[1] && (
-                  <div style={{ fontSize: 13, color: "#64748b", marginBottom: 10 }}>
-                    {allDataCols[1]}: <span style={{ color: "#334155", fontWeight: 600 }}>{detail[allDataCols[1]] || "—"}</span>
-                  </div>
-                )}
+                <div style={{ display: "flex", gap: 14, fontSize: 13, color: "#64748b", marginBottom: 10, flexWrap: "wrap" }}>
+                  {resolvedTableCols[1].key && <span>แผนก: <b style={{ color: "#334155" }}>{detail[resolvedTableCols[1].key] || "—"}</b></span>}
+                  {resolvedTableCols[0].key && <span>วันที่สมัคร: <b style={{ color: "#334155" }}>{detail[resolvedTableCols[0].key] || "—"}</b></span>}
+                </div>
                 {statusKey && <StatusBadge val={detail[statusKey] ?? ""} />}
               </div>
               <button onClick={() => setDetail(null)}
