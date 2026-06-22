@@ -14,6 +14,12 @@ const STATUS_COLOR: Record<string, { bg: string; text: string; border: string }>
 };
 
 const HIDDEN_COLS = new Set(["_row"]);
+function isHiddenCol(h: string) {
+  return HIDDEN_COLS.has(h)
+    || h.includes("ประทับเวลา")
+    || h.toLowerCase().includes("timestamp")
+    || h.includes("ทราบข่าว");
+}
 function isStatusCol(h: string) {
   return h.includes("ผลการพิจารณา") || h.toLowerCase().includes("status") || h.toLowerCase().includes("result");
 }
@@ -69,7 +75,7 @@ export default function RecruitPage() {
     setUpdating(null);
   }
 
-  const allDataCols  = headers.filter(h => !HIDDEN_COLS.has(h) && h !== statusKey && h.trim() !== "");
+  const allDataCols  = headers.filter(h => !isHiddenCol(h) && h !== statusKey && h.trim() !== "");
   const tableCols    = allDataCols.slice(0, TABLE_MAX_COLS);
 
   // Detect phone/contact column dynamically
