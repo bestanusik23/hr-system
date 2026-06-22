@@ -18,7 +18,13 @@ function isHiddenCol(h: string) {
   return HIDDEN_COLS.has(h)
     || h.includes("ประทับเวลา")
     || h.toLowerCase().includes("timestamp")
-    || h.includes("ทราบข่าว");
+    || h.includes("ทราบข่าว")
+    || h.includes("ชื่อเล่น")
+    || h.includes("วันเดือนปีเกิด")
+    || h.includes("วันเกิด")
+    || h.toLowerCase().includes("birthdate")
+    || h.toLowerCase().includes("birthday")
+    || h.toLowerCase().includes("nickname");
 }
 function isStatusCol(h: string) {
   return h.includes("ผลการพิจารณา") || h.toLowerCase().includes("status") || h.toLowerCase().includes("result");
