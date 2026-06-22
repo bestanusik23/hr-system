@@ -52,7 +52,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const trainingDone   = await db.prepare("SELECT COUNT(*) AS n FROM training_courses WHERE status='done' AND COALESCE(is_cancelled,0)=0").first<{ n: number }>();
   const trainingTarget = await db.prepare("SELECT COALESCE(SUM(target),0) AS n FROM training_courses WHERE COALESCE(is_cancelled,0)=0").first<{ n: number }>();
   const trainingActual = await db.prepare("SELECT COUNT(*) AS n FROM training_attendees WHERE participant_type='attendee'").first<{ n: number }>();
-  const trainingCerts  = await db.prepare("SELECT COUNT(*) AS n FROM training_attendees WHERE cert_id IS NOT NULL").first<{ n: number }>();
+  const trainingCerts  = await db.prepare("SELECT COUNT(*) AS n FROM training_certificates").first<{ n: number }>();
 
   // Training satisfaction (from survey table)
   const surveyRow = await db.prepare(
