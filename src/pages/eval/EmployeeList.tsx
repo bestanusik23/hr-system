@@ -17,9 +17,16 @@ const STATUS_COLOR: Record<string, string> = {
   probation: "#f59e0b", passed: "#16a34a", transferred: "#0891b2", resigned: "#94a3b8",
 };
 
+function toGregorian(dateStr: string): Date {
+  const d = new Date(dateStr);
+  // Year >= 2500 → Buddhist Era, convert to Gregorian
+  if (d.getFullYear() >= 2500) return new Date(d.getFullYear() - 543, d.getMonth(), d.getDate());
+  return d;
+}
+
 function daysSince(dateStr: string | null) {
   if (!dateStr) return null;
-  return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
+  return Math.floor((Date.now() - toGregorian(dateStr).getTime()) / 86400000);
 }
 
 // Determine state of each 30/60/90 round for a given employee
