@@ -64,8 +64,12 @@ export default function EmployeeList() {
   const [editing, setEditing]     = useState<Employee | null>(null);
   const [openEvalId, setOpenEvalId] = useState<number | null>(null);
   const [creatingFor, setCreatingFor] = useState<{ empId: number; round: 30 | 60 | 90 } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<Employee | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
-  const canEdit = user && ["hr", "admin"].includes(user.role);
+  const canEdit   = user && ["hr", "admin"].includes(user.role);
+  const canDelete = user && ["hr", "admin"].includes(user.role);
 
   async function load() {
     setLoading(true);
@@ -79,6 +83,17 @@ export default function EmployeeList() {
   }
 
   useEffect(() => { load(); }, [statusFilter]);
+
+  async function deleteEmployee() {
+    if (!confirmDelete) return;
+    setDeleting(true); setDeleteError("");
+    const r = await fetch(`/api/eval/employees/${confirmDelete.id}`, { method: "DELETE" });
+    const d = await r.json() as { ok: boolean; error?: string };
+    setDeleting(false);
+    if (!d.ok) { setDeleteError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+    setConfirmDelete(null);
+    load();
+  }
 
   async function createEval(empId: number, round: 30 | 60 | 90) {
     setCreatingFor({ empId, round });
@@ -183,6 +198,15 @@ export default function EmployeeList() {
                         ✏️
                       </button>
                     )}
+                    {canDelete && (
+                      <button onClick={() => { setConfirmDelete(emp); setDeleteError(""); }}
+                        style={{ background: "#fee2e2", border: "none", borderRadius: 8,
+                          padding: "6px 12px", cursor: "pointer", fontSize: 13, fontFamily: "inherit",
+                          color: "#dc2626" }}
+                        title="ลบพนักงาน">
+                        🗑️
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -240,6 +264,49 @@ export default function EmployeeList() {
       {openEvalId !== null && (
         <EvaluationForm evalId={openEvalId} onClose={() => setOpenEvalId(null)}
           onSaved={() => { setOpenEvalId(null); load(); }} />
+      )}
+
+      {/* Delete confirmation modal */}
+      {confirmDelete && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: "28px 32px",
+            maxWidth: 420, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: 36, textAlign: "center", marginBottom: 12 }}>🗑️</div>
+            <div style={{ fontWeight: 800, fontSize: 16, color: "#0f172a", textAlign: "center", marginBottom: 6 }}>
+              ยืนยันลบพนักงาน
+            </div>
+            <div style={{ fontSize: 14, color: "#64748b", textAlign: "center", marginBottom: 20, lineHeight: 1.6 }}>
+              คุณต้องการลบ{" "}
+              <span style={{ fontWeight: 700, color: "#dc2626" }}>{confirmDelete.full_name}</span>
+              {" "}ออกจากระบบ?<br />
+              <span style={{ fontSize: 12 }}>ข้อมูลและใบประเมิน (ที่ยังไม่อนุมัติ) จะถูกลบทั้งหมด</span>
+            </div>
+
+            {deleteError && (
+              <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8,
+                padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>
+                {deleteError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => { setConfirmDelete(null); setDeleteError(""); }}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "1.5px solid #e2e8f0",
+                  background: "#fff", color: "#64748b", fontWeight: 700, fontSize: 14,
+                  cursor: "pointer", fontFamily: "inherit" }}>
+                ยกเลิก
+              </button>
+              <button onClick={deleteEmployee} disabled={deleting}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "none",
+                  background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 14,
+                  cursor: deleting ? "not-allowed" : "pointer", fontFamily: "inherit",
+                  opacity: deleting ? 0.7 : 1 }}>
+                {deleting ? "กำลังลบ…" : "ยืนยันลบ"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

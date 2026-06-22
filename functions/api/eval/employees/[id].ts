@@ -37,3 +37,35 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   return Response.json({ ok: true });
 };
+
+// DELETE /api/eval/employees/:id  — admin/hr only; blocks if approved evaluations exist
+export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
+  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const id = ctx.params.id as string;
+
+  const emp = await ctx.env.HR_DB.prepare("SELECT full_name FROM employees WHERE id=?").bind(id).first<{ full_name: string }>();
+  if (!emp) return Response.json({ ok: false, error: "ไม่พบพนักงาน" }, { status: 404 });
+
+  const hasApproved = await ctx.env.HR_DB.prepare(
+    "SELECT COUNT(*) AS n FROM evaluations WHERE employee_id=? AND status='approved'"
+  ).bind(id).first<{ n: number }>();
+
+  if ((hasApproved?.n ?? 0) > 0) {
+    return Response.json({ ok: false, error: "ไม่สามารถลบได้ — มีใบประเมินที่อนุมัติแล้ว กรุณาเปลี่ยนสถานะเป็น 'ลาออก' แทน" }, { status: 409 });
+  }
+
+  // Cascade: scores → approvals → evaluations → employee
+  await ctx.env.HR_DB.prepare(
+    "DELETE FROM evaluation_scores WHERE evaluation_id IN (SELECT id FROM evaluations WHERE employee_id=?)"
+  ).bind(id).run();
+  await ctx.env.HR_DB.prepare(
+    "DELETE FROM evaluation_approvals WHERE evaluation_id IN (SELECT id FROM evaluations WHERE employee_id=?)"
+  ).bind(id).run();
+  await ctx.env.HR_DB.prepare("DELETE FROM evaluations WHERE employee_id=?").bind(id).run();
+  await ctx.env.HR_DB.prepare("DELETE FROM employees WHERE id=?").bind(id).run();
+
+  return Response.json({ ok: true });
+};
