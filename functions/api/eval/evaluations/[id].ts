@@ -69,84 +69,202 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true, evaluation: ev, scores: scores.results, approvals: approvals.results, templateTopics });
 };
 
-// PUT /api/eval/evaluations/:id
+// PUT /api/eval/evaluations/:id — 4-step workflow
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
   const id = ctx.params.id as string;
   const body = await ctx.request.json() as Record<string, unknown>;
-  const { action, scores, suggestion, decision, grade } = body as {
-    action: "save" | "submit" | "approve" | "reject";
-    scores?: Record<number, number>;
-    suggestion?: string; decision?: string; grade?: string; note?: string;
-  };
+  const action = body.action as string;
 
   const ev = await ctx.env.HR_DB.prepare(`
     SELECT ev.*, e.division_id, e.department_id FROM evaluations ev
     JOIN employees e ON e.id = ev.employee_id
     WHERE ev.id = ?
-  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number }>();
+  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // Scope check
-  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id) {
+  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id)
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id && ev.division_id !== user.scope_division_id) {
+  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id && ev.division_id !== user.scope_division_id)
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const scores     = body.scores as Record<string, number> | undefined;
+  const suggestion = body.suggestion as string | undefined;
+  const decision   = body.decision as string | undefined;
+  const grade      = body.grade as string | undefined;
+  const note       = body.note as string | undefined;
+  const signerEmp  = body.signer_employee as string | undefined;
+  const signerHead = body.signer_head as string | undefined;
+  const signerHR   = body.signer_hr as string | undefined;
+  const signerDir  = body.signer_director as string | undefined;
+
+  const forbidden = Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const conflict  = (msg: string) => Response.json({ ok: false, error: msg }, { status: 409 });
+
+  async function saveScores() {
+    if (!scores) return;
+    for (const [topicId, score] of Object.entries(scores)) {
+      await ctx.env.HR_DB.prepare(
+        "INSERT INTO evaluation_scores (evaluation_id, topic_id, score) VALUES (?,?,?) ON CONFLICT(evaluation_id,topic_id) DO UPDATE SET score=excluded.score"
+      ).bind(id, Number(topicId), score).run();
+    }
   }
 
-  if (action === "save" || action === "submit") {
-    if (!["hr", "head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    const { signer_employee, signer_head, signer_hr, signer_director } = body as {
-      signer_employee?: string; signer_head?: string; signer_hr?: string; signer_director?: string;
-    };
-    if (scores) {
-      for (const [topicId, score] of Object.entries(scores)) {
-        await ctx.env.HR_DB.prepare(
-          "INSERT INTO evaluation_scores (evaluation_id, topic_id, score) VALUES (?,?,?) ON CONFLICT(evaluation_id,topic_id) DO UPDATE SET score=excluded.score"
-        ).bind(id, Number(topicId), score).run();
-      }
-    }
-    const total = scores ? Object.values(scores).reduce((a, b) => a + (b as number), 0) : null;
-    const newStatus = action === "submit" ? "pending_deputy" : "draft";
-    // Track which role filled which part
-    const headUserId = ["head", "admin"].includes(user.role) ? user.id : null;
-    const hrUserId   = ["hr",   "admin"].includes(user.role) ? user.id : null;
-    await ctx.env.HR_DB.prepare(`
-      UPDATE evaluations SET status=?, suggestion=?, decision=?, grade=?, total_score=?,
-        head_user_id=COALESCE(?,head_user_id), hr_user_id=COALESCE(?,hr_user_id),
-        signer_employee=?, signer_head=?, signer_hr=?, signer_director=?,
-        updated_at=datetime('now') WHERE id=?
-    `).bind(newStatus, suggestion ?? null, decision ?? null, grade ?? null, total,
-            headUserId, hrUserId,
-            signer_employee ?? null, signer_head ?? null, signer_hr ?? null, signer_director ?? null,
-            id).run();
-    if (action === "submit") {
-      await ctx.env.HR_DB.prepare(
-        "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status) VALUES (?,?,?,?)"
-      ).bind(id, "head", user.id, "approved").run();
-      await ctx.env.HR_DB.prepare(
-        "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','submit_eval','evaluation',?)"
-      ).bind(user.id, user.full_name, id).run();
+  async function totalFromDB(): Promise<number> {
+    const r = await ctx.env.HR_DB.prepare(
+      "SELECT COALESCE(SUM(score),0) AS t FROM evaluation_scores WHERE evaluation_id=?"
+    ).bind(id).first<{ t: number }>();
+    return r?.t ?? 0;
+  }
+
+  // ── SAVE draft (head in draft / hr in pending_hr) ───────────────
+  if (action === "save") {
+    const canSave =
+      (["head", "admin"].includes(user.role) && ev.status === "draft") ||
+      (["hr",   "admin"].includes(user.role) && ev.status === "pending_hr");
+    if (!canSave) return forbidden;
+
+    await saveScores();
+    const total = scores ? Object.values(scores).reduce((a, b) => a + b, 0) : null;
+
+    if (ev.status === "draft") {
+      await ctx.env.HR_DB.prepare(`
+        UPDATE evaluations SET suggestion=?, decision=?, grade=?,
+          total_score=COALESCE(?,total_score),
+          signer_employee=COALESCE(?,signer_employee),
+          signer_head=COALESCE(?,signer_head),
+          updated_at=datetime('now') WHERE id=?
+      `).bind(suggestion ?? null, decision ?? null, grade ?? null, total,
+               signerEmp ?? null, signerHead ?? null, id).run();
+    } else {
+      await ctx.env.HR_DB.prepare(`
+        UPDATE evaluations SET signer_hr=COALESCE(?,signer_hr),
+          updated_at=datetime('now') WHERE id=?
+      `).bind(signerHR ?? null, id).run();
     }
     return Response.json({ ok: true });
   }
 
-  if (action === "approve" || action === "reject") {
-    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    if (ev.status !== "pending_deputy") return Response.json({ ok: false, error: "ไม่อยู่ในสถานะรออนุมัติ" }, { status: 409 });
+  // ── STEP 1: Head submits → pending_deputy ───────────────────────
+  if (action === "submit") {
+    if (!["head", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "draft") return conflict("ไม่อยู่ในสถานะร่าง");
 
-    const note = (body as { note?: string }).note ?? null;
-    const newStatus = action === "approve" ? "approved" : "rejected";
-    await ctx.env.HR_DB.prepare("UPDATE evaluations SET status=?, updated_at=datetime('now') WHERE id=?").bind(newStatus, id).run();
+    await saveScores();
+    const total = await totalFromDB();
+
+    await ctx.env.HR_DB.prepare(`
+      UPDATE evaluations SET status='pending_deputy', suggestion=?, decision=?, grade=?,
+        total_score=?, head_user_id=?,
+        signer_employee=COALESCE(?,signer_employee),
+        signer_head=COALESCE(?,signer_head),
+        updated_at=datetime('now') WHERE id=?
+    `).bind(suggestion ?? null, decision ?? null, grade ?? null, total, user.id,
+             signerEmp ?? null, signerHead ?? null, id).run();
+
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status) VALUES (?,?,?,?)"
+    ).bind(id, "head", user.id, "approved").run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','submit_eval','evaluation',?)"
+    ).bind(user.id, user.full_name, id).run();
+
+    return Response.json({ ok: true });
+  }
+
+  // ── STEP 2a: Deputy approves → pending_hr ──────────────────────
+  if (action === "deputy_approve") {
+    if (!["deputy", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
+
+    await ctx.env.HR_DB.prepare(
+      "UPDATE evaluations SET status='pending_hr', updated_at=datetime('now') WHERE id=?"
+    ).bind(id).run();
     await ctx.env.HR_DB.prepare(
       "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
-    ).bind(id, "deputy", user.id, action === "approve" ? "approved" : "rejected", note).run();
+    ).bind(id, "deputy", user.id, "approved", note ?? null).run();
     await ctx.env.HR_DB.prepare(
-      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id, detail) VALUES (?,?,'eval',?,?,?,?)"
-    ).bind(user.id, user.full_name, `${action}_eval`, "evaluation", id, note).run();
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','deputy_approve','evaluation',?)"
+    ).bind(user.id, user.full_name, id).run();
+
+    return Response.json({ ok: true });
+  }
+
+  // ── STEP 2b: Deputy rejects → rejected ─────────────────────────
+  if (action === "deputy_reject") {
+    if (!["deputy", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
+
+    await ctx.env.HR_DB.prepare(
+      "UPDATE evaluations SET status='rejected', updated_at=datetime('now') WHERE id=?"
+    ).bind(id).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "deputy", user.id, "rejected", note ?? null).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id, detail) VALUES (?,?,'eval','deputy_reject','evaluation',?,?)"
+    ).bind(user.id, user.full_name, id, note ?? null).run();
+
+    return Response.json({ ok: true });
+  }
+
+  // ── STEP 3: HR acknowledges → pending_final ─────────────────────
+  if (action === "hr_acknowledge") {
+    if (!["hr", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "pending_hr") return conflict("ไม่อยู่ในสถานะรอ HR");
+
+    await saveScores();
+    const total = await totalFromDB();
+
+    await ctx.env.HR_DB.prepare(`
+      UPDATE evaluations SET status='pending_final', hr_user_id=?,
+        signer_hr=COALESCE(?,signer_hr), total_score=?,
+        updated_at=datetime('now') WHERE id=?
+    `).bind(user.id, signerHR ?? null, total, id).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "hr", user.id, "approved", note ?? null).run();
+
+    return Response.json({ ok: true });
+  }
+
+  // ── STEP 4a: Final deputy approves → approved ───────────────────
+  if (action === "final_approve") {
+    if (!["deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "pending_final") return conflict("ไม่อยู่ในสถานะรออนุมัติขั้นสุดท้าย");
+
+    await ctx.env.HR_DB.prepare(`
+      UPDATE evaluations SET status='approved',
+        signer_director=COALESCE(?,signer_director),
+        updated_at=datetime('now') WHERE id=?
+    `).bind(signerDir ?? null, id).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "final", user.id, "approved", note ?? null).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','final_approve','evaluation',?)"
+    ).bind(user.id, user.full_name, id).run();
+
+    return Response.json({ ok: true });
+  }
+
+  // ── STEP 4b: Final deputy rejects → rejected ────────────────────
+  if (action === "final_reject") {
+    if (!["deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "pending_final") return conflict("ไม่อยู่ในสถานะรออนุมัติขั้นสุดท้าย");
+
+    await ctx.env.HR_DB.prepare(
+      "UPDATE evaluations SET status='rejected', updated_at=datetime('now') WHERE id=?"
+    ).bind(id).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "final", user.id, "rejected", note ?? null).run();
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id, detail) VALUES (?,?,'eval','final_reject','evaluation',?,?)"
+    ).bind(user.id, user.full_name, id, note ?? null).run();
+
     return Response.json({ ok: true });
   }
 

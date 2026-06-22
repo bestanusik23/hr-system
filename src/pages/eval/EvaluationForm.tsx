@@ -12,52 +12,173 @@ interface EvalDetail {
 }
 interface ScoreRow { topic_id: number; score: number; text: string; owner: string; }
 interface Approval { step: string; status: string; note: string | null; created_at: string; approver_name: string; }
-
 interface Props { evalId: number; onClose: () => void; onSaved: () => void; }
 
-// Grade A–F from raw score out of 100
 function gradeFromScore(s: number): string {
-  if (s >= 90) return "A";
-  if (s >= 80) return "B";
-  if (s >= 70) return "C";
-  if (s >= 60) return "D";
-  if (s >= 50) return "E";
-  return "F";
+  if (s >= 90) return "A"; if (s >= 80) return "B"; if (s >= 70) return "C";
+  if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
 }
-
 const GRADE_COLOR: Record<string, string> = {
-  A: "#16a34a", B: "#0891b2", C: "#f59e0b", D: "#f97316", E: "#ef4444", F: "#991b1b",
+  A: "#16a34a", B: "#0891b2", C: "#d97706", D: "#ea580c", E: "#dc2626", F: "#991b1b",
 };
 
+/* ── Score ring ─────────────────────────────────────────────────── */
 function ScoreRing({ score, maxScore = 100 }: { score: number; maxScore?: number }) {
-  const r = 48, circ = 2 * Math.PI * r;
-  const pct = Math.min(score / maxScore, 1);
-  const offset = circ * (1 - pct);
+  const r = 40, circ = 2 * Math.PI * r;
   const grade = gradeFromScore(score);
   const color = GRADE_COLOR[grade] ?? "#94a3b8";
+  const offset = circ * (1 - Math.min(score / maxScore, 1));
   return (
-    <div style={{ position: "relative", width: 120, height: 120, flexShrink: 0 }}>
-      <svg viewBox="0 0 120 120" style={{ transform: "rotate(-90deg)", width: 120, height: 120 }}>
-        <circle cx="60" cy="60" r={r} fill="none" stroke="#e2e8f0" strokeWidth="10" />
-        <circle cx="60" cy="60" r={r} fill="none" stroke={color} strokeWidth="10"
+    <div style={{ position: "relative", width: 100, height: 100, flexShrink: 0 }}>
+      <svg viewBox="0 0 100 100" style={{ transform: "rotate(-90deg)", width: 100, height: 100 }}>
+        <circle cx="50" cy="50" r={r} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="8" />
+        <circle cx="50" cy="50" r={r} fill="none" stroke="#fff" strokeWidth="8"
           strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset .5s ease" }} />
+          style={{ transition: "stroke-dashoffset .6s ease" }} />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center", gap: 1 }}>
-        <div style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{score}</div>
-        <div style={{ fontSize: 10, color: "#94a3b8" }}>/{maxScore}</div>
-        <div style={{ fontSize: 15, fontWeight: 800, color }}>เกรด {grade}</div>
+        alignItems: "center", justifyContent: "center" }}>
+        <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", lineHeight: 1 }}>{score}</div>
+        <div style={{ fontSize: 9, color: "rgba(255,255,255,0.6)", marginTop: 1 }}>/{maxScore}</div>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#fff", marginTop: 2 }}>{grade}</div>
       </div>
     </div>
   );
 }
 
+/* ── Status badge ───────────────────────────────────────────────── */
+function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    draft:          { label: "ร่าง",                  bg: "rgba(255,255,255,0.15)", color: "#fff" },
+    pending_deputy: { label: "รอรองผู้อำนวยการ",      bg: "#fff3cd",               color: "#b45309" },
+    pending_hr:     { label: "รอ HR ประเมิน",          bg: "#ede9fe",               color: "#7c3aed" },
+    pending_final:  { label: "รออนุมัติขั้นสุดท้าย", bg: "#dcfce7",               color: "#16a34a" },
+    approved:       { label: "อนุมัติแล้ว",           bg: "#dcfce7",               color: "#16a34a" },
+    rejected:       { label: "ไม่อนุมัติ",           bg: "#fee2e2",               color: "#dc2626" },
+  };
+  const s = map[status] ?? { label: status, bg: "rgba(255,255,255,0.15)", color: "#fff" };
+  return (
+    <span style={{ background: s.bg, color: s.color, borderRadius: 4,
+      padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.05em" }}>
+      {s.label}
+    </span>
+  );
+}
+
+/* ── Workflow step bar ──────────────────────────────────────────── */
+const STEP_META = [
+  { key: "draft",          short: "01", label: "หัวหน้าแผนก" },
+  { key: "pending_deputy", short: "02", label: "รองผู้อำนวยการ" },
+  { key: "pending_hr",     short: "03", label: "HR ประเมิน" },
+  { key: "pending_final",  short: "04", label: "รองฯ อนุมัติสุดท้าย" },
+];
+const STATUS_ORDER = ["draft", "pending_deputy", "pending_hr", "pending_final", "approved"];
+
+function WorkflowSteps({ status }: { status: string }) {
+  const cur = STATUS_ORDER.indexOf(status);
+  const approved = status === "approved";
+  const rejected = status === "rejected";
+  return (
+    <div style={{ background: "#f0f5ff", borderBottom: "1px solid #dce4f5",
+      display: "flex", padding: "0 32px", overflowX: "auto" }}>
+      {STEP_META.map((s, i) => {
+        const done   = approved || i < cur;
+        const active = i === cur && !approved && !rejected;
+        const c = done ? "#16a34a" : active ? "#0038C6" : "#94a3b8";
+        const bg = done ? "#dcfce7" : active ? "#e8eeff" : "transparent";
+        return (
+          <div key={i} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
+            <div style={{ flex: 1, padding: "12px 8px", display: "flex", alignItems: "center",
+              gap: 8, borderBottom: `3px solid ${(done || active) ? c : "transparent"}`,
+              transition: "border-color .2s" }}>
+              <div style={{ width: 24, height: 24, borderRadius: "50%", background: bg,
+                border: `1.5px solid ${c}`, display: "flex", alignItems: "center",
+                justifyContent: "center", flexShrink: 0,
+                fontSize: 9, fontWeight: 700, color: c, fontFamily: "monospace" }}>
+                {done ? "✓" : s.short}
+              </div>
+              <span style={{ fontSize: 11, fontWeight: active ? 700 : 400, color: c,
+                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {s.label}
+              </span>
+            </div>
+            {i < STEP_META.length - 1 && (
+              <div style={{ width: 16, flexShrink: 0, display: "flex", alignItems: "center",
+                justifyContent: "center", color: "#c4cfee", fontSize: 14, paddingBottom: 3 }}>›</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Topic row ─────────────────────────────────────────────────── */
+function TopicRow({ topic, score, onChange, locked }: {
+  topic: Topic; score: number; onChange: (v: number) => void; locked: boolean;
+}) {
+  const isHR = topic.owner === "hr";
+  const accentColor = isHR ? "#7c3aed" : "#0038C6";
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6,
+      padding: "10px 14px", borderRadius: 4,
+      background: locked ? "#f8fafc" : "#fff",
+      border: `1px solid ${locked ? "#e8eeff" : "#c4cfee"}` }}>
+      <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+        background: locked ? "#f0f4ff" : (isHR ? "#ede9fe" : "#e8eeff"),
+        color: locked ? "#94a3b8" : accentColor,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 10, fontWeight: 700, border: `1px solid ${locked ? "#dce4f5" : (isHR ? "#ddd6fe" : "#c4cfee")}` }}>
+        {topic.id}
+      </div>
+      <div style={{ flex: 1, fontSize: 13, color: locked ? "#94a3b8" : "#1e293b", lineHeight: 1.4 }}>
+        {topic.text}
+      </div>
+      {locked ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 13 }}>🔒</span>
+          <span style={{ fontWeight: 700, fontSize: 15, color: "#94a3b8", minWidth: 24, textAlign: "right" }}>
+            {score || "—"}
+          </span>
+          <span style={{ fontSize: 11, color: "#c4cfee" }}>/10</span>
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <input type="number" min={0} max={10} value={score}
+            onChange={e => onChange(Math.min(10, Math.max(0, Number(e.target.value))))}
+            style={{ width: 56, padding: "5px 8px", borderRadius: 4,
+              border: `1.5px solid ${accentColor}`, fontSize: 15, textAlign: "center",
+              fontFamily: "inherit", fontWeight: 700, color: accentColor, outline: "none",
+              background: isHR ? "#faf5ff" : "#f0f5ff" }} />
+          <span style={{ fontSize: 11, color: "#94a3b8" }}>/10</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Section header ─────────────────────────────────────────────── */
+function SectionHeader({ color, label, note, style }: {
+  color: string; label: string; note?: string; style?: React.CSSProperties;
+}) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8, ...style }}>
+      <div style={{ width: 4, height: 16, borderRadius: 2, background: color, flexShrink: 0 }} />
+      <span style={{ fontSize: 12, fontWeight: 700, color, letterSpacing: "0.04em", textTransform: "uppercase" as const }}>{label}</span>
+      {note && (
+        <span style={{ fontSize: 10, color: "#94a3b8", background: "#f0f5ff",
+          borderRadius: 4, padding: "2px 8px", border: "1px solid #dce4f5" }}>{note}</span>
+      )}
+    </div>
+  );
+}
+
+/* ── Main component ─────────────────────────────────────────────── */
 export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const { user } = useAuth();
-  const [ev, setEv]           = useState<EvalDetail | null>(null);
-  const [topics, setTopics]   = useState<Topic[]>([]);
-  const [scores, setScores]   = useState<Record<number, number>>({});
+  const [ev, setEv]               = useState<EvalDetail | null>(null);
+  const [topics, setTopics]       = useState<Topic[]>([]);
+  const [scores, setScores]       = useState<Record<number, number>>({});
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [suggestion, setSuggestion] = useState("");
   const [decision, setDecision]     = useState("");
@@ -72,42 +193,48 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   useEffect(() => {
     fetch(`/api/eval/evaluations/${evalId}`).then(r => r.json())
       .then((evd: { ok: boolean; evaluation: EvalDetail; scores: ScoreRow[]; approvals: Approval[]; templateTopics: Topic[] | null }) => {
-        setEv(evd.evaluation);
+        const evaluation = evd.evaluation;
+        setEv(evaluation);
         setApprovals(evd.approvals ?? []);
-        setSuggestion(evd.evaluation.suggestion ?? "");
-        setDecision(evd.evaluation.decision ?? "");
-        setSignerEmp(evd.evaluation.signer_employee ?? "");
-        setSignerHead(evd.evaluation.signer_head ?? "");
-        setSignerHR(evd.evaluation.signer_hr ?? "");
-        setSignerDir(evd.evaluation.signer_director ?? "");
+        setSuggestion(evaluation.suggestion ?? "");
+        setDecision(evaluation.decision ?? "");
+        setSignerEmp(evaluation.signer_employee ?? "");
+        setSignerHead(evaluation.signer_head ?? "");
+        setSignerHR(evaluation.signer_hr ?? "");
+        setSignerDir(evaluation.signer_director ?? "");
         const sc: Record<number, number> = {};
         evd.scores.forEach(s => { sc[s.topic_id] = s.score; });
         setScores(sc);
-
-        // Use template topics if available, otherwise fetch global topics
-        if (evd.templateTopics) {
-          setTopics(evd.templateTopics);
-        } else {
-          fetch("/api/eval/topics").then(r => r.json())
-            .then((td: { ok: boolean; topics: Topic[] }) => setTopics(td.topics));
+        // Auto-fill signature
+        if (user) {
+          if (evaluation.status === "draft" && ["head","admin"].includes(user.role) && !evaluation.signer_head)
+            setSignerHead(user.full_name ?? "");
+          if (evaluation.status === "pending_hr" && ["hr","admin"].includes(user.role) && !evaluation.signer_hr)
+            setSignerHR(user.full_name ?? "");
+          if (evaluation.status === "pending_final" && user.role === "deputyHR" && !evaluation.signer_director)
+            setSignerDir(user.full_name ?? "");
         }
+        if (evd.templateTopics) setTopics(evd.templateTopics);
+        else fetch("/api/eval/topics").then(r => r.json())
+          .then((td: { ok: boolean; topics: Topic[] }) => setTopics(td.topics));
       });
   }, [evalId]);
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-  const grade      = gradeFromScore(totalScore);
 
-  const isHR      = user && ["hr", "admin"].includes(user.role);
-  const isHead    = user && ["head", "admin"].includes(user.role);
-  const canEdit   = !!(user && ["hr", "head", "admin"].includes(user.role) && ev?.status === "draft");
-  const canApprove = !!(user && ["deputy", "deputyHR", "admin"].includes(user.role) && ev?.status === "pending_deputy");
+  const canEditHead  = !!(user && ["head","admin"].includes(user.role)    && ev?.status === "draft");
+  const canEditHR    = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "pending_hr");
+  const canDeputyAct = !!(user && ["deputy","admin"].includes(user.role)  && ev?.status === "pending_deputy");
+  const canHRAct     = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "pending_hr");
+  const canFinalAct  = !!(user && ["deputyHR","admin"].includes(user.role)&& ev?.status === "pending_final");
 
-  async function save(action: "save" | "submit" | "approve" | "reject") {
+  async function save(action: string) {
     setSaving(true); setError("");
     const r = await fetch(`/api/eval/evaluations/${evalId}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action, scores, suggestion, decision, grade, note,
+        action, scores, suggestion, decision,
+        grade: gradeFromScore(totalScore), note,
         signer_employee: signerEmp || null, signer_head: signerHead || null,
         signer_hr: signerHR || null, signer_director: signerDir || null,
       }),
@@ -119,295 +246,344 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   }
 
   if (!ev) return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 40 }}>กำลังโหลด…</div>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex",
+      alignItems: "center", justifyContent: "center", zIndex: 100 }}>
+      <div style={{ background: "#fff", borderRadius: 12, padding: 40, color: "#0038C6",
+        fontWeight: 600 }}>กำลังโหลด…</div>
     </div>
   );
 
   const hrTopics   = topics.filter(t => t.owner === "hr");
   const headTopics = topics.filter(t => t.owner === "head");
 
-  const DECISIONS = ["ผ่านทดลองงาน", "ทดลองงานต่อ", "ยุติการจ้าง"];
+  const DECISIONS = ev.round >= 90
+    ? ["บรรจุเป็นพนักงานประจำ", "ยุติทดลองงาน"]
+    : ["ทดลองงานต่อในเดือนถัดไป", "ยุติทดลองงาน"];
   const DECISION_COLOR: Record<string, string> = {
-    "ผ่านทดลองงาน": "#16a34a", "ทดลองงานต่อ": "#f59e0b", "ยุติการจ้าง": "#dc2626",
+    "บรรจุเป็นพนักงานประจำ":    "#16a34a",
+    "ทดลองงานต่อในเดือนถัดไป": "#d97706",
+    "ยุติทดลองงาน":             "#dc2626",
+  };
+  const STEP_LABEL: Record<string, string> = {
+    head: "หัวหน้าแผนก", deputy: "รองผู้อำนวยการ",
+    hr: "ฝ่ายทรัพยากรบุคคล", final: "รองผู้อำนวยการ (อนุมัติสุดท้าย)",
+  };
+
+  /* ── shared style tokens ── */
+  const cardStyle: React.CSSProperties = {
+    background: "#fff", border: "1px solid #dce4f5", borderRadius: 6,
+    borderLeft: "4px solid #0038C6",
+  };
+  const inp: React.CSSProperties = {
+    width: "100%", padding: "9px 12px", borderRadius: 4,
+    border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+    outline: "none", boxSizing: "border-box" as const, background: "#fff",
+  };
+  const btnClose: React.CSSProperties = {
+    flex: 1, minWidth: 80, padding: "11px 0", borderRadius: 4,
+    border: "1.5px solid #c4cfee", background: "#fff", cursor: "pointer",
+    fontFamily: "inherit", fontSize: 13, color: "#475569",
+  };
+  const btnPrimary = (bg: string): React.CSSProperties => ({
+    flex: 2, minWidth: 150, padding: "11px 0", borderRadius: 4, border: "none",
+    background: bg, color: "#fff", fontWeight: 700, cursor: "pointer",
+    fontFamily: "inherit", fontSize: 13, letterSpacing: "0.02em",
+  });
+  const btnOutline = (color: string): React.CSSProperties => ({
+    flex: 1, minWidth: 100, padding: "11px 0", borderRadius: 4,
+    border: `1.5px solid ${color}`, background: "#fff",
+    color, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+  });
+  const btnRed: React.CSSProperties = {
+    flex: 1, minWidth: 100, padding: "11px 0", borderRadius: 4, border: "none",
+    background: "#dc2626", color: "#fff", fontWeight: 700,
+    cursor: "pointer", fontFamily: "inherit", fontSize: 13,
   };
 
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-      style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", display: "flex",
-        alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 700,
-        maxHeight: "94vh", overflowY: "auto", boxShadow: "0 32px 80px rgba(0,0,0,.3)" }}>
+      style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+      <div style={{ background: "#f0f5ff", borderRadius: 8, width: "100%", maxWidth: 720,
+        maxHeight: "94vh", overflowY: "auto",
+        boxShadow: "0 24px 80px rgba(0,56,198,0.25), 0 4px 16px rgba(0,0,0,0.1)",
+        border: "1px solid #c4cfee" }}>
 
-        {/* ── Header ── */}
-        <div style={{ padding: "22px 28px 18px", borderBottom: "1px solid #f1f5f9" }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: 18 }}>
+        {/* ── Blue header ── */}
+        <div style={{ background: "#0038C6", borderRadius: "8px 8px 0 0",
+          padding: "28px 32px 24px", position: "relative", overflow: "hidden" }}>
+          {/* Decorative circles */}
+          <div style={{ position: "absolute", right: -40, top: -40, width: 160, height: 160,
+            borderRadius: "50%", border: "32px solid rgba(255,255,255,0.06)", pointerEvents: "none" }} />
+          <div style={{ position: "absolute", right: 60, bottom: -60, width: 120, height: 120,
+            borderRadius: "50%", border: "24px solid rgba(255,255,255,0.04)", pointerEvents: "none" }} />
+
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 20, position: "relative", zIndex: 1 }}>
             <ScoreRing score={totalScore} />
             <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ background: "#0038C622", color: "#0038C6", borderRadius: 20,
-                  padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>รอบ {ev.round} วัน</span>
+              <div style={{ fontFamily: "monospace", fontSize: 10, letterSpacing: "0.18em",
+                color: "rgba(255,255,255,0.5)", marginBottom: 8, textTransform: "uppercase" as const }}>
+                ระบบประเมินพนักงานทดลองงาน
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" as const }}>
+                <span style={{ background: "rgba(255,255,255,0.15)", color: "#fff", borderRadius: 4,
+                  padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.08em",
+                  fontFamily: "monospace" }}>
+                  รอบ {ev.round} วัน
+                </span>
                 <StatusBadge status={ev.status} />
               </div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{ev.full_name}</div>
-              <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                {ev.position ?? "—"} · {ev.department_name ?? "—"} · {ev.division_name ?? "—"}
+              <div style={{ fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.01em" }}>
+                {ev.full_name}
               </div>
-              {ev.start_date && (
-                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 4 }}>
-                  เริ่มงาน {ev.start_date}
-                </div>
-              )}
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.65)", marginTop: 6, lineHeight: 1.6 }}>
+                {ev.position ?? "—"} · {ev.department_name ?? "—"} · {ev.division_name ?? "—"}
+                {ev.start_date && <> · เริ่มงาน {ev.start_date}</>}
+              </div>
             </div>
-            <button onClick={onClose} style={{ border: "none", background: "#f1f5f9", borderRadius: 10,
-              width: 36, height: 36, cursor: "pointer", fontSize: 20, display: "flex",
-              alignItems: "center", justifyContent: "center", color: "#64748b", flexShrink: 0 }}>×</button>
+            <button onClick={onClose} style={{ border: "none", background: "rgba(255,255,255,0.15)",
+              borderRadius: 6, width: 34, height: 34, cursor: "pointer", fontSize: 18,
+              color: "#fff", display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, zIndex: 1 }}>×</button>
           </div>
         </div>
 
-        <div style={{ padding: "20px 28px" }}>
+        {/* ── Workflow step bar ── */}
+        <WorkflowSteps status={ev.status} />
 
-          {/* ── HR Topics (1-3) ── */}
-          <SectionHeader color="#0038C6" label="หัวข้อฝ่ายบุคคลประเมิน (ข้อ 1–3)"
-            note={!isHR ? "🔒 เฉพาะ HR เท่านั้น" : undefined} />
-          {hrTopics.map(t => (
-            <TopicRow key={t.id} topic={t} score={scores[t.id] ?? 0}
-              onChange={v => setScores(p => ({ ...p, [t.id]: v }))}
-              locked={!canEdit || !isHR} />
-          ))}
+        {/* ── Content ── */}
+        <div style={{ padding: "24px 32px 32px", display: "flex", flexDirection: "column", gap: 20 }}>
 
-          {/* ── Head Topics (4-10) ── */}
-          <SectionHeader color="#16A34A" label="หัวข้อหัวหน้าแผนกประเมิน (ข้อ 4–10)"
-            note={!isHead ? "🔒 เฉพาะหัวหน้าแผนกเท่านั้น" : undefined}
-            style={{ marginTop: 20 }} />
-          {headTopics.map(t => (
-            <TopicRow key={t.id} topic={t} score={scores[t.id] ?? 0}
-              onChange={v => setScores(p => ({ ...p, [t.id]: v }))}
-              locked={!canEdit || !isHead} />
-          ))}
-
-          {/* ── Suggestion ── */}
-          <div style={{ marginTop: 22, borderTop: "1px solid #f1f5f9", paddingTop: 18 }}>
-            <label style={labelStyle}>ข้อเสนอแนะ / ความเห็นเพิ่มเติม</label>
-            <textarea value={suggestion} onChange={e => setSuggestion(e.target.value)}
-              readOnly={!canEdit}
-              rows={3} style={{ ...inputStyle, resize: "vertical", height: "auto" }} />
+          {/* Head topics card */}
+          <div style={{ ...cardStyle }}>
+            <div style={{ padding: "16px 20px 6px" }}>
+              <SectionHeader color="#0038C6"
+                label={`หัวหน้าแผนกประเมิน · ${headTopics.length} ข้อ`}
+                note={!canEditHead ? (ev.status === "draft" ? "🔒 เฉพาะหัวหน้าแผนก" : "🔒 ดูเท่านั้น") : undefined} />
+            </div>
+            <div style={{ padding: "0 20px 16px" }}>
+              {headTopics.map(t => (
+                <TopicRow key={t.id} topic={t} score={scores[t.id] ?? 0}
+                  onChange={v => setScores(p => ({ ...p, [t.id]: v }))}
+                  locked={!canEditHead} />
+              ))}
+            </div>
           </div>
 
-          {/* ── Decision ── */}
-          <div style={{ marginTop: 16 }}>
-            <label style={labelStyle}>ผลการพิจารณา</label>
-            {canEdit ? (
-              <div style={{ display: "flex", gap: 8 }}>
-                {DECISIONS.map(d => (
-                  <button key={d} onClick={() => setDecision(d)}
-                    style={{ flex: 1, padding: "10px 4px", borderRadius: 10, border: "2px solid",
-                      borderColor: decision === d ? DECISION_COLOR[d] : "#e2e8f0",
-                      background: decision === d ? DECISION_COLOR[d] : "#fff",
-                      color: decision === d ? "#fff" : "#475569",
-                      fontFamily: "inherit", fontSize: 13, fontWeight: 700, cursor: "pointer",
-                      transition: "all .15s" }}>
-                    {d}
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: "10px 14px", background: "#f8fafc", borderRadius: 10, fontSize: 14,
-                color: ev.decision ? (DECISION_COLOR[ev.decision] ?? "#1e293b") : "#94a3b8",
-                fontWeight: ev.decision ? 700 : 400 }}>
-                {ev.decision || "—"}
-              </div>
-            )}
+          {/* HR topics card */}
+          <div style={{ ...cardStyle, borderLeftColor: "#7c3aed" }}>
+            <div style={{ padding: "16px 20px 6px" }}>
+              <SectionHeader color="#7c3aed" label="ฝ่ายบุคคลประเมิน · 3 ข้อ"
+                note={!canEditHR ? "🔒 HR ประเมินในขั้นตอนที่ 3" : undefined} />
+            </div>
+            <div style={{ padding: "0 20px 16px" }}>
+              {hrTopics.map(t => (
+                <TopicRow key={t.id} topic={t} score={scores[t.id] ?? 0}
+                  onChange={v => setScores(p => ({ ...p, [t.id]: v }))}
+                  locked={!canEditHR} />
+              ))}
+            </div>
           </div>
 
-          {/* ── Signatories ── */}
-          <div style={{ marginTop: 22, borderTop: "1px solid #f1f5f9", paddingTop: 18 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#334155", marginBottom: 14 }}>
+          {/* Suggestion + Decision */}
+          <div style={{ ...cardStyle, borderLeftColor: "#0038C6", padding: "20px" }}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0038C6",
+                letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                ข้อเสนอแนะ / ความเห็น (หัวหน้าแผนก)
+              </label>
+              <textarea value={suggestion} onChange={e => setSuggestion(e.target.value)}
+                readOnly={!canEditHead} rows={2}
+                style={{ ...inp, resize: "vertical" as const, height: "auto",
+                  background: canEditHead ? "#fff" : "#f8fafc" }} />
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#0038C6",
+                letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                ผลการพิจารณา (หัวหน้าแผนก)
+              </label>
+              {canEditHead ? (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+                  {DECISIONS.map(d => (
+                    <button key={d} onClick={() => setDecision(d)}
+                      style={{ flex: 1, minWidth: 130, padding: "10px 8px", borderRadius: 4,
+                        border: `2px solid ${decision === d ? DECISION_COLOR[d] : "#dce4f5"}`,
+                        background: decision === d ? DECISION_COLOR[d] : "#fff",
+                        color: decision === d ? "#fff" : "#64748b",
+                        fontFamily: "inherit", fontSize: 12, fontWeight: 700, cursor: "pointer",
+                        transition: "all .15s", letterSpacing: "0.01em" }}>
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ padding: "10px 14px", background: "#f0f5ff", borderRadius: 4,
+                  fontSize: 13, border: "1px solid #dce4f5",
+                  color: ev.decision ? (DECISION_COLOR[ev.decision] ?? "#1e293b") : "#94a3b8",
+                  fontWeight: ev.decision ? 700 : 400 }}>
+                  {ev.decision || "—"}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Note for deputy / final */}
+          {(canDeputyAct || canFinalAct) && (
+            <div style={{ background: "#fff8ed", border: "1px solid #fde68a",
+              borderLeft: "4px solid #d97706", borderRadius: 4, padding: "16px 20px" }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#b45309",
+                letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                หมายเหตุการอนุมัติ (ถ้ามี)
+              </label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                style={{ ...inp, resize: "vertical" as const, height: "auto",
+                  borderColor: "#fde68a" }} />
+            </div>
+          )}
+
+          {/* Note for HR */}
+          {canHRAct && (
+            <div style={{ background: "#faf5ff", border: "1px solid #ddd6fe",
+              borderLeft: "4px solid #7c3aed", borderRadius: 4, padding: "16px 20px" }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#7c3aed",
+                letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 8 }}>
+                หมายเหตุ HR (ถ้ามี)
+              </label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
+                style={{ ...inp, resize: "vertical" as const, height: "auto",
+                  borderColor: "#ddd6fe" }} />
+            </div>
+          )}
+
+          {/* Signatories */}
+          <div style={{ ...cardStyle, borderLeftColor: "#16a34a", padding: "20px" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a",
+              letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 14 }}>
               ✍️ ผู้ลงนาม
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 20px" }}>
-              {[
-                { label: "พนักงานผู้รับการประเมิน", value: signerEmp, set: setSignerEmp },
-                { label: "หัวหน้าแผนก",             value: signerHead, set: setSignerHead },
-                { label: "ฝ่ายทรัพยากรบุคคล",      value: signerHR,   set: setSignerHR },
-                { label: "รองผู้อำนวยการ",          value: signerDir,  set: setSignerDir },
-              ].map(({ label, value, set }) => (
+              {([
+                { label: "พนักงานผู้รับการประเมิน", value: signerEmp,  set: setSignerEmp,  editable: canEditHead },
+                { label: "หัวหน้าแผนก",             value: signerHead, set: setSignerHead, editable: canEditHead },
+                { label: "ฝ่ายทรัพยากรบุคคล",      value: signerHR,   set: setSignerHR,   editable: canEditHR },
+                { label: "รองผู้อำนวยการ",          value: signerDir,  set: setSignerDir,  editable: canFinalAct },
+              ] as { label: string; value: string; set: (v: string) => void; editable: boolean }[]).map(({ label, value, set, editable }) => (
                 <div key={label}>
-                  <label style={{ ...labelStyle, fontSize: 11, textTransform: "uppercase",
-                    letterSpacing: "0.05em" }}>{label}</label>
+                  <label style={{ display: "block", fontSize: 10, fontWeight: 600, color: "#64748b",
+                    letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                    {label}
+                  </label>
                   <input value={value} onChange={e => set(e.target.value)}
-                    readOnly={!canEdit && !canApprove}
-                    placeholder={canEdit || canApprove ? "ชื่อ-นามสกุล" : "—"}
-                    style={{ ...inputStyle, fontSize: 13 }} />
+                    readOnly={!editable} placeholder={editable ? "ชื่อ-นามสกุล" : "—"}
+                    style={{ ...inp, fontSize: 12, background: editable ? "#fff" : "#f8fafc",
+                      borderColor: editable ? "#c4cfee" : "#e8eeff" }} />
                 </div>
               ))}
             </div>
           </div>
 
-          {/* ── Deputy approve note ── */}
-          {canApprove && (
-            <div style={{ marginTop: 16 }}>
-              <label style={labelStyle}>หมายเหตุการอนุมัติ (ถ้ามี)</label>
-              <textarea value={note} onChange={e => setNote(e.target.value)} rows={2}
-                style={{ ...inputStyle, resize: "vertical", height: "auto" }} />
-            </div>
-          )}
-
-          {/* ── Approval Timeline ── */}
+          {/* Approval timeline */}
           {approvals.length > 0 && (
-            <div style={{ marginTop: 20, borderTop: "1px solid #f1f5f9", paddingTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#334155", marginBottom: 12 }}>
+            <div style={{ background: "#fff", border: "1px solid #dce4f5", borderRadius: 6,
+              padding: "20px" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#0038C6",
+                letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: 16 }}>
                 ประวัติการดำเนินการ
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-                {approvals.map((a, i) => (
-                  <div key={i} style={{ display: "flex", gap: 12, position: "relative",
-                    paddingBottom: i < approvals.length - 1 ? 14 : 0 }}>
-                    {/* Timeline line */}
-                    {i < approvals.length - 1 && (
-                      <div style={{ position: "absolute", left: 15, top: 30, bottom: 0,
-                        width: 2, background: "#e2e8f0" }} />
-                    )}
-                    <div style={{ width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
-                      background: a.status === "approved" ? "#dcfce7" : "#fee2e2",
-                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
-                      {a.status === "approved" ? "✓" : "✗"}
+              {approvals.map((a, i) => (
+                <div key={i} style={{ display: "flex", gap: 12, position: "relative",
+                  paddingBottom: i < approvals.length - 1 ? 16 : 0 }}>
+                  {i < approvals.length - 1 && (
+                    <div style={{ position: "absolute", left: 14, top: 28, bottom: 0,
+                      width: 1, background: "#dce4f5" }} />
+                  )}
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                    background: a.status === "approved" ? "#dcfce7" : "#fee2e2",
+                    border: `1px solid ${a.status === "approved" ? "#bbf7d0" : "#fecaca"}`,
+                    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+                    color: a.status === "approved" ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
+                    {a.status === "approved" ? "✓" : "✗"}
+                  </div>
+                  <div style={{ flex: 1, paddingTop: 3 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1e293b" }}>
+                      {STEP_LABEL[a.step] ?? a.step}
+                      <span style={{ fontWeight: 400, color: "#64748b" }}> — {a.approver_name}</span>
                     </div>
-                    <div style={{ flex: 1, paddingTop: 4 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>
-                        {a.step === "head" ? "หัวหน้าแผนก" : "รองผู้อำนวยการ"} — {a.approver_name}
-                      </div>
-                      <div style={{ fontSize: 12, color: a.status === "approved" ? "#16a34a" : "#dc2626" }}>
-                        {a.status === "approved" ? "✅ อนุมัติ" : "❌ ไม่อนุมัติ"}
-                        {a.note ? ` · ${a.note}` : ""}
-                      </div>
-                      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
-                        {new Date(a.created_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                      </div>
+                    <div style={{ fontSize: 11, color: a.status === "approved" ? "#16a34a" : "#dc2626", marginTop: 2 }}>
+                      {a.status === "approved" ? "✅ อนุมัติ / ดำเนินการ" : "❌ ไม่อนุมัติ"}
+                      {a.note ? ` · ${a.note}` : ""}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2, fontFamily: "monospace" }}>
+                      {new Date(a.created_at).toLocaleDateString("th-TH", {
+                        day: "numeric", month: "short", year: "2-digit",
+                        hour: "2-digit", minute: "2-digit" })}
                     </div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {error && <div style={{ color: "#dc2626", fontSize: 13, marginTop: 12 }}>{error}</div>}
+          {error && (
+            <div style={{ color: "#dc2626", fontSize: 12, padding: "10px 14px",
+              background: "#fee2e2", borderRadius: 4, border: "1px solid #fecaca" }}>
+              {error}
+            </div>
+          )}
 
-          {/* ── Action Buttons ── */}
-          <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
-            <button onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: 10,
-              border: "1.5px solid #e2e8f0", background: "#fff", cursor: "pointer",
-              fontFamily: "inherit", fontSize: 14 }}>ปิด</button>
+          {/* ── Action buttons ── */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
+            <button onClick={onClose} style={btnClose}>ปิด</button>
 
-            {canEdit && (
+            {canEditHead && (
               <>
-                <button onClick={() => save("save")} disabled={saving}
-                  style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "1.5px solid #16A34A",
-                    background: "#fff", color: "#16A34A", fontWeight: 600, cursor: "pointer",
-                    fontFamily: "inherit", fontSize: 14 }}>
+                <button onClick={() => save("save")} disabled={saving} style={btnOutline("#0038C6")}>
                   💾 บันทึกร่าง
                 </button>
                 <button onClick={() => save("submit")} disabled={saving || !decision}
-                  style={{ flex: 2, padding: "11px 0", borderRadius: 10, border: "none",
-                    background: decision ? "#16A34A" : "#94a3b8",
-                    color: "#fff", fontWeight: 700, cursor: decision ? "pointer" : "not-allowed",
-                    fontFamily: "inherit", fontSize: 14 }}>
-                  {saving ? "กำลังส่ง…" : "ส่งขออนุมัติ →"}
+                  style={{ ...btnPrimary(decision ? "#0038C6" : "#94a3b8"),
+                    cursor: decision ? "pointer" : "not-allowed" }}>
+                  {saving ? "กำลังส่ง…" : "ส่งให้รองผู้อำนวยการ →"}
                 </button>
               </>
             )}
-            {canApprove && (
+            {canDeputyAct && (
               <>
-                <button onClick={() => save("reject")} disabled={saving}
-                  style={{ flex: 1, padding: "11px 0", borderRadius: 10, border: "none",
-                    background: "#ef4444", color: "#fff", fontWeight: 700,
-                    cursor: "pointer", fontFamily: "inherit", fontSize: 14 }}>
+                <button onClick={() => save("deputy_reject")} disabled={saving} style={btnRed}>
                   ✗ ไม่อนุมัติ
                 </button>
-                <button onClick={() => save("approve")} disabled={saving}
-                  style={{ flex: 2, padding: "11px 0", borderRadius: 10, border: "none",
-                    background: "#16A34A", color: "#fff", fontWeight: 700,
-                    cursor: "pointer", fontFamily: "inherit", fontSize: 14 }}>
-                  {saving ? "กำลังอนุมัติ…" : "✓ อนุมัติ"}
+                <button onClick={() => save("deputy_approve")} disabled={saving}
+                  style={btnPrimary("#0038C6")}>
+                  {saving ? "กำลังบันทึก…" : "✓ อนุมัติ → ส่ง HR"}
+                </button>
+              </>
+            )}
+            {canHRAct && (
+              <>
+                <button onClick={() => save("save")} disabled={saving} style={btnOutline("#7c3aed")}>
+                  💾 บันทึกร่าง
+                </button>
+                <button onClick={() => save("hr_acknowledge")} disabled={saving}
+                  style={btnPrimary("#7c3aed")}>
+                  {saving ? "กำลังส่ง…" : "รับทราบและส่งต่อ →"}
+                </button>
+              </>
+            )}
+            {canFinalAct && (
+              <>
+                <button onClick={() => save("final_reject")} disabled={saving} style={btnRed}>
+                  ✗ ไม่อนุมัติ
+                </button>
+                <button onClick={() => save("final_approve")} disabled={saving}
+                  style={btnPrimary("#16a34a")}>
+                  {saving ? "กำลังบันทึก…" : "✓ อนุมัติขั้นสุดท้าย"}
                 </button>
               </>
             )}
           </div>
+
         </div>
       </div>
     </div>
   );
 }
-
-// ── Sub-components ──
-
-function SectionHeader({ color, label, note, style }: { color: string; label: string; note?: string; style?: React.CSSProperties }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, ...style }}>
-      <div style={{ width: 4, height: 18, borderRadius: 2, background: color, flexShrink: 0 }} />
-      <span style={{ fontSize: 13, fontWeight: 700, color }}>{label}</span>
-      {note && <span style={{ fontSize: 11, color: "#94a3b8", background: "#f8fafc",
-        borderRadius: 6, padding: "2px 8px" }}>{note}</span>}
-    </div>
-  );
-}
-
-function TopicRow({ topic, score, onChange, locked }: {
-  topic: Topic; score: number; onChange: (v: number) => void; locked: boolean;
-}) {
-  const color = topic.owner === "hr" ? "#0038C6" : "#16A34A";
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8,
-      padding: "10px 14px", background: locked ? "#f8fafc" : "#fff",
-      borderRadius: 10, border: `1px solid ${locked ? "#f1f5f9" : "#e2e8f0"}` }}>
-      <div style={{ width: 26, height: 26, borderRadius: "50%", background: color + "22",
-        color, display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: 12, fontWeight: 700, flexShrink: 0 }}>
-        {topic.id}
-      </div>
-      <div style={{ flex: 1, fontSize: 13, color: locked ? "#94a3b8" : "#334155" }}>
-        {topic.text}
-      </div>
-      {locked ? (
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 16 }}>🔒</span>
-          <span style={{ fontWeight: 700, fontSize: 15, color: "#94a3b8", minWidth: 28, textAlign: "center" }}>
-            {score || "—"}
-          </span>
-          <span style={{ fontSize: 12, color: "#cbd5e1" }}>/10</span>
-        </div>
-      ) : (
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <input type="number" min={0} max={10} value={score}
-            onChange={e => onChange(Math.min(10, Math.max(0, Number(e.target.value))))}
-            style={{ width: 56, padding: "5px 8px", borderRadius: 8, border: "1.5px solid #e2e8f0",
-              fontSize: 15, textAlign: "center", fontFamily: "inherit", fontWeight: 700,
-              color, outline: "none" }} />
-          <span style={{ fontSize: 12, color: "#94a3b8" }}>/10</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, { label: string; bg: string; color: string }> = {
-    draft:         { label: "ร่าง",          bg: "#f1f5f9", color: "#64748b" },
-    pending_deputy:{ label: "รออนุมัติรอง",  bg: "#dbeafe", color: "#1d4ed8" },
-    approved:      { label: "อนุมัติแล้ว",   bg: "#dcfce7", color: "#16a34a" },
-    rejected:      { label: "ไม่อนุมัติ",   bg: "#fee2e2", color: "#dc2626" },
-  };
-  const s = map[status] ?? { label: status, bg: "#f1f5f9", color: "#64748b" };
-  return (
-    <span style={{ background: s.bg, color: s.color, borderRadius: 20,
-      padding: "3px 12px", fontSize: 12, fontWeight: 700 }}>{s.label}</span>
-  );
-}
-
-const labelStyle: React.CSSProperties = {
-  display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 6,
-};
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0",
-  fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
-};

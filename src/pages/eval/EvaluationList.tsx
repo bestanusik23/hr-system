@@ -9,12 +9,20 @@ interface Evaluation {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  draft: "ร่าง", head_submitted: "หัวหน้าส่งแล้ว", pending_deputy: "รออนุมัติรอง",
-  approved: "อนุมัติแล้ว", rejected: "ไม่อนุมัติ",
+  draft:          "ร่าง",
+  pending_deputy: "รอรองผู้อำนวยการ",
+  pending_hr:     "รอ HR ประเมิน",
+  pending_final:  "รออนุมัติสุดท้าย",
+  approved:       "อนุมัติแล้ว",
+  rejected:       "ไม่อนุมัติ",
 };
 const STATUS_COLOR: Record<string, string> = {
-  draft: "#94a3b8", head_submitted: "#f59e0b", pending_deputy: "#0891b2",
-  approved: "#16a34a", rejected: "#ef4444",
+  draft:          "#94a3b8",
+  pending_deputy: "#c2410c",
+  pending_hr:     "#1d4ed8",
+  pending_final:  "#7c3aed",
+  approved:       "#16a34a",
+  rejected:       "#ef4444",
 };
 
 export default function EvaluationList() {
@@ -36,11 +44,13 @@ export default function EvaluationList() {
   useEffect(() => { load(); }, [statusFilter]);
 
   const canCreate = user && ["hr", "head", "admin"].includes(user.role);
-  const pendingApproval = user && ["deputy", "deputyHR"].includes(user.role);
 
-  const filters = pendingApproval
-    ? [["", "ทั้งหมด"], ["pending_deputy", "รออนุมัติ"], ["approved", "อนุมัติแล้ว"], ["rejected", "ไม่อนุมัติ"]]
-    : [["", "ทั้งหมด"], ["draft", "ร่าง"], ["pending_deputy", "รออนุมัติ"], ["approved", "อนุมัติแล้ว"]];
+  // Filter tabs scoped to what each role cares about
+  const filters: [string, string][] =
+    user?.role === "deputy"    ? [["", "ทั้งหมด"], ["pending_deputy", "รอฉันอนุมัติ"], ["approved", "อนุมัติแล้ว"], ["rejected", "ไม่อนุมัติ"]]
+    : user?.role === "hr"      ? [["", "ทั้งหมด"], ["pending_hr", "รอ HR ประเมิน"], ["approved", "อนุมัติแล้ว"]]
+    : user?.role === "deputyHR"? [["", "ทั้งหมด"], ["pending_final", "รอฉันอนุมัติ"], ["approved", "อนุมัติแล้ว"], ["rejected", "ไม่อนุมัติ"]]
+    : [["", "ทั้งหมด"], ["draft", "ร่าง"], ["pending_deputy", "รอรองฯ"], ["pending_hr", "รอ HR"], ["pending_final", "รออนุมัติสุดท้าย"], ["approved", "อนุมัติแล้ว"]];
 
   return (
     <div>

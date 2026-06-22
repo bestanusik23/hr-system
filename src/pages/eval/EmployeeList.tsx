@@ -34,7 +34,8 @@ function roundState(days: number | null, round: 30 | 60 | 90, evals: EvalSummary
   const ev = evals.find(e => e.employee_id === empId && e.round === round);
   if (ev) {
     if (ev.status === "approved") return { state: "done", evalId: ev.id };
-    if (ev.status === "pending_deputy") return { state: "pending", evalId: ev.id };
+    if (["pending_deputy", "pending_hr", "pending_final"].includes(ev.status))
+      return { state: "pending", evalId: ev.id };
     return { state: "draft", evalId: ev.id };
   }
   if (days === null) return { state: "waiting", evalId: null };
