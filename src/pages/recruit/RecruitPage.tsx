@@ -45,7 +45,11 @@ const TABLE_COL_DEFS = [
 ] as const;
 
 // คอลัมน์ระยะเวลาลาออก — แสดงใน detail modal เท่านั้น (ไม่แสดงในตาราง)
-const NOTICE_KEYS = ["ระยะเวลาในการลาออก", "ระยะเวลาลาออก", "ลาออกให้ถูกต้อง", "กี่วัน", "notice"];
+const NOTICE_KEYS = [
+  "ระยะเวลาในการลาออก", "ระยะเวลาลาออก", "ลาออกให้ถูกต้อง", "กี่วัน", "notice",
+  "ยังไม่ออกจากงาน", "ออกจากงานเดิม", "ลาออกตามระเบียบ", "ระเบียบกี่วัน",
+  "คัดเลือกเข้าทำงาน", "ท่านต้องใช้ระยะเวลา",
+];
 
 function findColKey(dataCols: string[], keys: readonly string[]): string | undefined {
   for (const kw of keys) {
@@ -117,10 +121,12 @@ export default function RecruitPage() {
     h.includes("โทร") || h.toLowerCase().includes("phone") || h.toLowerCase().includes("tel") || h.includes("ติดต่อ")
   );
 
-  // คอลัมน์ระยะเวลาลาออก — ใช้ใน detail modal
-  const noticeKey = allDataCols.find(h =>
+  // คอลัมน์ระยะเวลาลาออก — ค้นจาก headers ทั้งหมด (รวมถึงที่อาจถูก filter ออก)
+  const noticeKey = headers.find(h =>
     NOTICE_KEYS.some(kw => h.toLowerCase().includes(kw.toLowerCase()))
   );
+  // debug: log headers เพื่อตรวจสอบชื่อคอลัมจริง
+  if (headers.length > 0) console.log("[recruit] headers:", headers);
 
   const interviewQueue = statusKey
     ? applications.filter(a => a[statusKey] === "รอนัดสัมภาษณ์")
