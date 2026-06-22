@@ -158,7 +158,7 @@ export default function RecruitPage() {
       {/* Toolbar */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ค้นหา..."
-          style={{ padding: "9px 16px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", width: 220, outline: "none" }} />
+          style={{ padding: "9px 16px", borderRadius: 7, border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit", width: 220, outline: "none" }} />
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <FilterBtn label={`ทั้งหมด (${applications.length})`} active={!statusFilter} onClick={() => setStatusFilter("")} />
 
@@ -279,11 +279,11 @@ export default function RecruitPage() {
       ) : (
 
         /* ── Regular Table View ── */
-        <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 1px 8px rgba(0,0,0,.07)", overflow: "hidden" }}>
+        <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #dce4f5", overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
-                <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e2e8f0" }}>
+                <tr style={{ background: "#f4f7ff", borderBottom: "2px solid #dce4f5" }}>
                   <th style={TH}>#</th>
                   {resolvedTableCols.map(col => <th key={col.label} style={TH}>{col.label}</th>)}
                   <th style={TH}>ผลพิจารณา</th>
@@ -341,7 +341,7 @@ export default function RecruitPage() {
               </tbody>
             </table>
           </div>
-          <div style={{ padding: "12px 20px", borderTop: "1px solid #f1f5f9", fontSize: 12, color: "#94a3b8", textAlign: "right" }}>
+          <div style={{ padding: "12px 20px", borderTop: "1px solid #f0f5ff", fontSize: 12, color: "#94a3b8", textAlign: "right" }}>
             แสดง {filtered.length} รายการ จาก {applications.length} ทั้งหมด
           </div>
         </div>
@@ -463,8 +463,8 @@ export default function RecruitPage() {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div style={{ background: "#fff", borderRadius: 12, padding: "14px 20px",
-      boxShadow: "0 1px 4px rgba(0,0,0,.06)", borderLeft: `4px solid ${color}`, minWidth: 120 }}>
+    <div style={{ background: "#fff", borderRadius: 8, padding: "14px 20px",
+      border: "1px solid #dce4f5", borderLeft: `4px solid ${color}`, minWidth: 120 }}>
       <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color }}>{value}</div>
     </div>

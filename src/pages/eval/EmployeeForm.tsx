@@ -70,9 +70,13 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
   }
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.2)" }}>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 22 }}>{employee ? "แก้ไขข้อมูลพนักงาน" : "เพิ่มพนักงานใหม่"}</div>
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 10, padding: 32, width: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,56,198,0.25)", border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#0a1628", marginBottom: 22, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 4, height: 18, borderRadius: 2, background: "#0038C6" }} />
+          {employee ? "แก้ไขข้อมูลพนักงาน" : "เพิ่มพนักงานใหม่"}
+        </div>
 
         <Field label="ชื่อ-นามสกุล *">
           <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" />
@@ -86,11 +90,11 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
               style={inp} placeholder="🔍 ค้นหาหรือพิมพ์ตำแหน่ง…"
             />
             {posOpen && filteredPos.length > 0 && (
-              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #e2e8f0", borderRadius: 9, boxShadow: "0 8px 24px rgba(0,0,0,.12)", zIndex: 200, maxHeight: 200, overflowY: "auto" }}>
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1.5px solid #c4cfee", borderRadius: 7, boxShadow: "0 8px 24px rgba(0,56,198,.14)", zIndex: 200, maxHeight: 200, overflowY: "auto" }}>
                 {filteredPos.slice(0, 30).map(t => (
                   <div key={t.id} onClick={() => { setPosition(t.name); setPosSearch(t.name); setPosOpen(false); }}
                     style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "#f0fdf4")}
+                    onMouseEnter={e => (e.currentTarget.style.background = "#f0f5ff")}
                     onMouseLeave={e => (e.currentTarget.style.background = "")}>
                     {t.name}
                   </div>
@@ -138,8 +142,8 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
         {error && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
         <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #e2e8f0", background: "#fff", cursor: "pointer", fontSize: 14, fontFamily: "inherit" }}>ยกเลิก</button>
-          <button onClick={save} disabled={saving} style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: "#16A34A", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "1.5px solid #c4cfee", background: "#fff", cursor: "pointer", fontSize: 13, fontFamily: "inherit" }}>ยกเลิก</button>
+          <button onClick={save} disabled={saving} style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none", background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
             {saving ? "กำลังบันทึก…" : "บันทึก"}
           </button>
         </div>
@@ -151,10 +155,10 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 6 }}>{label}</label>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 7 }}>{label}</label>
       {children}
     </div>
   );
 }
 
-const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit", outline: "none" };
+const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };

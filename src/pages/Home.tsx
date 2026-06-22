@@ -9,11 +9,11 @@ interface SystemCard {
 const SYSTEMS: SystemCard[] = [
   { key: "recruit", no: "1", icon: "🔍", title: "ระบบสรรหาบุคลากร", desc: "คัดเลือกใบสมัครออนไลน์ และตรวจสอบอัตรากำลัง (Manpower) ตามแผนก", tags: ["คัดเลือกใบสมัคร", "Manpower"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
   { key: "eval", no: "2", icon: "📋", title: "ระบบประเมินผลพนักงาน", desc: "ประเมินพนักงานทดลองงาน รอบ 30/60/90 วัน พร้อมอนุมัติผลตามผังองค์กร", tags: ["แบบประเมิน 10 หัวข้อ", "อนุมัติผล"], accent: "#16A34A", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "training", no: "3", icon: "🎓", title: "ระบบข้อมูลฝึกอบรม", desc: "แผนอบรมประจำเดือน บันทึกผลการอบรม และ Dashboard เปรียบเทียบแผนกับผลจริง", tags: ["แผนอบรม", "Dashboard"], accent: "#7C3AED", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "transfer", no: "4", icon: "📑", title: "ระบบคำขอย้ายแผนก", desc: "ส่งคำขอย้ายแผนก อนุมัติโดยหัวหน้าแผนก และอนุมัติขั้นสุดท้ายโดย HR", tags: ["Workflow 3 ขั้น", "อนุมัติ"], accent: "#E0533D", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "exec", no: "5", icon: "📈", title: "Executive Dashboard", desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม", tags: ["ภาพรวมองค์กร", "KPI"], accent: "#0891B2", roles: ["hr","deputy","deputyHR","admin"] },
-  { key: "admin", no: "6", icon: "⚙️", title: "จัดการผู้ใช้งาน", desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ", tags: ["เพิ่มผู้ใช้", "กำหนดสิทธิ์"], accent: "#16a34a", roles: ["admin"] },
-  { key: "admin/org", no: "7", icon: "🏢", title: "จัดการฝ่าย/แผนก/ตำแหน่ง", desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบ", tags: ["ฝ่าย", "แผนก", "ตำแหน่ง"], accent: "#0891B2", roles: ["hr", "admin"] },
+  { key: "training", no: "3", icon: "🎓", title: "ระบบข้อมูลฝึกอบรม", desc: "แผนอบรมประจำเดือน บันทึกผลการอบรม และ Dashboard เปรียบเทียบแผนกับผลจริง", tags: ["แผนอบรม", "Dashboard"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "transfer", no: "4", icon: "📑", title: "ระบบคำขอย้ายแผนก", desc: "ส่งคำขอย้ายแผนก อนุมัติโดยหัวหน้าแผนก และอนุมัติขั้นสุดท้ายโดย HR", tags: ["Workflow 3 ขั้น", "อนุมัติ"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "exec", no: "5", icon: "📈", title: "Executive Dashboard", desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม", tags: ["ภาพรวมองค์กร", "KPI"], accent: "#0038C6", roles: ["hr","deputy","deputyHR","admin"] },
+  { key: "admin", no: "6", icon: "⚙️", title: "จัดการผู้ใช้งาน", desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ", tags: ["เพิ่มผู้ใช้", "กำหนดสิทธิ์"], accent: "#0038C6", roles: ["admin"] },
+  { key: "admin/org", no: "7", icon: "🏢", title: "จัดการฝ่าย/แผนก/ตำแหน่ง", desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบ", tags: ["ฝ่าย", "แผนก", "ตำแหน่ง"], accent: "#0038C6", roles: ["hr", "admin"] },
 ];
 
 export default function Home() {
@@ -68,10 +68,10 @@ export default function Home() {
               <div style={{ width: 56, height: 56, borderRadius: 16, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, background: c.accent }}>{c.icon}</div>
               <div style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #e2e8f0", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#64748b" }}>{c.no}</div>
             </div>
-            <div style={{ marginTop: 16, fontSize: 19, fontWeight: 700 }}>{c.title}</div>
-            <div style={{ marginTop: 8, fontSize: 13.5, color: "#5c7378", lineHeight: 1.5 }}>{c.desc}</div>
+            <div style={{ marginTop: 16, fontSize: 19, fontWeight: 700, color: "#0a1628" }}>{c.title}</div>
+            <div style={{ marginTop: 8, fontSize: 13.5, color: "#475569", lineHeight: 1.5 }}>{c.desc}</div>
             <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {c.tags.map(t => <span key={t} style={{ background: "#f2f5fc", color: "#334155", borderRadius: 7, padding: "4px 10px", fontSize: 12 }}>{t}</span>)}
+              {c.tags.map(t => <span key={t} style={{ background: "#f0f5ff", color: "#0038C6", borderRadius: 7, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>{t}</span>)}
             </div>
           </div>
         ))}

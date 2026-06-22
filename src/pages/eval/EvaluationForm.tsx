@@ -18,15 +18,10 @@ function gradeFromScore(s: number): string {
   if (s >= 90) return "A"; if (s >= 80) return "B"; if (s >= 70) return "C";
   if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
 }
-const GRADE_COLOR: Record<string, string> = {
-  A: "#16a34a", B: "#0891b2", C: "#d97706", D: "#ea580c", E: "#dc2626", F: "#991b1b",
-};
-
 /* ── Score ring ─────────────────────────────────────────────────── */
 function ScoreRing({ score, maxScore = 100 }: { score: number; maxScore?: number }) {
   const r = 40, circ = 2 * Math.PI * r;
   const grade = gradeFromScore(score);
-  const color = GRADE_COLOR[grade] ?? "#94a3b8";
   const offset = circ * (1 - Math.min(score / maxScore, 1));
   return (
     <div style={{ position: "relative", width: 100, height: 100, flexShrink: 0 }}>

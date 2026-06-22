@@ -58,16 +58,17 @@ export default function EvaluationList() {
         <div style={{ display: "flex", gap: 8 }}>
           {filters.map(([k, v]) => (
             <button key={k} onClick={() => setStatusFilter(k)} style={{
-              padding: "6px 14px", borderRadius: 8, border: "1.5px solid",
-              borderColor: statusFilter === k ? "#16A34A" : "#e2e8f0",
-              background: statusFilter === k ? "#16A34A" : "#fff",
+              padding: "7px 16px", borderRadius: 7, border: "1.5px solid",
+              borderColor: statusFilter === k ? "#0038C6" : "#dce4f5",
+              background: statusFilter === k ? "#0038C6" : "#fff",
               color: statusFilter === k ? "#fff" : "#475569",
-              fontFamily: "inherit", fontSize: 13, cursor: "pointer",
+              fontFamily: "inherit", fontSize: 12, fontWeight: statusFilter === k ? 700 : 400,
+              cursor: "pointer", transition: "all .15s",
             }}>{v}</button>
           ))}
         </div>
         {canCreate && (
-          <button onClick={() => setShowNew(true)} style={{ padding: "8px 18px", borderRadius: 10, border: "none", background: "#16A34A", color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={() => setShowNew(true)} style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit", boxShadow: "0 2px 8px rgba(0,56,198,0.25)" }}>
             + สร้างใบประเมิน
           </button>
         )}
@@ -80,10 +81,10 @@ export default function EvaluationList() {
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
           {evals.map(ev => (
-            <div key={ev.id} onClick={() => setSelected(ev.id)} style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", boxShadow: "0 1px 4px rgba(0,0,0,.07)", cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "box-shadow .15s" }}
-              onMouseEnter={e => (e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,.12)")}
-              onMouseLeave={e => (e.currentTarget.style.boxShadow = "0 1px 4px rgba(0,0,0,.07)")}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: "#16A34A22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>
+            <div key={ev.id} onClick={() => setSelected(ev.id)} style={{ background: "#fff", borderRadius: 8, padding: "16px 20px", border: "1px solid #dce4f5", borderLeft: "4px solid #0038C6", cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "box-shadow .15s, transform .15s" }}
+              onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,56,198,0.12)"; e.currentTarget.style.transform = "translateX(2px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#e8eeff", color: "#0038C6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
                 {ev.round === 30 ? "①" : ev.round === 60 ? "②" : "③"}
               </div>
               <div style={{ flex: 1 }}>
@@ -146,12 +147,16 @@ function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     onSaved();
   }
 
-  const sel: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit" };
+  const sel: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee", fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.25)" }}>
-        <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 20 }}>สร้างใบประเมินใหม่</div>
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 10, padding: 32, width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,56,198,0.25)", border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
+        <div style={{ fontSize: 17, fontWeight: 700, color: "#0a1628", marginBottom: 20, display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 4, height: 18, borderRadius: 2, background: "#0038C6" }} />
+          สร้างใบประเมินใหม่
+        </div>
 
         {/* Employee */}
         <div style={{ marginBottom: 14 }}>
@@ -168,10 +173,10 @@ function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
           <div style={{ display: "flex", gap: 8 }}>
             {([30, 60, 90] as const).map(r => (
               <button key={r} onClick={() => setRound(r)}
-                style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "1.5px solid",
-                  borderColor: round === r ? "#16A34A" : "#e2e8f0",
-                  background: round === r ? "#16A34A" : "#fff",
-                  color: round === r ? "#fff" : "#475569", fontFamily: "inherit", fontSize: 14, cursor: "pointer" }}>
+                style={{ flex: 1, padding: "9px 0", borderRadius: 7, border: "1.5px solid",
+                  borderColor: round === r ? "#0038C6" : "#dce4f5",
+                  background: round === r ? "#0038C6" : "#fff",
+                  color: round === r ? "#fff" : "#475569", fontFamily: "inherit", fontSize: 14, fontWeight: round === r ? 700 : 400, cursor: "pointer" }}>
                 {r} วัน
               </button>
             ))}
@@ -191,7 +196,7 @@ function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
             ))}
           </select>
           {templateId && (
-            <div style={{ marginTop: 6, fontSize: 12, color: "#16a34a", fontWeight: 600 }}>
+            <div style={{ marginTop: 6, fontSize: 12, color: "#0038C6", fontWeight: 600 }}>
               ✓ เลือก: {templates.find(t => t.id === templateId)?.name}
             </div>
           )}
@@ -200,9 +205,9 @@ function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
         {error && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</div>}
 
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #e2e8f0", background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
+          <button onClick={onClose} style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "1.5px solid #c4cfee", background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
           <button onClick={create} disabled={saving}
-            style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: "#16A34A", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none", background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
             {saving ? "กำลังสร้าง…" : "สร้างใบประเมิน"}
           </button>
         </div>
@@ -211,4 +216,4 @@ function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
   );
 }
 
-const lbl: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 6 };
+const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 700, color: "#475569", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 7 };

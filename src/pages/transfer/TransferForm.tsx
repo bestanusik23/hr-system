@@ -1,21 +1,21 @@
 import { useEffect, useState } from "react";
 
-interface Division { id: number; name: string; }
+interface Division   { id: number; name: string; }
 interface Department { id: number; division_id: number; name: string; }
 interface Props { onClose: () => void; onSaved: () => void; }
 
 export default function TransferForm({ onClose, onSaved }: Props) {
-  const [divisions, setDivisions] = useState<Division[]>([]);
+  const [divisions,   setDivisions]   = useState<Division[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [name, setName] = useState("");
-  const [position, setPosition] = useState("");
-  const [fromDeptId, setFromDeptId] = useState<number | "">("");
-  const [toDivId, setToDivId] = useState<number | "">("");
-  const [toDeptId, setToDeptId] = useState<number | "">("");
+  const [name,        setName]        = useState("");
+  const [position,    setPosition]    = useState("");
+  const [fromDeptId,  setFromDeptId]  = useState<number | "">("");
+  const [toDivId,     setToDivId]     = useState<number | "">("");
+  const [toDeptId,    setToDeptId]    = useState<number | "">("");
   const [newPosition, setNewPosition] = useState("");
-  const [reason, setReason] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [reason,      setReason]      = useState("");
+  const [saving,      setSaving]      = useState(false);
+  const [error,       setError]       = useState("");
 
   useEffect(() => {
     fetch("/api/eval/org").then(r => r.json())
@@ -39,49 +39,81 @@ export default function TransferForm({ onClose, onSaved }: Props) {
     onSaved();
   }
 
-  const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit", outline: "none" };
+  const inp: React.CSSProperties = {
+    width: "100%", padding: "9px 12px", borderRadius: 7,
+    border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+    outline: "none", boxSizing: "border-box" as const,
+  };
+
+  const fields = [
+    { label: "ชื่อ-นามสกุลพนักงาน *", el: <input value={name} onChange={e => setName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" /> },
+    { label: "ตำแหน่งปัจจุบัน",        el: <input value={position} onChange={e => setPosition(e.target.value)} style={inp} /> },
+    { label: "แผนกปัจจุบัน",           el: (
+        <select value={fromDeptId} onChange={e => setFromDeptId(Number(e.target.value))} style={inp}>
+          <option value="">-- เลือกแผนก --</option>
+          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+    )},
+    { label: "ฝ่ายที่ย้ายไป *",        el: (
+        <select value={toDivId} onChange={e => { setToDivId(Number(e.target.value)); setToDeptId(""); }} style={inp}>
+          <option value="">-- เลือกฝ่าย --</option>
+          {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+    )},
+    { label: "แผนกที่ย้ายไป *",        el: (
+        <select value={toDeptId} onChange={e => setToDeptId(Number(e.target.value))} style={inp} disabled={!toDivId}>
+          <option value="">-- เลือกแผนก --</option>
+          {toDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+        </select>
+    )},
+    { label: "ตำแหน่งใหม่",            el: <input value={newPosition} onChange={e => setNewPosition(e.target.value)} style={inp} /> },
+    { label: "เหตุผลการย้าย",          el: <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} style={{ ...inp, resize: "vertical" as const }} /> },
+  ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 480, maxHeight: "90vh", overflowY: "auto", padding: 32, boxShadow: "0 24px 60px rgba(0,0,0,.25)" }}>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 22 }}>ส่งคำขอย้ายแผนก</div>
-
-        {[
-          { label: "ชื่อ-นามสกุลพนักงาน *", el: <input value={name} onChange={e => setName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" /> },
-          { label: "ตำแหน่งปัจจุบัน", el: <input value={position} onChange={e => setPosition(e.target.value)} style={inp} /> },
-          { label: "แผนกปัจจุบัน", el: (
-            <select value={fromDeptId} onChange={e => setFromDeptId(Number(e.target.value))} style={inp}>
-              <option value="">-- เลือกแผนก --</option>
-              {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )},
-          { label: "ฝ่ายที่ย้ายไป *", el: (
-            <select value={toDivId} onChange={e => { setToDivId(Number(e.target.value)); setToDeptId(""); }} style={inp}>
-              <option value="">-- เลือกฝ่าย --</option>
-              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )},
-          { label: "แผนกที่ย้ายไป *", el: (
-            <select value={toDeptId} onChange={e => setToDeptId(Number(e.target.value))} style={inp} disabled={!toDivId}>
-              <option value="">-- เลือกแผนก --</option>
-              {toDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          )},
-          { label: "ตำแหน่งใหม่", el: <input value={newPosition} onChange={e => setNewPosition(e.target.value)} style={inp} /> },
-          { label: "เหตุผลการย้าย", el: <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} style={{ ...inp, resize: "vertical" }} /> },
-        ].map(({ label, el }) => (
-          <div key={label} style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 6 }}>{label}</label>
-            {el}
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 10, width: "100%", maxWidth: 480,
+        maxHeight: "90vh", overflowY: "auto",
+        boxShadow: "0 24px 60px rgba(0,56,198,0.25)", border: "1px solid #c4cfee",
+        borderTop: "4px solid #0038C6" }}>
+        <div style={{ padding: "24px 28px" }}>
+          <div style={{ fontSize: 17, fontWeight: 700, color: "#0a1628", marginBottom: 22,
+            display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 4, height: 18, borderRadius: 2, background: "#0038C6" }} />
+            ส่งคำขอย้ายแผนก
           </div>
-        ))}
 
-        {error && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</div>}
-        <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #e2e8f0", background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
-          <button onClick={save} disabled={saving} style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: "#E0533D", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-            {saving ? "กำลังส่ง…" : "ส่งคำขอ"}
-          </button>
+          {fields.map(({ label, el }) => (
+            <div key={label} style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 7 }}>
+                {label}
+              </label>
+              {el}
+            </div>
+          ))}
+
+          {error && (
+            <div style={{ background: "#fee2e2", border: "1px solid #fecaca",
+              borderRadius: 7, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>
+              {error}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+            <button onClick={onClose}
+              style={{ flex: 1, padding: "11px 0", borderRadius: 7,
+                border: "1.5px solid #c4cfee", background: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+              ยกเลิก
+            </button>
+            <button onClick={save} disabled={saving}
+              style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none",
+                background: "#0038C6", color: "#fff", fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+              {saving ? "กำลังส่ง…" : "ส่งคำขอ"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

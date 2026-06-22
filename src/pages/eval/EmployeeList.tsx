@@ -109,8 +109,9 @@ export default function EmployeeList() {
         </div>
         {canEdit && (
           <button onClick={() => { setEditing(null); setShowForm(true); }}
-            style={{ padding: "8px 18px", borderRadius: 10, border: "none", background: "#16A34A",
-              color: "#fff", fontWeight: 700, fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: "#0038C6",
+              color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+              boxShadow: "0 2px 8px rgba(0,56,198,0.25)" }}>
             + เพิ่มพนักงานใหม่
           </button>
         )}
