@@ -37,6 +37,13 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
           course_date, start_time, end_time, location, month_label,
           target, budget, objectives, attachment_url, status, reg_open } = body;
 
+  // Auto-assign qr_token if missing (for courses created before migration 0008)
+  const existing = await ctx.env.HR_DB.prepare("SELECT qr_token FROM training_courses WHERE id = ?").bind(id).first<{ qr_token: string | null }>();
+  if (!existing?.qr_token) {
+    await ctx.env.HR_DB.prepare("UPDATE training_courses SET qr_token=? WHERE id=? AND (qr_token IS NULL OR qr_token='')")
+      .bind(crypto.randomUUID(), id).run();
+  }
+
   await ctx.env.HR_DB.prepare(`
     UPDATE training_courses SET
       course=?, course_type=?, organizing_dept=?, project_owner=?, trainer=?,
@@ -54,6 +61,28 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     status ?? "planned", reg_open ? 1 : 0,
     id
   ).run();
+
+  return Response.json({ ok: true });
+};
+
+// PATCH /api/training/courses/:id  — cancel or restore
+export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
+  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const id   = ctx.params.id as string;
+  const body = await ctx.request.json() as { action: "cancel" | "restore"; reason?: string };
+
+  if (body.action === "cancel") {
+    await ctx.env.HR_DB.prepare(
+      "UPDATE training_courses SET is_cancelled=1, cancel_reason=?, reg_open=0, updated_at=datetime('now') WHERE id=?"
+    ).bind(body.reason ?? null, id).run();
+  } else if (body.action === "restore") {
+    await ctx.env.HR_DB.prepare(
+      "UPDATE training_courses SET is_cancelled=0, cancel_reason=NULL, updated_at=datetime('now') WHERE id=?"
+    ).bind(id).run();
+  }
 
   return Response.json({ ok: true });
 };

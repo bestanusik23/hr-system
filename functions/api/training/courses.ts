@@ -12,17 +12,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const type   = url.searchParams.get("type")   ?? "";
   const year   = url.searchParams.get("year")   ?? "";
 
+  const showCancelled = url.searchParams.get("cancelled") === "1";
+
   let sql = `
     SELECT tc.id, tc.course_code, tc.course, tc.course_type, tc.organizing_dept,
            tc.project_owner, tc.trainer, tc.course_date, tc.start_time, tc.end_time,
            tc.location, tc.month_label, tc.target, tc.budget, tc.objectives,
            tc.attachment_url, tc.status, tc.reg_open, tc.qr_token,
+           COALESCE(tc.is_cancelled, 0) AS is_cancelled, tc.cancel_reason,
            COUNT(ta.id) AS actual
     FROM training_courses tc
     LEFT JOIN training_attendees ta ON ta.course_id = tc.id
     WHERE 1=1`;
   const params: (string | number)[] = [];
 
+  if (!showCancelled) { sql += " AND COALESCE(tc.is_cancelled, 0) = 0"; }
+  else                { sql += " AND COALESCE(tc.is_cancelled, 0) = 1"; }
   if (month)  { sql += " AND tc.month_label = ?"; params.push(month); }
   if (status) { sql += " AND tc.status = ?";      params.push(status); }
   if (type)   { sql += " AND tc.course_type = ?"; params.push(type); }

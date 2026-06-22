@@ -7,7 +7,7 @@ interface Course {
   course_date: string | null; start_time: string | null; end_time: string | null;
   location: string | null; month_label: string | null; target: number;
   budget: number; objectives: string | null; status: string; reg_open: number;
-  qr_token: string | null; actual: number;
+  qr_token: string | null; actual: number; is_cancelled: number; cancel_reason: string | null;
 }
 
 type ViewMode = "list" | "calendar";
@@ -28,26 +28,49 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   const [loading, setLoading]     = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter]     = useState("");
+  const [showCancelled, setShowCancelled] = useState(false);
   const [viewMode, setViewMode]   = useState<ViewMode>("list");
   const [calView, setCalView]     = useState<CalView>("month");
   const [calYear, setCalYear]     = useState(new Date().getFullYear());
   const [calMonth, setCalMonth]   = useState(new Date().getMonth());
   const [selected, setSelected]   = useState<Course | null>(null);
   const [showNew, setShowNew]     = useState(false);
-  const [confirmDel, setConfirmDel] = useState<Course | null>(null);
+  const [confirmDel, setConfirmDel]       = useState<Course | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<Course | null>(null);
+  const [cancelReason, setCancelReason]   = useState("");
+  const [cancelling, setCancelling]       = useState(false);
 
   async function load() {
     setLoading(true);
     const params = new URLSearchParams();
-    if (statusFilter) params.set("status", statusFilter);
-    if (typeFilter)   params.set("type",   typeFilter);
+    if (statusFilter)  params.set("status",    statusFilter);
+    if (typeFilter)    params.set("type",      typeFilter);
+    if (showCancelled) params.set("cancelled", "1");
     const r = await fetch(`/api/training/courses?${params}`);
     const d = await r.json() as { ok: boolean; courses: Course[] };
     setCourses(d.courses ?? []);
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [statusFilter, typeFilter]);
+  useEffect(() => { load(); }, [statusFilter, typeFilter, showCancelled]);
+
+  async function cancelCourse() {
+    if (!confirmCancel) return;
+    setCancelling(true);
+    await fetch(`/api/training/courses/${confirmCancel.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "cancel", reason: cancelReason || null }),
+    });
+    setCancelling(false); setConfirmCancel(null); setCancelReason(""); load();
+  }
+
+  async function restoreCourse(id: number) {
+    await fetch(`/api/training/courses/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "restore" }),
+    });
+    load();
+  }
 
   async function deleteCourse(id: number) {
     await fetch(`/api/training/courses/${id}`, { method: "DELETE" });
@@ -123,8 +146,8 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
       {/* Toolbar */}
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {/* Status filter */}
-        <div style={{ display: "flex", gap: 4 }}>
-          {[["", "ทั้งหมด"], ["planned", "วางแผน"], ["upcoming", "ใกล้ถึง"], ["done", "เสร็จแล้ว"]].map(([k, v]) => (
+        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+          {!showCancelled && [["", "ทั้งหมด"], ["planned", "วางแผน"], ["upcoming", "ใกล้ถึง"], ["done", "เสร็จแล้ว"]].map(([k, v]) => (
             <button key={k} onClick={() => setStatusFilter(k)}
               style={{ padding: "6px 14px", borderRadius: 7, border: "1.5px solid",
                 borderColor: statusFilter === k ? "#0038C6" : "#dce4f5",
@@ -132,6 +155,14 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                 color:       statusFilter === k ? "#fff" : "#475569",
                 fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}>{v}</button>
           ))}
+          <button onClick={() => { setShowCancelled(!showCancelled); setStatusFilter(""); }}
+            style={{ padding: "6px 14px", borderRadius: 7, border: "1.5px solid",
+              borderColor: showCancelled ? "#dc2626" : "#dce4f5",
+              background:  showCancelled ? "#dc2626" : "#fff",
+              color:       showCancelled ? "#fff" : "#64748b",
+              fontFamily: "inherit", fontSize: 12, cursor: "pointer" }}>
+            🚫 {showCancelled ? "ดูที่ใช้งาน" : "ยกเลิกแล้ว"}
+          </button>
         </div>
 
         {/* Type filter */}
@@ -188,13 +219,16 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
               <tbody>
                 {courses.map((c, i) => (
                   <tr key={c.id} style={{ borderBottom: "1px solid #f0f5ff",
-                    background: i % 2 === 0 ? "#fff" : "#fafcff" }}>
+                    background: c.is_cancelled ? "#fff5f5" : i % 2 === 0 ? "#fff" : "#fafcff",
+                    opacity: c.is_cancelled ? 0.8 : 1 }}>
                     <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>
                       {c.course_code}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      <div style={{ fontWeight: 700, color: "#0a1628" }}>{c.course}</div>
+                      <div style={{ fontWeight: 700, color: c.is_cancelled ? "#94a3b8" : "#0a1628",
+                        textDecoration: c.is_cancelled ? "line-through" : "none" }}>{c.course}</div>
                       {c.trainer && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>👤 {c.trainer}</div>}
+                      {c.cancel_reason && <div style={{ fontSize: 11, color: "#dc2626", marginTop: 2 }}>🚫 {c.cancel_reason}</div>}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <span style={{ fontSize: 11, background: "#f0f5ff", color: "#0038C6",
@@ -215,24 +249,38 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                       <span style={{ color: c.actual >= c.target ? "#16a34a" : "#0038C6", fontWeight: 700 }}>{c.actual}</span>
                     </td>
                     <td style={{ padding: "10px 14px" }}>
-                      <span style={{ background: STATUS_COLOR[c.status] + "20", color: STATUS_COLOR[c.status],
-                        border: `1px solid ${STATUS_COLOR[c.status]}40`,
-                        borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
-                        {STATUS_LABEL[c.status]}
-                      </span>
+                      {c.is_cancelled ? (
+                        <span style={{ background: "#fee2e2", color: "#dc2626",
+                          border: "1px solid #fecaca", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
+                          🚫 ยกเลิกแล้ว
+                        </span>
+                      ) : (
+                        <span style={{ background: STATUS_COLOR[c.status] + "20", color: STATUS_COLOR[c.status],
+                          border: `1px solid ${STATUS_COLOR[c.status]}40`,
+                          borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
+                          {STATUS_LABEL[c.status]}
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 4 }}>
-                        <button onClick={() => setSelected(c)}
-                          style={actionBtn("#0038C6")}>✏️</button>
-                        {canEdit && <>
+                        {!c.is_cancelled && (
+                          <button onClick={() => setSelected(c)} style={actionBtn("#0038C6")}>✏️</button>
+                        )}
+                        {canEdit && !c.is_cancelled && <>
                           <button onClick={() => duplicateCourse(c)}
                             style={actionBtn("#64748b")} title="Duplicate">⎘</button>
                           <button onClick={() => onNavigate("reg", c.id)}
                             style={actionBtn("#16a34a")} title="ลงทะเบียน">✍️</button>
+                          <button onClick={() => { setConfirmCancel(c); setCancelReason(""); }}
+                            style={actionBtn("#f59e0b")} title="ยกเลิกอบรม">🚫</button>
                           <button onClick={() => setConfirmDel(c)}
                             style={actionBtn("#dc2626")}>🗑</button>
                         </>}
+                        {canEdit && c.is_cancelled && (
+                          <button onClick={() => restoreCourse(c.id)}
+                            style={actionBtn("#16a34a")} title="กู้คืน">↩️ กู้คืน</button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -389,6 +437,47 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                 style={{ flex: 1, padding: "10px 0", borderRadius: 7, border: "none",
                   background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                 ลบ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel confirm modal */}
+      {confirmCancel && (
+        <div onClick={e => { if (e.target === e.currentTarget && !cancelling) setConfirmCancel(null); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 10, padding: 32, maxWidth: 420, width: "100%",
+            border: "1px solid #c4cfee", borderTop: "4px solid #f59e0b" }}>
+            <div style={{ fontSize: 28, textAlign: "center", marginBottom: 12 }}>🚫</div>
+            <div style={{ fontSize: 16, fontWeight: 700, textAlign: "center", marginBottom: 6 }}>ยืนยันยกเลิกอบรม?</div>
+            <div style={{ fontSize: 13, color: "#64748b", textAlign: "center", marginBottom: 16 }}>
+              {confirmCancel.course}
+            </div>
+            <div style={{ background: "#fff8ed", border: "1px solid #fde68a", borderRadius: 8,
+              padding: "10px 14px", fontSize: 12, color: "#92400e", marginBottom: 16 }}>
+              ⚠️ หลักสูตรจะถูกซ่อนจากรายการปกติ แต่ข้อมูลยังคงอยู่ สามารถกู้คืนได้ภายหลัง
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+                เหตุผลการยกเลิก (ไม่บังคับ)
+              </label>
+              <input value={cancelReason} onChange={e => setCancelReason(e.target.value)}
+                placeholder="เช่น วิทยากรติดภารกิจ, จำนวนผู้สมัครไม่ถึงเกณฑ์"
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  outline: "none", boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setConfirmCancel(null)} disabled={cancelling}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+                  background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ปิด</button>
+              <button onClick={cancelCourse} disabled={cancelling}
+                style={{ flex: 2, padding: "10px 0", borderRadius: 7, border: "none",
+                  background: "#f59e0b", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                {cancelling ? "กำลังยกเลิก…" : "🚫 ยืนยันยกเลิกอบรม"}
               </button>
             </div>
           </div>
