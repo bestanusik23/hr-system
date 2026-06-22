@@ -1,11 +1,24 @@
 import { useEffect, useState } from "react";
 
 interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; }
-interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; }
+interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; participant_type?: string; }
 interface Photo { id: number; course_id: number; url: string; photo_type: string; caption: string | null; uploaded_at: string; }
+interface Survey { id: number; q1: number; q2: number; q3: number; q4: number; q5: number; comment: string | null; submitted_at: string; }
 
 const STATUS_COLOR: Record<string, string> = { registered: "#94a3b8", checked_in: "#16a34a", late: "#d97706", absent: "#dc2626", completed: "#0038C6" };
 const STATUS_LABEL: Record<string, string> = { registered: "ลงทะเบียน", checked_in: "เช็คชื่อ", late: "สาย", absent: "ขาด", completed: "เสร็จ" };
+
+const Q_LABELS = [
+  "เนื้อหาเหมาะสม", "วิทยากรชัดเจน", "นำไปใช้ได้จริง", "ระยะเวลาเหมาะสม", "พึงพอใจโดยรวม",
+];
+
+function satLevel(pct: number) {
+  if (pct >= 90) return { label: "ดีเยี่ยม",    color: "#16a34a" };
+  if (pct >= 80) return { label: "ดีมาก",        color: "#0038C6" };
+  if (pct >= 70) return { label: "ดี",            color: "#059669" };
+  if (pct >= 60) return { label: "พอใช้",         color: "#d97706" };
+  return             { label: "ควรปรับปรุง",  color: "#dc2626" };
+}
 
 interface Props { canEdit: boolean; initCourseId: number | null; }
 
@@ -13,6 +26,7 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   const [courses, setCourses]   = useState<Course[]>([]);
   const [selId, setSelId]       = useState<number | "">("");
   const [course, setCourse]     = useState<Course | null>(null);
+  const [surveys, setSurveys]   = useState<Survey[]>([]);
   const [regs, setRegs]         = useState<Reg[]>([]);
   const [photos, setPhotos]     = useState<Photo[]>([]);
   const [loading, setLoading]   = useState(false);
@@ -40,14 +54,16 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
 
   async function loadAll(id: number) {
     setLoading(true);
-    const [regRes, photoRes, courseRes] = await Promise.all([
+    const [regRes, photoRes, courseRes, surveyRes] = await Promise.all([
       fetch(`/api/training/registrations?course_id=${id}`).then(r => r.json() as Promise<{ ok: boolean; registrations: Reg[] }>),
       fetch(`/api/training/photos?course_id=${id}`).then(r => r.json() as Promise<{ ok: boolean; photos: Photo[] }>),
       fetch(`/api/training/courses?`).then(r => r.json() as Promise<{ ok: boolean; courses: Course[] }>),
+      fetch(`/api/training/survey?course_id=${id}`).then(r => r.json() as Promise<{ ok: boolean; surveys: Survey[] }>),
     ]);
     setRegs(regRes.registrations ?? []);
     setPhotos(photoRes.photos ?? []);
     setCourse((courseRes.courses ?? []).find(c => c.id === id) ?? null);
+    setSurveys(surveyRes.surveys ?? []);
     setLoading(false);
   }
 
@@ -200,6 +216,9 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
             </table>
           </div>
 
+          {/* Satisfaction Survey Dashboard */}
+          <SatisfactionDashboard surveys={surveys} regs={regs} />
+
           {/* Photo gallery */}
           <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #dce4f5", padding: "20px 24px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
@@ -297,6 +316,141 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
             </div>
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+function SatisfactionDashboard({ surveys, regs }: { surveys: Survey[]; regs: Reg[] }) {
+  const attendees  = regs.filter(r => !r.participant_type || r.participant_type === "attendee").length;
+  const n          = surveys.length;
+  const responseRate = attendees > 0 ? Math.round(n / attendees * 100) : 0;
+
+  const totalScore   = surveys.reduce((s, sv) => s + sv.q1 + sv.q2 + sv.q3 + sv.q4 + sv.q5, 0);
+  const maxScore     = n * 5 * 4;
+  const satPct       = maxScore > 0 ? Math.round(totalScore / maxScore * 100) : 0;
+  const avgScore     = n > 0 ? (totalScore / (n * 5)).toFixed(2) : "—";
+  const level        = satLevel(satPct);
+
+  const qAvgs = [1, 2, 3, 4, 5].map(i =>
+    n > 0 ? surveys.reduce((s, sv) => s + sv[`q${i}` as keyof Survey] as number, 0) / n : 0
+  );
+
+  const comments = surveys.filter(sv => sv.comment).map(sv => sv.comment!);
+
+  return (
+    <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #dce4f5",
+      padding: "20px 24px", marginBottom: 24 }}>
+
+      <div style={{ fontWeight: 700, color: "#0a1628", marginBottom: 16, fontSize: 15 }}>
+        📊 ผลประเมินความพึงพอใจ
+      </div>
+
+      {n === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8" }}>
+          ยังไม่มีข้อมูลแบบสอบถาม
+        </div>
+      ) : (
+        <>
+          {/* KPI row */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10, marginBottom: 20 }}>
+            {[
+              { label: "ผู้เข้าอบรม",    value: attendees,         color: "#0038C6" },
+              { label: "ตอบแบบสอบถาม",  value: n,                  color: "#16a34a" },
+              { label: "Response Rate",  value: `${responseRate}%`, color: responseRate >= 80 ? "#16a34a" : "#d97706" },
+              { label: "คะแนนเฉลี่ย",   value: avgScore,           color: "#0038C6" },
+              { label: "% ความพึงพอใจ", value: `${satPct}%`,       color: level.color },
+            ].map(s => (
+              <div key={s.label} style={{ background: "#f8faff", borderRadius: 8, padding: "12px 14px",
+                border: "1px solid #dce4f5", textAlign: "center" }}>
+                <div style={{ fontSize: 9, color: "#64748b", fontWeight: 700,
+                  textTransform: "uppercase", letterSpacing: "0.07em" }}>{s.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color, marginTop: 4 }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Satisfaction level badge */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20,
+            background: level.color + "12", border: `1px solid ${level.color}30`,
+            borderRadius: 10, padding: "12px 18px" }}>
+            <div style={{ fontSize: 28 }}>
+              {satPct >= 90 ? "🌟" : satPct >= 80 ? "✅" : satPct >= 70 ? "👍" : satPct >= 60 ? "😐" : "⚠️"}
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, color: level.color, fontSize: 16 }}>{level.label}</div>
+              <div style={{ fontSize: 12, color: "#64748b" }}>
+                คะแนนรวม {totalScore} / {maxScore} คะแนน ({satPct}%)
+              </div>
+            </div>
+          </div>
+
+          {/* Per-question bar chart */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#475569",
+              textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>
+              คะแนนเฉลี่ยรายข้อ (เต็ม 4)
+            </div>
+            {Q_LABELS.map((label, i) => {
+              const avg = qAvgs[i];
+              const pct = (avg / 4) * 100;
+              const barColor = avg >= 3.5 ? "#16a34a" : avg >= 3 ? "#0038C6" : avg >= 2 ? "#d97706" : "#dc2626";
+              return (
+                <div key={i} style={{ marginBottom: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between",
+                    fontSize: 12, marginBottom: 5, color: "#0a1628" }}>
+                    <span>{i + 1}. {label}</span>
+                    <span style={{ fontWeight: 700, color: barColor }}>{avg.toFixed(2)}</span>
+                  </div>
+                  <div style={{ height: 8, background: "#e8eeff", borderRadius: 4 }}>
+                    <div style={{ height: 8, width: `${pct}%`, borderRadius: 4,
+                      background: barColor, transition: "width .5s" }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Score level breakdown */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 8, marginBottom: 20 }}>
+            {[
+              { label: "มากที่สุด (4)", val: 4, color: "#16a34a" },
+              { label: "มาก (3)",       val: 3, color: "#0038C6" },
+              { label: "ปานกลาง (2)",  val: 2, color: "#d97706" },
+              { label: "ปรับปรุง (1)", val: 1, color: "#dc2626" },
+            ].map(lv => {
+              const cnt = surveys.reduce((s, sv) =>
+                s + [sv.q1, sv.q2, sv.q3, sv.q4, sv.q5].filter(q => q === lv.val).length, 0);
+              return (
+                <div key={lv.val} style={{ background: lv.color + "10", border: `1px solid ${lv.color}30`,
+                  borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
+                  <div style={{ fontSize: 10, color: lv.color, fontWeight: 700,
+                    textTransform: "uppercase", letterSpacing: "0.05em" }}>{lv.label}</div>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: lv.color, marginTop: 4 }}>{cnt}</div>
+                  <div style={{ fontSize: 10, color: "#94a3b8" }}>ครั้ง</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Comments */}
+          {comments.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#475569",
+                textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+                ข้อเสนอแนะ ({comments.length})
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {comments.map((c, i) => (
+                  <div key={i} style={{ background: "#f8faff", borderRadius: 7, padding: "10px 14px",
+                    border: "1px solid #e8eeff", fontSize: 13, color: "#0a1628", lineHeight: 1.5 }}>
+                    💬 {c}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

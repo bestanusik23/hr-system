@@ -1,82 +1,85 @@
 import type { Env } from "../../lib/types";
-import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
-// POST /api/training/checkin  — QR scan check-in (requires login)
-export const onRequestPost: PagesFunction<Env> = async (ctx) => {
-  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
-  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+interface CourseRow {
+  id: number; course_code: string; course: string; course_type: string;
+  trainer: string | null; course_date: string | null; start_time: string | null;
+  end_time: string | null; location: string | null; reg_open: number;
+  status: string; is_cancelled: number;
+}
 
-  const body = await ctx.request.json() as Record<string, unknown>;
-  const { qr_token, name, emp_code, department, position, phone } = body;
-
-  if (!qr_token) return Response.json({ ok: false, error: "Missing qr_token" }, { status: 400 });
-
-  // Find course by QR token
-  const course = await ctx.env.HR_DB.prepare(
-    "SELECT id, course, reg_open, start_time FROM training_courses WHERE qr_token = ?"
-  ).bind(qr_token).first<{ id: number; course: string; reg_open: number; start_time: string | null }>();
-
-  if (!course) return Response.json({ ok: false, error: "QR Code ไม่ถูกต้อง" }, { status: 404 });
-  if (!course.reg_open) return Response.json({ ok: false, error: "หลักสูตรนี้ปิดรับสมัครแล้ว" }, { status: 400 });
-
-  // Check if already registered
-  const existing = await ctx.env.HR_DB.prepare(
-    "SELECT id, attendance_status FROM training_attendees WHERE course_id = ? AND name = ?"
-  ).bind(course.id, name ?? user.full_name).first<{ id: number; attendance_status: string }>();
-
-  const now = new Date().toISOString();
-  const userAgent = ctx.request.headers.get("user-agent") ?? "unknown";
-
-  // Determine if late (compare current time vs start_time)
-  let attendanceStatus = "checked_in";
-  if (course.start_time) {
-    const [h, m] = course.start_time.split(":").map(Number);
-    const nowDate   = new Date();
-    const startDate = new Date(nowDate.getFullYear(), nowDate.getMonth(), nowDate.getDate(), h, m);
-    if (nowDate > startDate) attendanceStatus = "late";
-  }
-
-  if (existing) {
-    if (existing.attendance_status === "checked_in" || existing.attendance_status === "late") {
-      return Response.json({ ok: true, message: "เช็คชื่อแล้ว", course: course.course, alreadyDone: true });
-    }
-    await ctx.env.HR_DB.prepare(
-      "UPDATE training_attendees SET attendance_status=?, checkin_time=?, device_info=? WHERE id=?"
-    ).bind(attendanceStatus, now, userAgent.slice(0, 200), existing.id).run();
-    return Response.json({ ok: true, message: "เช็คชื่อสำเร็จ", course: course.course });
-  }
-
-  // New registration via QR
-  const checkinName = (name as string) || user.full_name;
-  await ctx.env.HR_DB.prepare(`
-    INSERT INTO training_attendees
-      (course_id, emp_code, name, department, position, phone, reg_method, attendance_status, checkin_time, device_info)
-    VALUES (?, ?, ?, ?, ?, ?, 'qr', ?, ?, ?)
-  `).bind(
-    course.id,
-    emp_code ?? null,
-    checkinName,
-    department ?? null,
-    position   ?? null,
-    phone      ?? null,
-    attendanceStatus,
-    now,
-    userAgent.slice(0, 200)
-  ).run();
-
-  return Response.json({ ok: true, message: "ลงทะเบียนและเช็คชื่อสำเร็จ", course: course.course });
-};
-
-// GET /api/training/checkin?token=X  — get course info by QR token (for check-in page)
+// GET /api/training/checkin?token=xxx  — public, get course info
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const url   = new URL(ctx.request.url);
   const token = url.searchParams.get("token") ?? "";
   if (!token) return Response.json({ ok: false, error: "Missing token" }, { status: 400 });
 
-  const course = await ctx.env.HR_DB.prepare(
-    "SELECT id, course_code, course, course_type, trainer, course_date, start_time, end_time, location, reg_open FROM training_courses WHERE qr_token = ?"
-  ).bind(token).first();
+  const course = await ctx.env.HR_DB.prepare(`
+    SELECT id, course_code, course, course_type, trainer, course_date,
+           start_time, end_time, location, reg_open, status,
+           COALESCE(is_cancelled, 0) AS is_cancelled
+    FROM training_courses WHERE qr_token = ?
+  `).bind(token).first<CourseRow>();
 
   if (!course) return Response.json({ ok: false, error: "QR Code ไม่ถูกต้อง" }, { status: 404 });
-  return Response.json({ ok: true, course });
+  if (course.is_cancelled) return Response.json({ ok: false, error: "หลักสูตรนี้ถูกยกเลิกแล้ว" }, { status: 410 });
+
+  const count = await ctx.env.HR_DB.prepare(
+    "SELECT COUNT(*) AS n FROM training_attendees WHERE course_id = ?"
+  ).bind(course.id).first<{ n: number }>();
+
+  return Response.json({ ok: true, course, registered: count?.n ?? 0 });
+};
+
+// POST /api/training/checkin  — public QR registration (no login required)
+export const onRequestPost: PagesFunction<Env> = async (ctx) => {
+  const body = await ctx.request.json() as {
+    token: string; first_name: string; last_name: string;
+    position?: string; participant_type: "attendee" | "trainer";
+  };
+
+  const { token, first_name, last_name, position, participant_type } = body;
+
+  if (!token || !first_name?.trim() || !last_name?.trim() || !participant_type) {
+    return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" }, { status: 400 });
+  }
+  if (!["attendee", "trainer"].includes(participant_type)) {
+    return Response.json({ ok: false, error: "participant_type ไม่ถูกต้อง" }, { status: 400 });
+  }
+
+  const course = await ctx.env.HR_DB.prepare(
+    "SELECT id, reg_open, status, COALESCE(is_cancelled, 0) AS is_cancelled FROM training_courses WHERE qr_token = ?"
+  ).bind(token).first<{ id: number; reg_open: number; status: string; is_cancelled: number }>();
+
+  if (!course) return Response.json({ ok: false, error: "QR Code ไม่ถูกต้อง" }, { status: 404 });
+  if (course.is_cancelled) return Response.json({ ok: false, error: "หลักสูตรนี้ถูกยกเลิกแล้ว" }, { status: 410 });
+  if (!course.reg_open) return Response.json({ ok: false, error: "ขณะนี้ยังไม่เปิดรับลงทะเบียน กรุณาติดต่อเจ้าหน้าที่ HR" }, { status: 403 });
+
+  const fullName = `${first_name.trim()} ${last_name.trim()}`;
+
+  const existing = await ctx.env.HR_DB.prepare(
+    "SELECT id, participant_type FROM training_attendees WHERE course_id = ? AND name = ?"
+  ).bind(course.id, fullName).first<{ id: number; participant_type: string }>();
+
+  if (existing) {
+    return Response.json({ ok: true, duplicate: true, attendee_id: existing.id, participant_type: existing.participant_type });
+  }
+
+  const ua = ctx.request.headers.get("user-agent") ?? "";
+  const ip = ctx.request.headers.get("CF-Connecting-IP") ?? ctx.request.headers.get("X-Real-IP") ?? null;
+
+  const result = await ctx.env.HR_DB.prepare(`
+    INSERT INTO training_attendees
+      (course_id, name, position, reg_method, attendance_status,
+       checkin_time, device_info, ip_address, participant_type)
+    VALUES (?, ?, ?, 'qr', 'checked_in', datetime('now'), ?, ?, ?)
+  `).bind(
+    course.id, fullName, position?.trim() ?? null,
+    ua.slice(0, 300), ip, participant_type
+  ).run();
+
+  return Response.json({
+    ok: true, duplicate: false,
+    attendee_id: result.meta.last_row_id,
+    participant_type,
+  }, { status: 201 });
 };

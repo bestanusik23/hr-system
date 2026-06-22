@@ -11,6 +11,7 @@ import AdminPage from "./pages/admin/AdminPage";
 import OrgPage from "./pages/admin/OrgPage";
 import CheckinPage from "./pages/CheckinPage";
 import CertVerifyPage from "./pages/CertVerifyPage";
+import SurveyPage from "./pages/SurveyPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           {/* Public routes — no auth required */}
           <Route path="/checkin"     element={<CheckinPage />} />
+          <Route path="/survey"      element={<SurveyPage />} />
           <Route path="/cert/verify" element={<CertVerifyPage />} />
           {/* Protected routes */}
           <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
