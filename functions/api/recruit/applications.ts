@@ -115,11 +115,21 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "deputy", "deputyHR", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!["hr", "deputy", "deputyHR", "admin", "head"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as { row: number; col: string; value: string };
   const { row, col, value } = body;
   if (!row || !col) return Response.json({ ok: false, error: "Missing row/col" }, { status: 400 });
+
+  // head can ONLY set "รอนัดสัมภาษณ์" (flag for HR to call)
+  if (user.role === "head") {
+    if (value !== "รอนัดสัมภาษณ์") {
+      return Response.json({ ok: false, error: "หัวหน้าแผนกสามารถส่งให้สัมภาษณ์เท่านั้น" }, { status: 403 });
+    }
+    // head allowed through — GET already scoped their rows to their dept
+  } else if (!["hr", "deputy", "deputyHR", "admin"].includes(user.role)) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   // "รับเข้างาน" requires Level 2 (deputy) approval
   const FINAL_STATUSES = ["รับเข้างาน", "ไม่ผ่าน"];

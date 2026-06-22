@@ -5,20 +5,19 @@ import { useAuth } from "../../context/AuthContext";
 interface Application { _row: string; [key: string]: string; }
 
 const STATUS_COLOR: Record<string, { bg: string; text: string; border: string }> = {
-  "รอพิจารณา":        { bg: "#fef9c3", text: "#b45309", border: "#fde68a" },
-  "รอกรอกใบสมัคร":   { bg: "#ede9fe", text: "#7c3aed", border: "#ddd6fe" },
-  "ผ่านการสัมภาษณ์": { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" },
-  "รับเข้างาน":       { bg: "#dbeafe", text: "#1d4ed8", border: "#bfdbfe" },
-  "ไม่ผ่าน":          { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
+  "รอพิจารณา":        { bg: "#fef9c3", text: "#b45309",  border: "#fde68a" },
+  "รอนัดสัมภาษณ์":   { bg: "#fff7ed", text: "#c2410c",  border: "#fed7aa" },
+  "รอกรอกใบสมัคร":   { bg: "#ede9fe", text: "#7c3aed",  border: "#ddd6fe" },
+  "ผ่านการสัมภาษณ์": { bg: "#dcfce7", text: "#16a34a",  border: "#bbf7d0" },
+  "รับเข้างาน":       { bg: "#dbeafe", text: "#1d4ed8",  border: "#bfdbfe" },
+  "ไม่ผ่าน":          { bg: "#fee2e2", text: "#dc2626",  border: "#fecaca" },
 };
 
 const HIDDEN_COLS = new Set(["_row"]);
-
 function isStatusCol(h: string) {
   return h.includes("ผลการพิจารณา") || h.toLowerCase().includes("status") || h.toLowerCase().includes("result");
 }
 
-// Max columns shown in the table (rest visible in modal)
 const TABLE_MAX_COLS = 6;
 
 export default function RecruitPage() {
@@ -34,9 +33,10 @@ export default function RecruitPage() {
 
   const isHR      = user && ["hr", "admin"].includes(user.role);
   const isDeputy  = user && ["deputy", "deputyHR", "admin"].includes(user.role);
+  const isHead    = user?.role === "head";
   const canUpdate = isHR || isDeputy;
 
-  const HR_STATUSES     = ["รอพิจารณา", "รอกรอกใบสมัคร", "ผ่านการสัมภาษณ์"];
+  const HR_STATUSES     = ["รอพิจารณา", "รอนัดสัมภาษณ์", "รอกรอกใบสมัคร", "ผ่านการสัมภาษณ์"];
   const DEPUTY_STATUSES = Object.keys(STATUS_COLOR);
   const allowedStatuses = isDeputy ? DEPUTY_STATUSES : HR_STATUSES;
 
@@ -69,10 +69,17 @@ export default function RecruitPage() {
     setUpdating(null);
   }
 
-  // All data columns (no status, no hidden, no empty)
   const allDataCols  = headers.filter(h => !HIDDEN_COLS.has(h) && h !== statusKey && h.trim() !== "");
-  // First N for table, rest shown only in modal
   const tableCols    = allDataCols.slice(0, TABLE_MAX_COLS);
+
+  // Detect phone/contact column dynamically
+  const phoneKey = allDataCols.find(h =>
+    h.includes("โทร") || h.toLowerCase().includes("phone") || h.toLowerCase().includes("tel") || h.includes("ติดต่อ")
+  );
+
+  const interviewQueue = statusKey
+    ? applications.filter(a => a[statusKey] === "รอนัดสัมภาษณ์")
+    : [];
 
   const allStatuses = statusKey
     ? [...new Set(applications.map(a => a[statusKey] ?? "").filter(Boolean))]
@@ -84,6 +91,9 @@ export default function RecruitPage() {
     return matchSearch && matchStatus;
   });
 
+  // When HR views interview queue, show cards instead of table
+  const isInterviewQueueView = isHR && statusFilter === "รอนัดสัมภาษณ์";
+
   const StatusBadge = ({ val }: { val: string }) => {
     const c = STATUS_COLOR[val] ?? { bg: "#f1f5f9", text: "#64748b", border: "#e2e8f0" };
     return (
@@ -91,9 +101,7 @@ export default function RecruitPage() {
         background: c.bg, color: c.text, border: `1.5px solid ${c.border}`,
         borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700,
         whiteSpace: "nowrap", display: "inline-block",
-      }}>
-        {val || "—"}
-      </span>
+      }}>{val || "—"}</span>
     );
   };
 
@@ -113,9 +121,26 @@ export default function RecruitPage() {
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ค้นหา..."
           style={{ padding: "9px 16px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", width: 220, outline: "none" }} />
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <FilterBtn label={`ทั้งหมด (${applications.length})`} active={!statusFilter} onClick={() => setStatusFilter("")} />
-          {allStatuses.map(s => (
+
+          {/* HR special: interview queue button with orange accent */}
+          {isHR && interviewQueue.length > 0 && (
+            <button onClick={() => setStatusFilter("รอนัดสัมภาษณ์")}
+              style={{ padding: "6px 14px", borderRadius: 20, border: `2px solid ${statusFilter === "รอนัดสัมภาษณ์" ? "#c2410c" : "#fed7aa"}`,
+                fontFamily: "inherit", fontSize: 12, cursor: "pointer", fontWeight: 700,
+                background: statusFilter === "รอนัดสัมภาษณ์" ? "#c2410c" : "#fff7ed",
+                color: statusFilter === "รอนัดสัมภาษณ์" ? "#fff" : "#c2410c",
+                display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
+              📞 คิวโทรนัดสัมภาษณ์
+              <span style={{ background: statusFilter === "รอนัดสัมภาษณ์" ? "rgba(255,255,255,.25)" : "#fed7aa",
+                borderRadius: 10, padding: "0 7px", fontSize: 11, fontWeight: 800 }}>
+                {interviewQueue.length}
+              </span>
+            </button>
+          )}
+
+          {allStatuses.filter(s => s !== "รอนัดสัมภาษณ์" || !isHR).map(s => (
             <FilterBtn key={s} label={`${s} (${applications.filter(a => a[statusKey] === s).length})`}
               active={statusFilter === s} onClick={() => setStatusFilter(s)} />
           ))}
@@ -133,7 +158,89 @@ export default function RecruitPage() {
         <div style={{ textAlign: "center", padding: 60, color: "#94a3b8", background: "#fff", borderRadius: 14 }}>
           {user?.role === "head" ? "ยังไม่มีผู้มาสมัครงานในแผนกของคุณ" : "ไม่มีข้อมูล"}
         </div>
+      ) : isInterviewQueueView ? (
+
+        /* ── HR Interview Queue Card View ── */
+        <div>
+          <div style={{ background: "linear-gradient(135deg,#fff7ed,#fef3c7)", border: "2px solid #fed7aa",
+            borderRadius: 14, padding: "16px 22px", marginBottom: 20,
+            display: "flex", alignItems: "center", gap: 14 }}>
+            <span style={{ fontSize: 28 }}>📞</span>
+            <div>
+              <div style={{ fontWeight: 800, color: "#92400e", fontSize: 15 }}>รายการรอโทรนัดสัมภาษณ์</div>
+              <div style={{ fontSize: 13, color: "#b45309", marginTop: 2 }}>
+                หัวหน้าแผนกส่งมา {filtered.length} ราย — กรุณาโทรนัดและอัปเดตสถานะ
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gap: 14 }}>
+            {filtered.map((app, ri) => (
+              <div key={app._row} style={{ background: "#fff", borderRadius: 14, padding: "18px 22px",
+                boxShadow: "0 2px 8px rgba(0,0,0,.07)", border: "1.5px solid #fed7aa",
+                display: "flex", alignItems: "flex-start", gap: 18, flexWrap: "wrap" }}>
+                {/* Avatar */}
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: "#fff7ed",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 20, fontWeight: 800, color: "#c2410c", flexShrink: 0 }}>
+                  {ri + 1}
+                </div>
+
+                {/* Info */}
+                <div style={{ flex: 1, minWidth: 200 }}>
+                  <div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>
+                    {app[allDataCols[0] ?? ""] || "—"}
+                  </div>
+                  {allDataCols[1] && (
+                    <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
+                      {allDataCols[1]}: <span style={{ fontWeight: 600, color: "#334155" }}>{app[allDataCols[1]] || "—"}</span>
+                    </div>
+                  )}
+                  {phoneKey && app[phoneKey] && (
+                    <div style={{ fontSize: 13, color: "#0038C6", fontWeight: 700 }}>
+                      📱 {app[phoneKey]}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action buttons */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <button onClick={() => setDetail(app)}
+                    style={{ padding: "7px 14px", borderRadius: 9, border: "1.5px solid #e2e8f0",
+                      background: "#f8fafc", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                      color: "#475569", fontWeight: 600 }}>
+                    🔍 ดูข้อมูล
+                  </button>
+                  <button onClick={() => updateStatus(app, "รอกรอกใบสมัคร")} disabled={updating === app._row}
+                    style={{ padding: "7px 16px", borderRadius: 9, border: "none",
+                      background: "#ede9fe", fontSize: 12, cursor: "pointer",
+                      fontFamily: "inherit", color: "#7c3aed", fontWeight: 700,
+                      opacity: updating === app._row ? 0.6 : 1 }}>
+                    ✓ นัดสัมภาษณ์แล้ว
+                  </button>
+                  <button onClick={() => updateStatus(app, "ผ่านการสัมภาษณ์")} disabled={updating === app._row}
+                    style={{ padding: "7px 16px", borderRadius: 9, border: "none",
+                      background: "#dcfce7", fontSize: 12, cursor: "pointer",
+                      fontFamily: "inherit", color: "#16a34a", fontWeight: 700,
+                      opacity: updating === app._row ? 0.6 : 1 }}>
+                    🎉 ผ่านการสัมภาษณ์
+                  </button>
+                  <button onClick={() => updateStatus(app, "ไม่ผ่าน")} disabled={updating === app._row}
+                    style={{ padding: "7px 14px", borderRadius: 9, border: "1.5px solid #fecaca",
+                      background: "#fff", fontSize: 12, cursor: "pointer",
+                      fontFamily: "inherit", color: "#dc2626", fontWeight: 600,
+                      opacity: updating === app._row ? 0.6 : 1 }}>
+                    ✗ ไม่เหมาะสม
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
       ) : (
+
+        /* ── Regular Table View ── */
         <div style={{ background: "#fff", borderRadius: 16, boxShadow: "0 1px 8px rgba(0,0,0,.07)", overflow: "hidden" }}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -151,8 +258,7 @@ export default function RecruitPage() {
                   const sc = STATUS_COLOR[curStatus];
                   return (
                     <tr key={app._row}
-                      style={{ borderBottom: "1px solid #f1f5f9", background: ri % 2 === 0 ? "#fff" : "#fafbff",
-                               transition: "background .15s" }}
+                      style={{ borderBottom: "1px solid #f1f5f9", background: ri % 2 === 0 ? "#fff" : "#fafbff", transition: "background .15s" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#f0f6ff")}
                       onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? "#fff" : "#fafbff")}>
                       <td style={{ ...TD, color: "#94a3b8", width: 40, textAlign: "center", fontWeight: 600 }}>{ri + 1}</td>
@@ -181,8 +287,7 @@ export default function RecruitPage() {
                         <button onClick={() => setDetail(app)}
                           style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid #dbeafe",
                             background: "#eff6ff", fontSize: 12, cursor: "pointer",
-                            fontFamily: "inherit", color: "#1d4ed8", fontWeight: 600, whiteSpace: "nowrap",
-                            display: "inline-flex", alignItems: "center", gap: 5 }}>
+                            fontFamily: "inherit", color: "#1d4ed8", fontWeight: 600, whiteSpace: "nowrap" }}>
                           🔍 ดูข้อมูล
                         </button>
                       </td>
@@ -198,7 +303,7 @@ export default function RecruitPage() {
         </div>
       )}
 
-      {/* Detail Modal */}
+      {/* ── Detail Modal ── */}
       {detail && (
         <div onClick={e => { if (e.target === e.currentTarget) setDetail(null); }}
           style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "flex",
@@ -240,19 +345,43 @@ export default function RecruitPage() {
                 ))}
               </div>
 
-              {/* Status Update Panel */}
+              {/* ── Head action: send to HR for interview ── */}
+              {isHead && statusKey && (
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #f1f5f9" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12 }}>
+                    การดำเนินการ
+                  </div>
+                  {detail[statusKey] === "รอนัดสัมภาษณ์" ? (
+                    <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 12,
+                      padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
+                      <span style={{ fontSize: 20 }}>📞</span>
+                      <div>
+                        <div style={{ fontWeight: 700, color: "#c2410c", fontSize: 14 }}>ส่งให้ HR เรียกสัมภาษณ์แล้ว</div>
+                        <div style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>รอ HR ติดต่อผู้สมัคร</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => updateStatus(detail, "รอนัดสัมภาษณ์")} disabled={updating === detail._row}
+                      style={{ width: "100%", padding: "14px 24px", borderRadius: 12, border: "none",
+                        background: "linear-gradient(135deg,#c2410c,#ea580c)",
+                        color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer",
+                        fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
+                        gap: 10, opacity: updating === detail._row ? 0.7 : 1,
+                        boxShadow: "0 4px 14px rgba(194,65,12,.35)", transition: "opacity .15s" }}>
+                      <span style={{ fontSize: 20 }}>📞</span>
+                      ส่งให้ HR เรียกสัมภาษณ์
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* ── HR/Deputy status update panel ── */}
               {canUpdate && statusKey && (
                 <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #f1f5f9" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#334155" }}>อัปเดตผลการพิจารณา</div>
-                    {!isDeputy && (
-                      <span style={{ fontSize: 11, background: "#fef9c3", color: "#b45309",
-                        borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>HR — ไม่รวม "รับเข้างาน"</span>
-                    )}
-                    {isDeputy && (
-                      <span style={{ fontSize: 11, background: "#ede9fe", color: "#7c3aed",
-                        borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>รองผู้อำนวยการ — อนุมัติรับเข้างาน</span>
-                    )}
+                    {!isDeputy && <span style={{ fontSize: 11, background: "#fef9c3", color: "#b45309", borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>HR</span>}
+                    {isDeputy  && <span style={{ fontSize: 11, background: "#ede9fe", color: "#7c3aed", borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>รองผู้อำนวยการ</span>}
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {allowedStatuses.map(s => {
