@@ -4,7 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 interface Topic { id: number; owner: string; text: string; sort_order: number; }
 interface EvalDetail {
   id: number; round: number; status: string; grade: string | null; total_score: number | null;
-  suggestion: string | null; decision: string | null;
+  suggestion: string | null; decision: string | null; template_id: number | null;
   signer_employee: string | null; signer_head: string | null;
   signer_hr: string | null; signer_director: string | null;
   full_name: string; position: string | null; start_date: string | null;
@@ -70,25 +70,28 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const [error, setError]           = useState("");
 
   useEffect(() => {
-    Promise.all([
-      fetch(`/api/eval/evaluations/${evalId}`).then(r => r.json()),
-      fetch("/api/eval/topics").then(r => r.json()),
-    ]).then(([evd, td]) => {
-      const evData = evd as { ok: boolean; evaluation: EvalDetail; scores: ScoreRow[]; approvals: Approval[] };
-      const tData  = td as { ok: boolean; topics: Topic[] };
-      setEv(evData.evaluation);
-      setTopics(tData.topics);
-      setApprovals(evData.approvals ?? []);
-      setSuggestion(evData.evaluation.suggestion ?? "");
-      setDecision(evData.evaluation.decision ?? "");
-      setSignerEmp(evData.evaluation.signer_employee ?? "");
-      setSignerHead(evData.evaluation.signer_head ?? "");
-      setSignerHR(evData.evaluation.signer_hr ?? "");
-      setSignerDir(evData.evaluation.signer_director ?? "");
-      const sc: Record<number, number> = {};
-      evData.scores.forEach(s => { sc[s.topic_id] = s.score; });
-      setScores(sc);
-    });
+    fetch(`/api/eval/evaluations/${evalId}`).then(r => r.json())
+      .then((evd: { ok: boolean; evaluation: EvalDetail; scores: ScoreRow[]; approvals: Approval[]; templateTopics: Topic[] | null }) => {
+        setEv(evd.evaluation);
+        setApprovals(evd.approvals ?? []);
+        setSuggestion(evd.evaluation.suggestion ?? "");
+        setDecision(evd.evaluation.decision ?? "");
+        setSignerEmp(evd.evaluation.signer_employee ?? "");
+        setSignerHead(evd.evaluation.signer_head ?? "");
+        setSignerHR(evd.evaluation.signer_hr ?? "");
+        setSignerDir(evd.evaluation.signer_director ?? "");
+        const sc: Record<number, number> = {};
+        evd.scores.forEach(s => { sc[s.topic_id] = s.score; });
+        setScores(sc);
+
+        // Use template topics if available, otherwise fetch global topics
+        if (evd.templateTopics) {
+          setTopics(evd.templateTopics);
+        } else {
+          fetch("/api/eval/topics").then(r => r.json())
+            .then((td: { ok: boolean; topics: Topic[] }) => setTopics(td.topics));
+        }
+      });
   }, [evalId]);
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);

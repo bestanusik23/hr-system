@@ -100,52 +100,99 @@ export default function EvaluationList() {
 }
 
 function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
-  const [employees, setEmployees] = useState<{ id: number; full_name: string; emp_status: string }[]>([]);
-  const [empId, setEmpId] = useState<number | "">("");
-  const [round, setRound] = useState<30 | 60 | 90>(30);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [employees,  setEmployees]  = useState<{ id: number; full_name: string }[]>([]);
+  const [templates,  setTemplates]  = useState<{ id: number; name: string }[]>([]);
+  const [empId,      setEmpId]      = useState<number | "">("");
+  const [round,      setRound]      = useState<30 | 60 | 90>(30);
+  const [templateId, setTemplateId] = useState<number | "">("");
+  const [search,     setSearch]     = useState("");
+  const [saving,     setSaving]     = useState(false);
+  const [error,      setError]      = useState("");
 
   useEffect(() => {
-    fetch("/api/eval/employees?status=probation").then(r => r.json())
-      .then((d: { employees: { id: number; full_name: string; emp_status: string }[] }) => setEmployees(d.employees ?? []));
+    Promise.all([
+      fetch("/api/eval/employees?status=probation").then(r => r.json()),
+      fetch("/api/eval/templates").then(r => r.json()),
+    ]).then(([ed, td]) => {
+      setEmployees((ed as { employees: { id: number; full_name: string }[] }).employees ?? []);
+      setTemplates((td as { templates: { id: number; name: string }[] }).templates ?? []);
+    });
   }, []);
+
+  const filteredTemplates = search.trim()
+    ? templates.filter(t => t.name.toLowerCase().includes(search.toLowerCase()))
+    : templates;
 
   async function create() {
     if (!empId) { setError("กรุณาเลือกพนักงาน"); return; }
     setSaving(true);
-    const r = await fetch("/api/eval/evaluations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ employee_id: empId, round }) });
+    const r = await fetch("/api/eval/evaluations", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employee_id: empId, round, template_id: templateId || null }),
+    });
     const d = await r.json() as { ok: boolean; error?: string };
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     onSaved();
   }
 
+  const sel: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit" };
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: 400, boxShadow: "0 24px 60px rgba(0,0,0,.2)" }}>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
+      <div style={{ background: "#fff", borderRadius: 20, padding: 32, width: "100%", maxWidth: 460, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 24px 60px rgba(0,0,0,.25)" }}>
         <div style={{ fontSize: 17, fontWeight: 700, marginBottom: 20 }}>สร้างใบประเมินใหม่</div>
+
+        {/* Employee */}
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>พนักงาน</label>
-          <select value={empId} onChange={e => setEmpId(Number(e.target.value))} style={{ width: "100%", padding: "9px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0", fontSize: 14, fontFamily: "inherit" }}>
+          <label style={lbl}>พนักงาน *</label>
+          <select value={empId} onChange={e => setEmpId(Number(e.target.value))} style={sel}>
             <option value="">-- เลือกพนักงาน --</option>
             {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
           </select>
         </div>
-        <div style={{ marginBottom: 20 }}>
-          <label style={{ fontSize: 13, fontWeight: 600, color: "#475569", display: "block", marginBottom: 6 }}>รอบประเมิน</label>
+
+        {/* Round */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={lbl}>รอบประเมิน *</label>
           <div style={{ display: "flex", gap: 8 }}>
             {([30, 60, 90] as const).map(r => (
-              <button key={r} onClick={() => setRound(r)} style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "1.5px solid", borderColor: round === r ? "#16A34A" : "#e2e8f0", background: round === r ? "#16A34A" : "#fff", color: round === r ? "#fff" : "#475569", fontFamily: "inherit", fontSize: 14, cursor: "pointer" }}>
+              <button key={r} onClick={() => setRound(r)}
+                style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: "1.5px solid",
+                  borderColor: round === r ? "#16A34A" : "#e2e8f0",
+                  background: round === r ? "#16A34A" : "#fff",
+                  color: round === r ? "#fff" : "#475569", fontFamily: "inherit", fontSize: 14, cursor: "pointer" }}>
                 {r} วัน
               </button>
             ))}
           </div>
         </div>
+
+        {/* Template */}
+        <div style={{ marginBottom: 20 }}>
+          <label style={lbl}>แบบประเมินตามตำแหน่ง <span style={{ color: "#94a3b8", fontWeight: 400 }}>(เว้นว่าง = ใช้แบบมาตรฐาน 10 ข้อ)</span></label>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="🔍 ค้นหาตำแหน่ง เช่น พยาบาล, บัญชี…"
+            style={{ ...sel, marginBottom: 6 }} />
+          <select value={templateId} onChange={e => setTemplateId(e.target.value ? Number(e.target.value) : "")} style={sel} size={5}>
+            <option value="">— ใช้แบบมาตรฐาน 10 ข้อ —</option>
+            {filteredTemplates.map(t => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          {templateId && (
+            <div style={{ marginTop: 6, fontSize: 12, color: "#16a34a", fontWeight: 600 }}>
+              ✓ เลือก: {templates.find(t => t.id === templateId)?.name}
+            </div>
+          )}
+        </div>
+
         {error && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onClose} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "1.5px solid #e2e8f0", background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
-          <button onClick={create} disabled={saving} style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: "#16A34A", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={create} disabled={saving}
+            style={{ flex: 2, padding: "10px 0", borderRadius: 10, border: "none", background: "#16A34A", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
             {saving ? "กำลังสร้าง…" : "สร้างใบประเมิน"}
           </button>
         </div>
@@ -153,3 +200,5 @@ function NewEvalDialog({ onClose, onSaved }: { onClose: () => void; onSaved: () 
     </div>
   );
 }
+
+const lbl: React.CSSProperties = { display: "block", fontSize: 13, fontWeight: 600, color: "#475569", marginBottom: 6 };

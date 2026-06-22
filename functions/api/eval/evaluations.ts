@@ -59,9 +59,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   ).bind(employee_id, round).first();
   if (existing) return Response.json({ ok: false, error: "มีใบประเมินรอบนี้แล้ว" }, { status: 409 });
 
+  const template_id = body.template_id ?? null;
   const result = await ctx.env.HR_DB.prepare(
-    "INSERT INTO evaluations (employee_id, round, head_user_id) VALUES (?, ?, ?)"
-  ).bind(employee_id, round, user.id).run();
+    "INSERT INTO evaluations (employee_id, round, head_user_id, template_id) VALUES (?, ?, ?, ?)"
+  ).bind(employee_id, round, user.id, template_id).run();
 
   return Response.json({ ok: true, id: result.meta.last_row_id }, { status: 201 });
 };

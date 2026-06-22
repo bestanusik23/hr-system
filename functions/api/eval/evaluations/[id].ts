@@ -35,6 +35,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     ORDER BY et.sort_order
   `).bind(id).all();
 
+  // Also return template topics if this eval uses a template
+  let templateTopics = null;
+  if ((ev as Record<string, unknown>).template_id) {
+    const tmpl = await ctx.env.HR_DB.prepare(
+      "SELECT id, owner, text, sort_order FROM eval_topics WHERE template_id = ? ORDER BY sort_order"
+    ).bind((ev as Record<string, unknown>).template_id).all();
+    templateTopics = tmpl.results;
+  }
+
   const approvals = await ctx.env.HR_DB.prepare(`
     SELECT ea.step, ea.status, ea.note, ea.created_at, u.full_name AS approver_name
     FROM evaluation_approvals ea
@@ -43,7 +52,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     ORDER BY ea.created_at
   `).bind(id).all();
 
-  return Response.json({ ok: true, evaluation: ev, scores: scores.results, approvals: approvals.results });
+  return Response.json({ ok: true, evaluation: ev, scores: scores.results, approvals: approvals.results, templateTopics });
 };
 
 // PUT /api/eval/evaluations/:id
