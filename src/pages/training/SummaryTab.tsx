@@ -30,12 +30,12 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   const [regs, setRegs]         = useState<Reg[]>([]);
   const [photos, setPhotos]     = useState<Photo[]>([]);
   const [loading, setLoading]   = useState(false);
-  const [photoUrl, setPhotoUrl] = useState("");
   const [photoType, setPhotoType] = useState<"activity" | "trainer" | "participant">("activity");
-  const [photoCaption, setPhotoCaption] = useState("");
-  const [addingPhoto, setAddingPhoto]   = useState(false);
   const [showPhotoForm, setShowPhotoForm] = useState(false);
   const [lightbox, setLightbox]           = useState<Photo | null>(null);
+  const [uploadFiles,    setUploadFiles]    = useState<File[]>([]);
+  const [uploadPreviews, setUploadPreviews] = useState<string[]>([]);
+  const [uploading,      setUploading]      = useState(false);
 
   useEffect(() => {
     fetch("/api/training/courses")
@@ -67,20 +67,146 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     setLoading(false);
   }
 
-  async function addPhoto() {
-    if (!photoUrl.trim()) return;
-    setAddingPhoto(true);
-    await fetch("/api/training/photos", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ course_id: selId, url: photoUrl, photo_type: photoType, caption: photoCaption || null }),
+  function compressImage(file: File): Promise<string> {
+    return new Promise(resolve => {
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = new Image();
+        img.onload = () => {
+          let w = img.width, h = img.height;
+          const MAX = 800;
+          if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+          if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          canvas.getContext("2d")!.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.75));
+        };
+        img.src = ev.target?.result as string;
+      };
+      reader.readAsDataURL(file);
     });
-    setPhotoUrl(""); setPhotoCaption(""); setShowPhotoForm(false); setAddingPhoto(false);
+  }
+
+  function onFilePick(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).slice(0, 3 - photos.length);
+    if (!files.length) return;
+    setUploadFiles(prev => [...prev, ...files].slice(0, 3));
+    files.forEach(f => {
+      const reader = new FileReader();
+      reader.onload = ev => setUploadPreviews(prev => [...prev, ev.target?.result as string].slice(0, 3));
+      reader.readAsDataURL(f);
+    });
+    e.target.value = "";
+  }
+
+  function removePreview(i: number) {
+    setUploadFiles(prev => prev.filter((_, idx) => idx !== i));
+    setUploadPreviews(prev => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function uploadPhotos() {
+    if (!uploadFiles.length) return;
+    setUploading(true);
+    for (const file of uploadFiles) {
+      const dataUrl = await compressImage(file);
+      await fetch("/api/training/photos", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ course_id: selId, url: dataUrl, photo_type: photoType, caption: null }),
+      });
+    }
+    setUploadFiles([]); setUploadPreviews([]); setShowPhotoForm(false); setUploading(false);
     loadAll(selId as number);
   }
 
   async function deletePhoto(id: number) {
     await fetch(`/api/training/photos/${id}`, { method: "DELETE" });
     loadAll(selId as number);
+  }
+
+  function printList() {
+    if (!course) return;
+    const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
+    const trainers  = regs.filter(r => r.participant_type === "trainer");
+    const checked   = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
+    const badgeClass = (s: string) => s === "checked_in" ? "bc" : s === "late" ? "bl" : s === "absent" ? "ba" : "br";
+    const badgeLabel = (s: string) => s === "checked_in" ? "เช็คชื่อ" : s === "late" ? "สาย" : s === "absent" ? "ขาด" : "ลงทะเบียน";
+    const win = window.open("", "_blank", "width=1000,height=750");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+<title>รายชื่อผู้เข้าอบรม</title>
+<style>
+  @page{size:A4;margin:18mm}
+  body{font-family:Sarabun,Arial,sans-serif;font-size:11pt;color:#111;margin:0}
+  .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0038C6;padding-bottom:12px;margin-bottom:16px}
+  .logo{width:44px;height:44px;background:#0038C6;border-radius:8px;color:#fff;font-weight:900;font-size:10pt;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;flex-shrink:0}
+  h1{font-size:15pt;color:#0038C6;margin:0 0 2px}
+  .sub{font-size:9pt;color:#64748b}
+  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:10pt;margin-bottom:16px;background:#f0f5ff;padding:10px 14px;border-radius:6px;border:1px solid #dce4f5}
+  table{width:100%;border-collapse:collapse;font-size:10pt}
+  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:7px 10px;text-align:left}
+  td{border:1px solid #dce4f5;padding:6px 10px;vertical-align:middle}
+  tr:nth-child(even) td{background:#f8faff}
+  .bc{background:#dcfce7;color:#16a34a;padding:1px 7px;border-radius:4px;font-size:9pt}
+  .bl{background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:4px;font-size:9pt}
+  .ba{background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:4px;font-size:9pt}
+  .br{background:#f0f5ff;color:#0038C6;padding:1px 7px;border-radius:4px;font-size:9pt}
+  .sect{background:#eff4ff;color:#0038C6;font-weight:700;padding:7px 10px;border:1px solid #c4cfee}
+  .summary{margin-top:14px;font-size:10pt;display:flex;gap:20px}
+  .sig{margin-top:44px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
+  .sigbox{text-align:center;font-size:10pt}
+  .sigline{border-top:1px solid #000;margin-bottom:6px}
+  .foot{margin-top:16px;font-size:8pt;color:#94a3b8;text-align:right}
+  @media print{.noprint{display:none}}
+</style></head><body>
+<div class="hdr">
+  <div class="logo">RAM+</div>
+  <div>
+    <div class="sub">โรงพยาบาลเชียงราย ราม · Human Resource Development</div>
+    <h1>${course.course}</h1>
+    <div class="sub">${course.course_code}</div>
+  </div>
+</div>
+<div class="meta">
+  <div>📅 วันที่อบรม : <strong>${course.course_date ?? "—"}</strong></div>
+  <div>🕐 เวลา : <strong>${course.start_time ?? "—"} – ${course.end_time ?? "—"} น.</strong></div>
+  <div>📍 สถานที่ : <strong>${course.location ?? "—"}</strong></div>
+  <div>👤 วิทยากร : <strong>${course.trainer ?? "—"}</strong></div>
+  <div>🎯 เป้าหมาย : <strong>${course.target} คน</strong></div>
+  <div>✅ เช็คชื่อ : <strong>${checked} / ${regs.length} คน</strong></div>
+</div>
+<table>
+<thead><tr><th>#</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>เวลาเช็คชื่อ</th><th>สถานะ</th><th style="width:90px">ลายเซ็น</th></tr></thead>
+<tbody>
+${attendees.map((r, i) => `<tr>
+  <td>${i + 1}</td>
+  <td><strong>${r.name}</strong></td>
+  <td>${r.position ?? "—"}</td>
+  <td>${r.department ?? "—"}</td>
+  <td>${r.checkin_time ? r.checkin_time.slice(0, 16).replace("T", " ") : "—"}</td>
+  <td><span class="${badgeClass(r.attendance_status)}">${badgeLabel(r.attendance_status)}</span></td>
+  <td></td>
+</tr>`).join("")}
+${trainers.length > 0 ? `<tr><td colspan="7" class="sect">🎤 วิทยากร</td></tr>
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td><td colspan="4"></td></tr>`).join("")}` : ""}
+</tbody></table>
+<div class="summary">
+  <span>ลงทะเบียนทั้งหมด <strong>${regs.length}</strong> คน</span>
+  <span>เช็คชื่อแล้ว <strong>${checked}</strong> คน</span>
+  <span>สาย <strong>${regs.filter(r => r.attendance_status === "late").length}</strong> คน</span>
+  <span>ขาด <strong>${regs.filter(r => r.attendance_status === "absent").length}</strong> คน</span>
+</div>
+<div class="sig">
+  <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ผู้รับผิดชอบโครงการ</div></div>
+  <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ฝ่ายทรัพยากรบุคคล (HRD)</div></div>
+</div>
+<div class="foot">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
+<div class="noprint" style="margin-top:16px">
+  <button onclick="window.print()" style="padding:9px 24px;background:#0038C6;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12pt">🖨️ พิมพ์รายชื่อ</button>
+</div>
+</body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 400);
   }
 
   const checkedIn = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
@@ -172,15 +298,22 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
             <div style={{ padding: "14px 20px", borderBottom: "1px solid #f0f5ff",
               display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ fontWeight: 700, color: "#0a1628" }}>รายชื่อผู้เข้าร่วม</div>
-              <button onClick={() => {
-                const rows = regs.map((r, i) =>
-                  `${i+1}\t${r.emp_code??""}\t${r.name}\t${r.department??""}\t${r.position??""}\t${r.checkin_time?.slice(0,16)??""}\t${STATUS_LABEL[r.attendance_status]??r.attendance_status}`
-                ).join("\n");
-                navigator.clipboard.writeText("ลำดับ\tรหัส\tชื่อ\tแผนก\tตำแหน่ง\tเวลา\tสถานะ\n" + rows);
-              }} style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #c4cfee",
-                background: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#475569" }}>
-                📋 คัดลอก
-              </button>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={printList}
+                  style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #0038C6",
+                    background: "#0038C6", color: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                  🖨️ พิมพ์
+                </button>
+                <button onClick={() => {
+                  const rows = regs.map((r, i) =>
+                    `${i+1}\t${r.emp_code??""}\t${r.name}\t${r.department??""}\t${r.position??""}\t${r.checkin_time?.slice(0,16)??""}\t${STATUS_LABEL[r.attendance_status]??r.attendance_status}`
+                  ).join("\n");
+                  navigator.clipboard.writeText("ลำดับ\tรหัส\tชื่อ\tแผนก\tตำแหน่ง\tเวลา\tสถานะ\n" + rows);
+                }} style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #c4cfee",
+                  background: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#475569" }}>
+                  📋 คัดลอก
+                </button>
+              </div>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
@@ -224,37 +357,89 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <div style={{ fontWeight: 700, color: "#0a1628" }}>📸 รูปภาพกิจกรรม</div>
               {canEdit && (
-                <button onClick={() => setShowPhotoForm(!showPhotoForm)}
+                <button onClick={() => { setShowPhotoForm(!showPhotoForm); if (showPhotoForm) { setUploadFiles([]); setUploadPreviews([]); } }}
                   style={{ padding: "7px 16px", borderRadius: 7, border: "none",
-                    background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
-                  + เพิ่มรูปภาพ
+                    background: showPhotoForm ? "#64748b" : "#0038C6",
+                    color: "#fff", fontWeight: 700, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>
+                  {showPhotoForm ? "ปิด" : `+ เพิ่มรูปภาพ (${photos.length}/∞)`}
                 </button>
               )}
             </div>
 
             {showPhotoForm && canEdit && (
-              <div style={{ background: "#f0f5ff", borderRadius: 8, padding: "16px 18px", marginBottom: 16,
+              <div style={{ background: "#f0f5ff", borderRadius: 8, padding: "18px 20px", marginBottom: 16,
                 border: "1px solid #dce4f5" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 5 }}>URL รูปภาพ</label>
-                    <input value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="https://..." style={inp} />
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 11, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 5 }}>ประเภท</label>
-                    <select value={photoType} onChange={e => setPhotoType(e.target.value as typeof photoType)} style={inp}>
-                      <option value="activity">กิจกรรม</option>
-                      <option value="trainer">วิทยากร</option>
-                      <option value="participant">ผู้เข้าอบรม</option>
-                    </select>
+
+                {/* Category selector */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#475569",
+                    textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>ประเภทรูปภาพ</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {(["activity", "trainer", "participant"] as const).map(t => (
+                      <button key={t} onClick={() => setPhotoType(t)}
+                        style={{ padding: "6px 14px", borderRadius: 7, border: "1.5px solid",
+                          borderColor: photoType === t ? "#0038C6" : "#c4cfee",
+                          background: photoType === t ? "#0038C6" : "#fff",
+                          color: photoType === t ? "#fff" : "#475569",
+                          fontFamily: "inherit", fontSize: 12, cursor: "pointer", fontWeight: photoType === t ? 700 : 400 }}>
+                        {t === "activity" ? "🎯 กิจกรรม" : t === "trainer" ? "👤 วิทยากร" : "👥 ผู้เข้าอบรม"}
+                      </button>
+                    ))}
                   </div>
                 </div>
-                <input value={photoCaption} onChange={e => setPhotoCaption(e.target.value)} placeholder="คำบรรยาย (ไม่บังคับ)" style={{ ...inp, marginBottom: 10 }} />
-                <button onClick={addPhoto} disabled={addingPhoto}
-                  style={{ padding: "8px 20px", borderRadius: 7, border: "none",
-                    background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-                  {addingPhoto ? "กำลังบันทึก…" : "เพิ่มรูปภาพ"}
-                </button>
+
+                {/* File picker + previews */}
+                <div style={{ marginBottom: 14 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "#475569",
+                    textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 6 }}>
+                    เลือกรูปภาพ (สูงสุด 3 ภาพ)
+                  </label>
+                  {uploadPreviews.length < 3 && (
+                    <label style={{ display: "inline-flex", alignItems: "center", gap: 8,
+                      padding: "9px 18px", borderRadius: 7, border: "1.5px dashed #0038C6",
+                      background: "#eff4ff", color: "#0038C6", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                      📁 เลือกไฟล์ภาพ (.jpg, .png)
+                      <input type="file" accept="image/*" multiple onChange={onFilePick}
+                        style={{ display: "none" }} disabled={uploadPreviews.length >= 3} />
+                    </label>
+                  )}
+                  <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+                    {uploadPreviews.length}/3 ภาพ · ระบบบีบอัดอัตโนมัติ (max 800px)
+                  </div>
+                  {uploadPreviews.length > 0 && (
+                    <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                      {uploadPreviews.map((src, i) => (
+                        <div key={i} style={{ position: "relative", width: 100, height: 100,
+                          borderRadius: 8, overflow: "hidden", border: "2px solid #0038C6" }}>
+                          <img src={src} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                          <button onClick={() => removePreview(i)}
+                            style={{ position: "absolute", top: 3, right: 3,
+                              width: 22, height: 22, borderRadius: "50%", border: "none",
+                              background: "#dc2626", color: "#fff", cursor: "pointer",
+                              fontSize: 12, lineHeight: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button onClick={uploadPhotos}
+                    disabled={uploading || uploadFiles.length === 0}
+                    style={{ padding: "9px 22px", borderRadius: 7, border: "none",
+                      background: uploadFiles.length === 0 ? "#94a3b8" : "#0038C6",
+                      color: "#fff", fontWeight: 700, fontSize: 13, cursor: uploadFiles.length === 0 ? "not-allowed" : "pointer",
+                      fontFamily: "inherit" }}>
+                    {uploading ? "กำลังอัพโหลด…" : `📤 อัพโหลด ${uploadFiles.length} ภาพ`}
+                  </button>
+                  <button onClick={() => { setShowPhotoForm(false); setUploadFiles([]); setUploadPreviews([]); }}
+                    style={{ padding: "9px 16px", borderRadius: 7, border: "1.5px solid #c4cfee",
+                      background: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit", color: "#475569" }}>
+                    ยกเลิก
+                  </button>
+                </div>
               </div>
             )}
 
