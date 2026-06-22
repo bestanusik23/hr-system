@@ -121,12 +121,10 @@ export default function RecruitPage() {
     h.includes("โทร") || h.toLowerCase().includes("phone") || h.toLowerCase().includes("tel") || h.includes("ติดต่อ")
   );
 
-  // คอลัมน์ระยะเวลาลาออก — ค้นจาก headers ทั้งหมด (รวมถึงที่อาจถูก filter ออก)
+  // คอลัมน์ระยะเวลาลาออก — ค้นจาก headers ทั้งหมด
   const noticeKey = headers.find(h =>
     NOTICE_KEYS.some(kw => h.toLowerCase().includes(kw.toLowerCase()))
   );
-  // debug: log headers เพื่อตรวจสอบชื่อคอลัมจริง
-  if (headers.length > 0) console.log("[recruit] headers:", headers);
 
   const interviewQueue = statusKey
     ? applications.filter(a => a[statusKey] === "รอนัดสัมภาษณ์")
