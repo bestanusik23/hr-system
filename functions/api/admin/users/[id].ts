@@ -34,3 +34,30 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   return Response.json({ ok: true });
 };
+
+// DELETE /api/admin/users/:id — delete user
+export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
+  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const id = ctx.params.id as string;
+  if (String(user.id) === id)
+    return Response.json({ ok: false, error: "ไม่สามารถลบ account ตัวเองได้" }, { status: 400 });
+
+  // Guard: must keep at least one admin
+  const target = await ctx.env.HR_DB.prepare("SELECT role FROM users WHERE id=?").bind(id).first<{ role: string }>();
+  if (!target) return Response.json({ ok: false, error: "ไม่พบผู้ใช้" }, { status: 404 });
+  if (target.role === "admin") {
+    const adminCount = await ctx.env.HR_DB.prepare("SELECT COUNT(*) AS c FROM users WHERE role='admin' AND is_active=1").first<{ c: number }>();
+    if ((adminCount?.c ?? 0) <= 1)
+      return Response.json({ ok: false, error: "ต้องมีผู้ดูแลระบบอย่างน้อย 1 คน" }, { status: 400 });
+  }
+
+  await ctx.env.HR_DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();
+  await ctx.env.HR_DB.prepare(
+    "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'admin','delete_user','user',?)"
+  ).bind(user.id, user.full_name, id).run();
+
+  return Response.json({ ok: true });
+};
