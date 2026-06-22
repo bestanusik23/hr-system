@@ -35,14 +35,28 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     ORDER BY et.sort_order
   `).bind(id).all();
 
-  // Also return template topics if this eval uses a template
-  let templateTopics = null;
-  if ((ev as Record<string, unknown>).template_id) {
+  // HR topics: always use global (template_id IS NULL, owner='hr') — same 3 for every position
+  const globalHR = await ctx.env.HR_DB.prepare(
+    "SELECT id, owner, text, sort_order FROM eval_topics WHERE template_id IS NULL AND owner = 'hr' ORDER BY sort_order"
+  ).all();
+
+  // Head topics: template-specific if template set, otherwise global head topics
+  let headTopics;
+  const templateId = (ev as Record<string, unknown>).template_id;
+  if (templateId) {
     const tmpl = await ctx.env.HR_DB.prepare(
-      "SELECT id, owner, text, sort_order FROM eval_topics WHERE template_id = ? ORDER BY sort_order"
-    ).bind((ev as Record<string, unknown>).template_id).all();
-    templateTopics = tmpl.results;
+      "SELECT id, owner, text, sort_order FROM eval_topics WHERE template_id = ? AND owner = 'head' ORDER BY sort_order"
+    ).bind(templateId).all();
+    headTopics = tmpl.results;
+  } else {
+    const global = await ctx.env.HR_DB.prepare(
+      "SELECT id, owner, text, sort_order FROM eval_topics WHERE template_id IS NULL AND owner = 'head' ORDER BY sort_order"
+    ).all();
+    headTopics = global.results;
   }
+
+  // Combine: HR first, then head — frontend splits by owner field
+  const templateTopics = [...(globalHR.results as object[]), ...(headTopics as object[])];
 
   const approvals = await ctx.env.HR_DB.prepare(`
     SELECT ea.step, ea.status, ea.note, ea.created_at, u.full_name AS approver_name
