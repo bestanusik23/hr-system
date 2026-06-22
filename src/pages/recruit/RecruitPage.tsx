@@ -24,7 +24,13 @@ function isHiddenCol(h: string) {
     || h.includes("วันเกิด")
     || h.toLowerCase().includes("birthdate")
     || h.toLowerCase().includes("birthday")
-    || h.toLowerCase().includes("nickname");
+    || h.toLowerCase().includes("nickname")
+    || h.includes("ศาสนา")
+    || h.toLowerCase().includes("religion")
+    || h.includes("เลขที่บัตร")
+    || h.includes("บัตรประจำตัว")
+    || h.toLowerCase().includes("id card")
+    || h.toLowerCase().includes("national id");
 }
 function isStatusCol(h: string) {
   return h.includes("ผลการพิจารณา") || h.toLowerCase().includes("status") || h.toLowerCase().includes("result");

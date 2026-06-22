@@ -76,6 +76,9 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   if (action === "save" || action === "submit") {
     if (!["hr", "head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    const { signer_employee, signer_head, signer_hr, signer_director } = body as {
+      signer_employee?: string; signer_head?: string; signer_hr?: string; signer_director?: string;
+    };
     if (scores) {
       for (const [topicId, score] of Object.entries(scores)) {
         await ctx.env.HR_DB.prepare(
@@ -85,10 +88,18 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     }
     const total = scores ? Object.values(scores).reduce((a, b) => a + (b as number), 0) : null;
     const newStatus = action === "submit" ? "pending_deputy" : "draft";
+    // Track which role filled which part
+    const headUserId = ["head", "admin"].includes(user.role) ? user.id : null;
+    const hrUserId   = ["hr",   "admin"].includes(user.role) ? user.id : null;
     await ctx.env.HR_DB.prepare(`
       UPDATE evaluations SET status=?, suggestion=?, decision=?, grade=?, total_score=?,
-        head_user_id=?, updated_at=datetime('now') WHERE id=?
-    `).bind(newStatus, suggestion ?? null, decision ?? null, grade ?? null, total, user.id, id).run();
+        head_user_id=COALESCE(?,head_user_id), hr_user_id=COALESCE(?,hr_user_id),
+        signer_employee=?, signer_head=?, signer_hr=?, signer_director=?,
+        updated_at=datetime('now') WHERE id=?
+    `).bind(newStatus, suggestion ?? null, decision ?? null, grade ?? null, total,
+            headUserId, hrUserId,
+            signer_employee ?? null, signer_head ?? null, signer_hr ?? null, signer_director ?? null,
+            id).run();
     if (action === "submit") {
       await ctx.env.HR_DB.prepare(
         "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status) VALUES (?,?,?,?)"
