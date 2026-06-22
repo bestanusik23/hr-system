@@ -26,14 +26,14 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const body = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, position, department_id, division_id, start_date, emp_status, color, initial } = body;
+  const { full_name, emp_code, position, department_id, division_id, start_date, emp_status } = body;
 
   await ctx.env.HR_DB.prepare(`
-    UPDATE employees SET full_name=?, position=?, department_id=?, division_id=?, start_date=?,
-      emp_status=?, color=?, initial=?, updated_at=datetime('now')
+    UPDATE employees SET emp_code=?, full_name=?, position=?, department_id=?, division_id=?,
+      start_date=?, emp_status=?, updated_at=datetime('now')
     WHERE id=?
-  `).bind(full_name, position ?? null, department_id ?? null, division_id ?? null,
-    start_date ?? null, emp_status ?? "probation", color ?? null, initial ?? null, id).run();
+  `).bind(emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null,
+    start_date ?? null, emp_status ?? "probation", id).run();
 
   return Response.json({ ok: true });
 };

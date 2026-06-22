@@ -4,7 +4,7 @@ import EmployeeForm from "./EmployeeForm";
 import EvaluationForm from "./EvaluationForm";
 
 interface Employee {
-  id: number; full_name: string; position: string | null; start_date: string | null;
+  id: number; emp_code: string | null; full_name: string; position: string | null; start_date: string | null;
   emp_status: string; department_name: string | null; division_name: string | null;
   color: string | null; initial: string | null; department_id: number | null; division_id: number | null;
 }
@@ -146,7 +146,16 @@ export default function EmployeeList() {
                     {emp.initial ?? emp.full_name.charAt(0)}
                   </div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a" }}>{emp.full_name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontWeight: 800, fontSize: 15, color: "#0f172a" }}>{emp.full_name}</span>
+                      {emp.emp_code && (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#0038C6",
+                          background: "#f0f5ff", border: "1px solid #c4cfee",
+                          borderRadius: 5, padding: "2px 8px", letterSpacing: "0.04em" }}>
+                          {emp.emp_code}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
                       {emp.position ?? "—"} · {emp.department_name ?? "—"} · {emp.division_name ?? "—"}
                     </div>

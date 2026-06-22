@@ -11,7 +11,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const divId  = url.searchParams.get("division_id") ?? "";
 
   let sql = `
-    SELECT e.id, e.full_name, e.position, e.start_date, e.emp_status, e.color, e.initial,
+    SELECT e.id, e.emp_code, e.full_name, e.position, e.start_date, e.emp_status,
+           e.color, e.initial,
            d.name AS department_name, dv.name AS division_name,
            e.department_id, e.division_id
     FROM employees e
@@ -45,13 +46,13 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, position, department_id, division_id, start_date, color, initial } = body;
+  const { full_name, emp_code, position, department_id, division_id, start_date } = body;
   if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
 
   const result = await ctx.env.HR_DB.prepare(`
-    INSERT INTO employees (full_name, position, department_id, division_id, start_date, color, initial)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).bind(full_name, position ?? null, department_id ?? null, division_id ?? null, start_date ?? null, color ?? null, initial ?? null).run();
+    INSERT INTO employees (emp_code, full_name, position, department_id, division_id, start_date)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null, start_date ?? null).run();
 
   return Response.json({ ok: true, id: result.meta.last_row_id }, { status: 201 });
 };
