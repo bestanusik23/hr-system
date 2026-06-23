@@ -89,7 +89,7 @@ const SYSTEMS: SystemCard[] = [
   },
   {
     key: "transfer", no: "05", icon: <IcArrows />,
-    title: "ระบบคำขอช่วยแผนก",
+    title: "ระบบคำขอย้ายตำแหน่ง / แผนก / ฝ่ายฯ",
     desc: "ส่งคำขอช่วยแผนก อนุมัติโดยหัวหน้าแผนกปลายทาง และรองผอ.ค่าตอบแทน",
     roles: ["hr","head","deputy","deputyHR","admin"],
   },
