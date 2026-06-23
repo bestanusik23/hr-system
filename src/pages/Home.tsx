@@ -83,7 +83,7 @@ const SYSTEMS: SystemCard[] = [
   },
   {
     key: "training", no: "04", icon: <IcBook />,
-    title: "ระบบข้อมูลลักษณะอบรม",
+    title: "ระบบฝึกอบรมภายใน",
     desc: "แผนอบรมประจำเดือน บันทึกผลการอบรม และ Dashboard เปรียบเทียบแผนกับผลจริง",
     roles: ["hr","head","deputy","deputyHR","admin"],
   },
