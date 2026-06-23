@@ -67,7 +67,7 @@ const SYSTEMS: SystemCard[] = [
     key: "manpower", no: "01", icon: <IcUsers />,
     title: "Manpower CRR",
     desc: "ฐานข้อมูลกลางพนักงาน เพิ่มพนักงานเข้าใหม่ / ลาออก และ Dashboard อัตรากำลังแบบ Real-time",
-    roles: ["hr","head","deputy","deputyHR","admin"],
+    roles: ["hr","deputyHR","admin"],
   },
   {
     key: "recruit", no: "02", icon: <IcSearch />,
@@ -97,7 +97,7 @@ const SYSTEMS: SystemCard[] = [
     key: "exec", no: "06", icon: <IcChart />,
     title: "Executive Dashboard",
     desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม",
-    roles: ["hr","deputy","deputyHR","admin"],
+    roles: ["hr","deputyHR","admin"],
   },
   {
     key: "admin", no: "07", icon: <IcUserCog />,
@@ -109,13 +109,13 @@ const SYSTEMS: SystemCard[] = [
     key: "admin/org", no: "08", icon: <IcBuilding />,
     title: "จัดการตำแหน่ง/แผนก",
     desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบตามโครงสร้างองค์กร",
-    roles: ["hr","admin"],
+    roles: ["hr","deputyHR","admin"],
   },
   {
     key: "workflow", no: "09", icon: <IcFlow />,
     title: "Workflow & สิทธิ์การอนุมัติ",
     desc: "ดูขั้นตอนการอนุมัติและสิทธิ์ของแต่ละ Role ในทุกระบบขององค์กร",
-    roles: ["hr","head","deputy","deputyHR","admin"],
+    roles: ["hr","deputyHR","admin"],
   },
 ];
 
