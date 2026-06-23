@@ -12,19 +12,23 @@ interface LiveEmp {
   resign_date?: string;
 }
 
-// Build map: "divId|position" → active employees sorted by start_date asc
+// Build map: position (trimmed, lower-cased) → active employees
+// We intentionally do NOT use division_id here because the static
+// manpowerPlan.ts divIds may not match the DB division_ids for some
+// divisions (e.g. ฝ่ายการพยาบาล was not detected as a separate division
+// during generation). Matching by position name alone is safe in practice
+// because hospital position names are specific to their department.
 function buildLiveMap(employees: LiveEmp[]): Map<string, LiveEmp[]> {
   const map = new Map<string, LiveEmp[]>();
   for (const e of employees) {
     if (e.emp_status === "resigned") continue;
-    const key = `${e.division_id}|${(e.position ?? "").trim()}`;
+    const key = (e.position ?? "").trim().toLowerCase();
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(e);
   }
   return map;
 }
 
-// Pre-assign employees to slots, returns augmented rows
 interface AugRow extends ManpowerRow {
   liveEmp: string;
   liveFilled: number;
@@ -38,7 +42,7 @@ function buildAugRows(rows: ManpowerRow[], liveMap: Map<string, LiveEmp[]>): Aug
     if (r.type !== "slot") {
       return { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "" };
     }
-    const key = `${r.divId}|${r.pos.trim()}`;
+    const key = r.pos.trim().toLowerCase();
     const pool = liveMap.get(key) ?? [];
     const ptr = ptrMap.get(key) ?? 0;
     ptrMap.set(key, ptr + 1);
