@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 import { daysUntil, formatThaiDate } from "../../utils/date";
 
+interface NewHireRow  { id: number; full_name: string; position: string; start_date: string; emp_type: string; division_name: string }
+interface ResignRow   { id: number; full_name: string; position: string; resign_date: string; resign_reason: string; division_name: string }
+
 interface Summary {
   cards: {
     headcount: number; active: number; probation: number;
     new_this_month: number; resigned_this_month: number; turnover_rate: number;
   };
+  period_label: string;
   by_division: { division: string; n: number }[];
   by_type: { type: string; n: number }[];
   trend: { hires: { m: string; n: number }[]; resigns: { m: string; n: number }[] };
@@ -13,14 +17,18 @@ interface Summary {
     id: number; emp_code: string; full_name: string; position: string;
     probation_end_date: string; color: string; initial: string; department_name: string;
   }[];
+  new_hire_list: NewHireRow[];
+  resign_list: ResignRow[];
 }
 
-const CARD_DEFS: { key: keyof Summary["cards"]; label: string; icon: string; color: string; suffix?: string }[] = [
+type Modal = "newhire" | "resign" | null;
+
+const CARD_DEFS: { key: keyof Summary["cards"]; label: string; icon: string; color: string; suffix?: string; modal?: Modal }[] = [
   { key: "headcount",           label: "อัตรากำลังทั้งหมด",  icon: "👥", color: "#0038C6" },
   { key: "active",             label: "พนักงาน Active",     icon: "✅", color: "#16a34a" },
   { key: "probation",          label: "ทดลองงาน",          icon: "🕐", color: "#d97706" },
-  { key: "new_this_month",     label: "เข้าใหม่เดือนนี้",    icon: "➕", color: "#0891b2" },
-  { key: "resigned_this_month",label: "ลาออกเดือนนี้",      icon: "📤", color: "#dc2626" },
+  { key: "new_this_month",     label: "เข้าใหม่เดือนนี้",    icon: "➕", color: "#0891b2", modal: "newhire" },
+  { key: "resigned_this_month",label: "ลาออกเดือนนี้",      icon: "📤", color: "#dc2626", modal: "resign"  },
   { key: "turnover_rate",      label: "Turnover Rate",      icon: "📉", color: "#7c3aed", suffix: "%" },
 ];
 
@@ -55,6 +63,7 @@ export default function ManpowerDashboard() {
   const [data, setData]     = useState<Summary | null>(null);
   const [loading, setLoad]  = useState(true);
   const [error, setError]   = useState("");
+  const [modal, setModal]   = useState<Modal>(null);
 
   useEffect(() => {
     fetch("/api/manpower/summary").then(r => r.json())
@@ -83,11 +92,111 @@ export default function ManpowerDashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+
+      {/* ── Employee Detail Modal ───────────────────────────────────────────── */}
+      {modal && (
+        <div onClick={() => setModal(null)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "#fff", borderRadius: 18, width: "100%", maxWidth: 700,
+            maxHeight: "82vh", display: "flex", flexDirection: "column",
+            boxShadow: "0 8px 40px rgba(0,0,0,.18)" }}>
+            {/* Modal header */}
+            <div style={{ padding: "20px 24px 16px", borderBottom: "1px solid #f1f5f9",
+              display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: "#0a1628" }}>
+                  {modal === "newhire" ? "พนักงานเข้าใหม่" : "พนักงานลาออก"}
+                </div>
+                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
+                  รอบ {data.period_label}
+                </div>
+              </div>
+              <button onClick={() => setModal(null)} style={{ background: "none", border: "none",
+                fontSize: 20, cursor: "pointer", color: "#94a3b8", lineHeight: 1, padding: 4 }}>✕</button>
+            </div>
+            {/* Modal body */}
+            <div style={{ overflowY: "auto", padding: "16px 24px 24px" }}>
+              {modal === "newhire" && (
+                data.new_hire_list.length === 0
+                  ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานเข้าใหม่ในรอบนี้</div>
+                  : <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc" }}>
+                          {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","ประเภท","วันที่เริ่มงาน"].map(h => (
+                            <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
+                              fontWeight: 700, color: "#475569", borderBottom: "2px solid #e2e8f0" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.new_hire_list.map((e, i) => (
+                          <tr key={e.id} style={{ background: i % 2 === 0 ? "#fafbff" : "#fff",
+                            borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{i + 1}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: "#0a1628" }}>{e.full_name}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#475569" }}>{e.position}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.division_name}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.emp_type || "—"}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#0891b2", fontWeight: 600 }}>
+                              {formatThaiDate(e.start_date)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+              )}
+              {modal === "resign" && (
+                data.resign_list.length === 0
+                  ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานลาออกในรอบนี้</div>
+                  : <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead>
+                        <tr style={{ background: "#f8fafc" }}>
+                          {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","วันสุดท้าย","เหตุผล"].map(h => (
+                            <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
+                              fontWeight: 700, color: "#475569", borderBottom: "2px solid #e2e8f0" }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.resign_list.map((e, i) => (
+                          <tr key={e.id} style={{ background: i % 2 === 0 ? "#fafbff" : "#fff",
+                            borderBottom: "1px solid #f1f5f9" }}>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{i + 1}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: "#0a1628" }}>{e.full_name}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#475569" }}>{e.position}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.division_name}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
+                              {formatThaiDate(e.resign_date)}
+                            </td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{e.resign_reason || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
-        {CARD_DEFS.map(c => (
-          <div key={c.key} style={{ background: "#fff", borderRadius: 14, padding: "18px 20px",
-            boxShadow: "0 1px 6px rgba(0,0,0,.06)", borderTop: `3px solid ${c.color}` }}>
+        {CARD_DEFS.map(c => {
+          const clickable = !!c.modal;
+          return (
+          <div key={c.key}
+            onClick={clickable ? () => setModal(c.modal!) : undefined}
+            style={{ background: "#fff", borderRadius: 14, padding: "18px 20px",
+              boxShadow: "0 1px 6px rgba(0,0,0,.06)", borderTop: `3px solid ${c.color}`,
+              cursor: clickable ? "pointer" : "default",
+              transition: "transform .12s, box-shadow .12s",
+              position: "relative",
+            }}
+            onMouseEnter={clickable ? e => { (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 4px 18px rgba(0,0,0,.12)"; } : undefined}
+            onMouseLeave={clickable ? e => { (e.currentTarget as HTMLDivElement).style.transform = ""; (e.currentTarget as HTMLDivElement).style.boxShadow = "0 1px 6px rgba(0,0,0,.06)"; } : undefined}
+          >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: 12, color: "#64748b", fontWeight: 600 }}>{c.label}</span>
               <span style={{ fontSize: 18 }}>{c.icon}</span>
@@ -95,8 +204,17 @@ export default function ManpowerDashboard() {
             <div style={{ fontSize: 30, fontWeight: 800, color: c.color, marginTop: 8 }}>
               {data.cards[c.key]}{c.suffix ?? ""}
             </div>
+            {clickable && (
+              <div style={{ fontSize: 10.5, color: c.color, marginTop: 4, opacity: 0.75 }}>
+                คลิกดูรายชื่อ →
+              </div>
+            )}
+            {clickable && c.key === "new_this_month" && (
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>รอบ {data.period_label}</div>
+            )}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>

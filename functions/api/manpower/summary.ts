@@ -17,12 +17,23 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     scope = " AND e.division_id = ?"; sp.push(user.scope_division_id);
   }
 
+  // ── Cut-off: 26th of prev month → 25th of current month ──────────────────
+  // e.g. today 2026-06-23 → period 2026-05-26 to 2026-06-25
+  const pStart = "date('now','start of month','-1 month','+25 days')";
+  const pEnd   = "date('now','start of month','+24 days')";
+
   // --- Summary cards ---
   const headcount = await db.prepare(`SELECT COUNT(*) AS n FROM employees e WHERE e.emp_status != 'resigned'${scope}`).bind(...sp).first<{ n: number }>();
   const active    = await db.prepare(`SELECT COUNT(*) AS n FROM employees e WHERE e.emp_status IN ('passed','transferred')${scope}`).bind(...sp).first<{ n: number }>();
   const probation = await db.prepare(`SELECT COUNT(*) AS n FROM employees e WHERE e.emp_status = 'probation'${scope}`).bind(...sp).first<{ n: number }>();
-  const newMonth  = await db.prepare(`SELECT COUNT(*) AS n FROM employees e WHERE strftime('%Y-%m', e.start_date) = strftime('%Y-%m','now')${scope}`).bind(...sp).first<{ n: number }>();
-  const resignMon = await db.prepare(`SELECT COUNT(*) AS n FROM employees e WHERE strftime('%Y-%m', e.resign_date) = strftime('%Y-%m','now')${scope}`).bind(...sp).first<{ n: number }>();
+
+  const newMonth  = await db.prepare(
+    `SELECT COUNT(*) AS n FROM employees e WHERE e.start_date >= ${pStart} AND e.start_date <= ${pEnd}${scope}`
+  ).bind(...sp).first<{ n: number }>();
+
+  const resignMon = await db.prepare(
+    `SELECT COUNT(*) AS n FROM employees e WHERE e.resign_date >= ${pStart} AND e.resign_date <= ${pEnd}${scope}`
+  ).bind(...sp).first<{ n: number }>();
 
   const hc = headcount?.n ?? 0;
   const turnover_rate = hc > 0 ? Math.round(((resignMon?.n ?? 0) / hc) * 1000) / 10 : 0;
@@ -70,6 +81,25 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     ORDER BY e.probation_end_date ASC
   `).bind(...sp).all<{ id: number; emp_code: string; full_name: string; position: string; probation_end_date: string; color: string; initial: string; department_name: string }>();
 
+  // --- Employee lists for the period (for clickable dashboard cards) ---
+  const newHireList = await db.prepare(`
+    SELECT e.id, e.full_name, e.position, e.start_date, e.emp_type,
+           COALESCE(dv.name,'ไม่ระบุ') AS division_name
+    FROM employees e
+    LEFT JOIN divisions dv ON dv.id = e.division_id
+    WHERE e.start_date >= ${pStart} AND e.start_date <= ${pEnd}${scope}
+    ORDER BY e.start_date DESC
+  `).bind(...sp).all<{ id: number; full_name: string; position: string; start_date: string; emp_type: string; division_name: string }>();
+
+  const resignList = await db.prepare(`
+    SELECT e.id, e.full_name, e.position, e.resign_date, e.resign_reason,
+           COALESCE(dv.name,'ไม่ระบุ') AS division_name
+    FROM employees e
+    LEFT JOIN divisions dv ON dv.id = e.division_id
+    WHERE e.resign_date >= ${pStart} AND e.resign_date <= ${pEnd}${scope}
+    ORDER BY e.resign_date DESC
+  `).bind(...sp).all<{ id: number; full_name: string; position: string; resign_date: string; resign_reason: string; division_name: string }>();
+
   return Response.json({
     ok: true,
     cards: {
@@ -80,9 +110,20 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       resigned_this_month: resignMon?.n ?? 0,
       turnover_rate,
     },
+    period_label: getPeriodLabel(),
     by_division: byDivision.results,
     by_type: byType.results,
     trend: { hires: hires.results, resigns: resigns.results },
     near_probation: nearProb.results,
+    new_hire_list: newHireList.results,
+    resign_list: resignList.results,
   });
 };
+
+function getPeriodLabel(): string {
+  const now = new Date();
+  const MT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const p = new Date(now.getFullYear(), now.getMonth() - 1, 26);
+  const e = new Date(now.getFullYear(), now.getMonth(), 25);
+  return `26 ${MT[p.getMonth()]} ${p.getFullYear() + 543} – 25 ${MT[e.getMonth()]} ${e.getFullYear() + 543}`;
+}
