@@ -1,9 +1,48 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatThaiDate, toGregorian } from "../../utils/date";
 import { EMP_TYPES } from "./MasterEmployeeForm";
+import { MANPOWER_ROWS } from "../../data/manpowerPlan";
 
 interface Division { id: number; name: string; }
 interface Department { id: number; division_id: number; name: string; }
+
+/* ── Build position lookup from manpowerPlan at module level ── */
+const POSITIONS_BY_PLAN_DIV_ID = (() => {
+  const map = new Map<number, string[]>();
+  for (const row of MANPOWER_ROWS) {
+    if (row.type === "slot" && row.pos.trim()) {
+      const arr = map.get(row.divId) ?? [];
+      if (!arr.includes(row.pos)) arr.push(row.pos);
+      map.set(row.divId, arr);
+    }
+  }
+  return map;
+})();
+
+/* ── Map division name → plan divId (exact + known extras) ── */
+const PLAN_NAME_TO_DIV_ID = (() => {
+  const map = new Map<string, number>();
+  for (const row of MANPOWER_ROWS) {
+    if (row.type === "division") map.set(row.name, row.divId);
+  }
+  // Divisions missing from generation script — add manually
+  map.set("ฝ่ายบัญชี", 5);
+  map.set("ฝ่ายการพยาบาลส่วนใน", 8);
+  map.set("ฝ่ายการพยาบาลส่วนหน้า", 9);
+  map.set("ศูนย์มะเร็ง", 11);
+  map.set("ฝ่ายบริการ", 10);
+  return map;
+})();
+
+function getPlanDivId(divName: string): number | null {
+  if (!divName) return null;
+  if (PLAN_NAME_TO_DIV_ID.has(divName)) return PLAN_NAME_TO_DIV_ID.get(divName)!;
+  // Fuzzy: plan name contains DB name or vice versa
+  for (const [planName, id] of PLAN_NAME_TO_DIV_ID) {
+    if (planName.includes(divName) || divName.includes(planName)) return id;
+  }
+  return null;
+}
 
 const inp: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
@@ -42,7 +81,20 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
 
   const filteredDepts = departments.filter(d => d.division_id === Number(divId));
 
-  // Live preview of probation end
+  // Position options: filter manpowerPlan by selected division name
+  const positionOptions = useMemo(() => {
+    const selectedDiv = divisions.find(d => d.id === Number(divId));
+    if (!selectedDiv) return [];
+    const planId = getPlanDivId(selectedDiv.name);
+    if (planId === null) return [];
+    return POSITIONS_BY_PLAN_DIV_ID.get(planId) ?? [];
+  }, [divId, divisions]);
+
+  // Reset position when division changes
+  const handleDivChange = (val: number | "") => {
+    setDivId(val); setDeptId(""); setPos("");
+  };
+
   const probEndPreview = useMemo(() => {
     if (!startDate) return null;
     const d = toGregorian(startDate);
@@ -80,6 +132,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         <div style={{ display: "inline-flex", flexDirection: "column", gap: 8, textAlign: "left",
           background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 12, padding: "16px 22px", marginBottom: 24 }}>
           <div><b>ชื่อ:</b> {fullName}</div>
+          <div><b>ตำแหน่ง:</b> {position || "—"}</div>
           <div><b>สถานะ:</b> ทดลองงาน (Probation)</div>
           <div><b>ครบทดลองงาน:</b> {formatThaiDate(done.probation_end_date)} ({probDays} วัน)</div>
         </div>
@@ -119,7 +172,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         <input type="date" value={startDate} onChange={e => setStart(e.target.value)} style={inp} />
       </Field>
       <Field label="ฝ่าย">
-        <select value={divId} onChange={e => { setDivId(Number(e.target.value)); setDeptId(""); }} style={inp}>
+        <select value={divId} onChange={e => handleDivChange(e.target.value ? Number(e.target.value) : "")} style={inp}>
           <option value="">-- เลือกฝ่าย --</option>
           {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
@@ -130,9 +183,24 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
           {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
       </Field>
-      <Field label="ตำแหน่ง">
-        <input value={position} onChange={e => setPos(e.target.value)} style={inp} />
+
+      <Field label={`ตำแหน่ง${positionOptions.length > 0 ? ` (${positionOptions.length} ตำแหน่งในฝ่ายนี้)` : ""}`}>
+        {positionOptions.length > 0 ? (
+          <select value={position} onChange={e => setPos(e.target.value)} style={inp}>
+            <option value="">-- เลือกตำแหน่ง --</option>
+            {positionOptions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        ) : (
+          <input value={position} onChange={e => setPos(e.target.value)} style={inp}
+            placeholder={divId ? "พิมพ์ตำแหน่ง" : "เลือกฝ่ายก่อน"} />
+        )}
+        {positionOptions.length > 0 && (
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+            ตำแหน่งจากแผนอัตรากำลัง · เมื่อเพิ่มแล้วจะอัปเดตใน Manpower อัตโนมัติ
+          </div>
+        )}
       </Field>
+
       <Field label="ประเภทพนักงาน">
         <input value={empType} onChange={e => setType(e.target.value)} style={inp} list="newhire-types" placeholder="เลือกหรือพิมพ์…" />
         <datalist id="newhire-types">{EMP_TYPES.map(t => <option key={t} value={t} />)}</datalist>
