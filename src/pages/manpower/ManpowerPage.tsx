@@ -5,13 +5,14 @@ import ManpowerDashboard from "./ManpowerDashboard";
 import ManpowerTable from "./ManpowerTable";
 import NewHireTab from "./NewHireTab";
 import ResignTab from "./ResignTab";
+import LicensePlateTab from "./LicensePlateTab";
 
-type Tab = "dashboard" | "excel" | "newhire" | "resign";
+type Tab = "dashboard" | "excel" | "newhire" | "resign" | "license";
 
 export default function ManpowerPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("dashboard");
-  const [bump, setBump] = useState(0);          // force-refresh dependents after writes
+  const [bump, setBump] = useState(0);
 
   const canEdit = user && ["hr", "admin"].includes(user.role);
 
@@ -20,6 +21,7 @@ export default function ManpowerPage() {
     { key: "excel",     icon: "📋", label: "ตารางอัตรากำลัง" },
     { key: "newhire",   icon: "➕", label: "เพิ่มพนักงานเริ่มงานใหม่", hidden: !canEdit },
     { key: "resign",    icon: "📤", label: "เพิ่มพนักงานลาออก",       hidden: !canEdit },
+    { key: "license",   icon: "🪪", label: "ใบประกอบ / ทะเบียนรถ" },
   ];
 
   return (
@@ -49,6 +51,7 @@ export default function ManpowerPage() {
       {tab === "resign"    && (
         <ResignTab onSaved={() => { setBump(b => b + 1); setTab("excel"); }} />
       )}
+      {tab === "license"   && <LicensePlateTab />}
     </PageLayout>
   );
 }
