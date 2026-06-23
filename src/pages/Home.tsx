@@ -217,17 +217,30 @@ export default function Home() {
         }}>
           {/* Logo card */}
           <div style={{
-            display: "inline-block", background: "#fff", borderRadius: 18,
-            padding: "12px 22px", marginBottom: 28,
+            display: "inline-block", background: "#fff", borderRadius: 20,
+            padding: "16px 28px", marginBottom: 24,
             boxShadow: "0 4px 20px rgba(0,56,198,.12)",
           }}>
-            <img src="/logo.png" alt="CRR" style={{ height: 52, objectFit: "contain" }} />
+            <img src="/logo.png" alt="Chiangrai Ram Hospital"
+              style={{ height: 64, width: "auto", display: "block", objectFit: "contain" }} />
           </div>
+
+          {/* Hospital English name */}
+          <div style={{
+            fontSize: 13, fontWeight: 600, color: "#26a9e0",
+            letterSpacing: "0.18em", textTransform: "uppercase",
+            marginBottom: 10,
+          }}>Chiangrai Ram Hospital</div>
 
           <h1 style={{
             fontSize: 38, fontWeight: 800, color: "#0038c6",
-            margin: "0 0 14px", letterSpacing: "-0.4px", lineHeight: 1.2,
+            margin: "0 0 6px", letterSpacing: "-0.4px", lineHeight: 1.2,
           }}>ระบบบริหารทรัพยากรบุคคล</h1>
+
+          <div style={{
+            fontSize: 14, color: "#94a3b8", letterSpacing: "0.08em",
+            marginBottom: 14,
+          }}>Human Resource Management System</div>
 
           <p style={{
             fontSize: 15.5, color: "#475569", maxWidth: 520,
