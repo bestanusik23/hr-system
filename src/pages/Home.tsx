@@ -7,14 +7,15 @@ interface SystemCard {
 }
 
 const SYSTEMS: SystemCard[] = [
-  { key: "recruit", no: "1", icon: "🔍", title: "ระบบสรรหาบุคลากร", desc: "คัดเลือกใบสมัครออนไลน์ และตรวจสอบอัตรากำลัง (Manpower) ตามแผนก", tags: ["คัดเลือกใบสมัคร", "Manpower"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "eval", no: "2", icon: "📋", title: "ระบบประเมินผลพนักงาน", desc: "ประเมินพนักงานทดลองงาน รอบ 30/60/90 วัน พร้อมอนุมัติผลตามผังองค์กร", tags: ["แบบประเมิน 10 หัวข้อ", "อนุมัติผล"], accent: "#16A34A", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "training", no: "3", icon: "🎓", title: "ระบบข้อมูลฝึกอบรม", desc: "แผนอบรมประจำเดือน บันทึกผลการอบรม และ Dashboard เปรียบเทียบแผนกับผลจริง", tags: ["แผนอบรม", "Dashboard"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "transfer", no: "4", icon: "📑", title: "ระบบคำขอย้ายแผนก", desc: "ส่งคำขอย้ายแผนก อนุมัติโดยหัวหน้าแผนก และอนุมัติขั้นสุดท้ายโดย HR", tags: ["Workflow 3 ขั้น", "อนุมัติ"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
-  { key: "exec", no: "5", icon: "📈", title: "Executive Dashboard", desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม", tags: ["ภาพรวมองค์กร", "KPI"], accent: "#0038C6", roles: ["hr","deputy","deputyHR","admin"] },
-  { key: "admin", no: "6", icon: "⚙️", title: "จัดการผู้ใช้งาน", desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ", tags: ["เพิ่มผู้ใช้", "กำหนดสิทธิ์"], accent: "#0038C6", roles: ["admin"] },
-  { key: "admin/org", no: "7", icon: "🏢", title: "จัดการฝ่าย/แผนก/ตำแหน่ง", desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบ", tags: ["ฝ่าย", "แผนก", "ตำแหน่ง"], accent: "#0038C6", roles: ["hr", "admin"] },
-  { key: "workflow", no: "8", icon: "📊", title: "Workflow & สิทธิ์การอนุมัติ", desc: "ดูขั้นตอนการอนุมัติและสิทธิ์ของแต่ละ Role ในทุกระบบ", tags: ["Flow chart", "RBAC"], accent: "#0038C6", roles: ["hr", "head", "deputy", "deputyHR", "admin"] },
+  { key: "manpower", no: "1", icon: "🗂️", title: "Manpower CRR", desc: "ฐานข้อมูลกลางพนักงาน เพิ่มพนักงานเข้าใหม่/ลาออก และ Dashboard อัตรากำลังแบบ Real-time", tags: ["Master Database", "Dashboard"], accent: "#0891b2", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "recruit", no: "2", icon: "🔍", title: "ระบบสรรหาบุคลากร", desc: "คัดเลือกใบสมัครออนไลน์ และตรวจสอบอัตรากำลัง (Manpower) ตามแผนก", tags: ["คัดเลือกใบสมัคร", "Manpower"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "eval", no: "3", icon: "📋", title: "ระบบประเมินผลพนักงาน", desc: "ประเมินพนักงานทดลองงาน รอบ 30/60/90 วัน พร้อมอนุมัติผลตามผังองค์กร", tags: ["แบบประเมิน 10 หัวข้อ", "อนุมัติผล"], accent: "#16A34A", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "training", no: "4", icon: "🎓", title: "ระบบข้อมูลฝึกอบรม", desc: "แผนอบรมประจำเดือน บันทึกผลการอบรม และ Dashboard เปรียบเทียบแผนกับผลจริง", tags: ["แผนอบรม", "Dashboard"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "transfer", no: "5", icon: "📑", title: "ระบบคำขอย้ายแผนก", desc: "ส่งคำขอย้ายแผนก อนุมัติโดยหัวหน้าแผนกปลายทาง และรองผอ.ค่าตอบแทน", tags: ["Workflow 3 ขั้น", "อนุมัติ"], accent: "#0038C6", roles: ["hr","head","deputy","deputyHR","admin"] },
+  { key: "exec", no: "6", icon: "📈", title: "Executive Dashboard", desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม", tags: ["ภาพรวมองค์กร", "KPI"], accent: "#0038C6", roles: ["hr","deputy","deputyHR","admin"] },
+  { key: "admin", no: "7", icon: "⚙️", title: "จัดการผู้ใช้งาน", desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ", tags: ["เพิ่มผู้ใช้", "กำหนดสิทธิ์"], accent: "#0038C6", roles: ["admin"] },
+  { key: "admin/org", no: "8", icon: "🏢", title: "จัดการฝ่าย/แผนก/ตำแหน่ง", desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบ", tags: ["ฝ่าย", "แผนก", "ตำแหน่ง"], accent: "#0038C6", roles: ["hr", "admin"] },
+  { key: "workflow", no: "9", icon: "📊", title: "Workflow & สิทธิ์การอนุมัติ", desc: "ดูขั้นตอนการอนุมัติและสิทธิ์ของแต่ละ Role ในทุกระบบ", tags: ["Flow chart", "RBAC"], accent: "#0038C6", roles: ["hr", "head", "deputy", "deputyHR", "admin"] },
 ];
 
 export default function Home() {
