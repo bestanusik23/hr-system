@@ -200,7 +200,6 @@ export default function ManpowerDashboard() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, color: "#0a1628" }}>
                       {e.full_name}
-                      {e.emp_code && <span style={{ fontSize: 11, color: "#0891b2", marginLeft: 8, fontWeight: 600 }}>{e.emp_code}</span>}
                     </div>
                     <div style={{ fontSize: 12, color: "#64748b" }}>
                       {e.position ?? "—"} · {e.department_name ?? "—"} · ครบ {formatThaiDate(e.probation_end_date)}

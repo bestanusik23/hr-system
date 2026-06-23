@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { formatThaiDate } from "../../utils/date";
 
 interface ActiveEmp {
-  id: number; emp_code: string | null; full_name: string; position: string | null;
+  id: number; full_name: string; position: string | null;
   department_name: string | null; division_name: string | null; start_date: string | null;
 }
 
@@ -42,8 +42,7 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
 
   const selected = list.find(e => e.id === empId) ?? null;
   const filtered = list.filter(e =>
-    !search || e.full_name.toLowerCase().includes(search.toLowerCase()) ||
-    (e.emp_code ?? "").toLowerCase().includes(search.toLowerCase())
+    !search || e.full_name.toLowerCase().includes(search.toLowerCase())
   );
 
   async function save() {
@@ -80,7 +79,7 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
           <option value="">-- เลือกพนักงาน --</option>
           {filtered.map(e => (
             <option key={e.id} value={e.id}>
-              {e.emp_code ? `${e.emp_code} · ` : ""}{e.full_name}{e.department_name ? ` (${e.department_name})` : ""}
+              {e.full_name}{e.department_name ? ` (${e.department_name})` : ""}
             </option>
           ))}
         </select>

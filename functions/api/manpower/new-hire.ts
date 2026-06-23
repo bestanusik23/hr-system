@@ -13,7 +13,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const b = await ctx.request.json() as Record<string, unknown>;
   const {
     full_name, start_date, department_id, division_id, position,
-    supervisor, emp_type, probation_days, emp_code: manualCode,
+    supervisor, emp_type, probation_days,
   } = b;
 
   if (!full_name || !String(full_name).trim()) {
@@ -47,17 +47,11 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const newId = result.meta.last_row_id as number;
 
-  // 2) Auto-generate Employee ID = CRR + zero-padded id (unless manual code supplied)
-  const empCode = (manualCode && String(manualCode).trim())
-    ? String(manualCode).trim()
-    : `CRR${String(newId).padStart(4, "0")}`;
-  await ctx.env.HR_DB.prepare("UPDATE employees SET emp_code=? WHERE id=?").bind(empCode, newId).run();
-
   await ctx.env.HR_DB.prepare(
     "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','new_hire','employee',?)"
   ).bind(user.id, user.full_name, newId).run();
 
   return Response.json({
-    ok: true, id: newId, emp_code: empCode, probation_end_date: probEnd,
+    ok: true, id: newId, probation_end_date: probEnd,
   }, { status: 201 });
 };

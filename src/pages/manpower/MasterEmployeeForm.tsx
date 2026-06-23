@@ -36,7 +36,6 @@ interface Props { employee: MasterEmployee; onClose: () => void; onSaved: () => 
 export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props) {
   const [divisions, setDivs]   = useState<Division[]>([]);
   const [departments, setDeps] = useState<Department[]>([]);
-  const [empCode, setEmpCode]  = useState(employee.emp_code ?? "");
   const [fullName, setName]    = useState(employee.full_name);
   const [position, setPos]     = useState(employee.position ?? "");
   const [divId, setDivId]      = useState<number | "">(employee.division_id ?? "");
@@ -65,7 +64,7 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
     const r = await fetch(`/api/manpower/employees/${employee.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        emp_code: empCode.trim() || null, full_name: fullName, position: position || null,
+        full_name: fullName, position: position || null,
         department_id: deptId || null, division_id: divId || null, start_date: startDate || null,
         emp_status: empStatus, emp_type: empType || null, supervisor: supervisor || null,
         probation_days: probDays, remark: remark || null,
@@ -90,9 +89,6 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
           แก้ไขข้อมูลพนักงาน
         </div>
 
-        <Field label="รหัสพนักงาน">
-          <input value={empCode} onChange={e => setEmpCode(e.target.value)} style={inp} placeholder="CRR0001" />
-        </Field>
         <Field label="ชื่อ-นามสกุล *">
           <input value={fullName} onChange={e => setName(e.target.value)} style={inp} />
         </Field>

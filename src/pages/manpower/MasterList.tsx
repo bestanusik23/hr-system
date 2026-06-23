@@ -70,7 +70,7 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
     <div>
       {/* Toolbar */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
-        <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 ค้นหาชื่อ / รหัส / ตำแหน่ง…"
+        <input value={q} onChange={e => setQ(e.target.value)} placeholder="🔍 ค้นหาชื่อ / ตำแหน่ง…"
           style={{ padding: "8px 14px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", width: 240 }} />
         <select value={divId} onChange={e => setDivId(e.target.value)}
           style={{ padding: "8px 12px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", background: "#fff", cursor: "pointer" }}>
@@ -103,7 +103,6 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
-                  <th style={th}>รหัส</th>
                   <th style={th}>ชื่อ-นามสกุล</th>
                   <th style={th}>ตำแหน่ง</th>
                   <th style={th}>แผนก</th>
@@ -122,7 +121,6 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
                   return (
                     <tr key={e.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 ? "#fafbff" : "#fff",
                       opacity: e.emp_status === "resigned" ? 0.6 : 1 }}>
-                      <td style={{ ...td, fontFamily: "monospace", color: "#0891b2", fontWeight: 700 }}>{e.emp_code ?? "—"}</td>
                       <td style={{ ...td, fontWeight: 600 }}>{e.full_name}</td>
                       <td style={td}>{e.position ?? "—"}</td>
                       <td style={td}>{e.department_name ?? "—"}</td>

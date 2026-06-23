@@ -30,10 +30,9 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   const [supervisor, setSup]   = useState("");
   const [empType, setType]     = useState("");
   const [probDays, setProbDays] = useState(119);
-  const [empCode, setEmpCode]  = useState("");
   const [saving, setSaving]    = useState(false);
   const [error, setError]      = useState("");
-  const [done, setDone]        = useState<{ emp_code: string; probation_end_date: string | null } | null>(null);
+  const [done, setDone]        = useState<{ probation_end_date: string | null } | null>(null);
 
   useEffect(() => {
     fetch("/api/eval/org").then(r => r.json())
@@ -61,13 +60,13 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       body: JSON.stringify({
         full_name: fullName, start_date: startDate, department_id: deptId || null,
         division_id: divId || null, position: position || null, supervisor: supervisor || null,
-        emp_type: empType || null, probation_days: probDays, emp_code: empCode.trim() || null,
+        emp_type: empType || null, probation_days: probDays,
       }),
     });
-    const d = await r.json() as { ok: boolean; error?: string; emp_code?: string; probation_end_date?: string | null };
+    const d = await r.json() as { ok: boolean; error?: string; probation_end_date?: string | null };
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    setDone({ emp_code: d.emp_code ?? "", probation_end_date: d.probation_end_date ?? null });
+    setDone({ probation_end_date: d.probation_end_date ?? null });
   }
 
   if (done) {
@@ -81,14 +80,14 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         </div>
         <div style={{ display: "inline-flex", flexDirection: "column", gap: 8, textAlign: "left",
           background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 12, padding: "16px 22px", marginBottom: 24 }}>
-          <div><b>รหัสพนักงาน:</b> <span style={{ fontFamily: "monospace", color: "#0891b2", fontWeight: 700 }}>{done.emp_code}</span></div>
+          <div><b>ชื่อ:</b> {fullName}</div>
           <div><b>สถานะ:</b> ทดลองงาน (Probation)</div>
           <div><b>ครบทดลองงาน:</b> {formatThaiDate(done.probation_end_date)} ({probDays} วัน)</div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button onClick={() => {
             setDone(null); setName(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
-            setSup(""); setType(""); setProbDays(119); setEmpCode("");
+            setSup(""); setType(""); setProbDays(119);
           }} style={{ padding: "11px 22px", borderRadius: 8, border: "1.5px solid #c4cfee",
             background: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600 }}>
             + เพิ่มคนถัดไป
@@ -111,7 +110,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         เพิ่มพนักงานเริ่มงานใหม่
       </div>
       <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 22, paddingLeft: 14 }}>
-        รหัสพนักงานสร้างอัตโนมัติ · ตั้งสถานะทดลองงาน · ส่งเข้าระบบประเมินทันที
+        ตั้งสถานะทดลองงานอัตโนมัติ · ส่งเข้าระบบประเมินทันที
       </div>
 
       <Field label="ชื่อ-นามสกุล *">
@@ -142,18 +141,9 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         <input value={empType} onChange={e => setType(e.target.value)} style={inp} list="newhire-types" placeholder="เลือกหรือพิมพ์…" />
         <datalist id="newhire-types">{EMP_TYPES.map(t => <option key={t} value={t} />)}</datalist>
       </Field>
-      <div style={{ display: "flex", gap: 12 }}>
-        <div style={{ width: 150 }}>
-          <Field label="ระยะทดลองงาน (วัน)">
-            <input type="number" value={probDays} onChange={e => setProbDays(Number(e.target.value))} style={inp} />
-          </Field>
-        </div>
-        <div style={{ flex: 1 }}>
-          <Field label="รหัสพนักงาน (เว้นว่าง = อัตโนมัติ)">
-            <input value={empCode} onChange={e => setEmpCode(e.target.value)} style={inp} placeholder="อัตโนมัติ" />
-          </Field>
-        </div>
-      </div>
+      <Field label="ระยะทดลองงาน (วัน)">
+        <input type="number" value={probDays} onChange={e => setProbDays(Number(e.target.value))} style={inp} />
+      </Field>
 
       {probEndPreview && (
         <div style={{ background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 8,
