@@ -12,6 +12,7 @@ interface Summary {
   period_label: string;
   by_division: { division: string; n: number }[];
   by_type: { type: string; n: number }[];
+  by_status: { status: string; n: number }[];
   trend: { hires: { m: string; n: number }[]; resigns: { m: string; n: number }[] };
   near_probation: {
     id: number; emp_code: string; full_name: string; position: string;
@@ -87,8 +88,16 @@ export default function ManpowerDashboard() {
   const resignMap = Object.fromEntries(data.trend.resigns.map(x => [x.m, x.n]));
   const trendMax  = Math.max(1, ...months.map(m => Math.max(hireMap[m] ?? 0, resignMap[m] ?? 0)));
 
-  const divMax  = Math.max(1, ...data.by_division.map(d => d.n));
-  const typeTotal = Math.max(1, data.by_type.reduce((s, t) => s + t.n, 0));
+  const divMax     = Math.max(1, ...data.by_division.map(d => d.n));
+  const typeTotal  = Math.max(1, data.by_type.reduce((s, t) => s + t.n, 0));
+  const statusTotal= Math.max(1, (data.by_status ?? []).reduce((s, t) => s + t.n, 0));
+
+  const STATUS_COLOR: Record<string, string> = {
+    "ผ่านทดลองงาน": "#16a34a",
+    "ทดลองงาน":     "#d97706",
+    "ย้ายแผนก":     "#0891b2",
+  };
+  const TYPE_MULTI = data.by_type.length > 1;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -238,27 +247,68 @@ export default function ManpowerDashboard() {
           </div>
         </div>
 
-        {/* By type (proportion) */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: 22, boxShadow: "0 1px 6px rgba(0,0,0,.06)" }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#0a1628", marginBottom: 16 }}>สัดส่วนประเภทพนักงาน</div>
-          <div style={{ display: "flex", height: 16, borderRadius: 8, overflow: "hidden", marginBottom: 16 }}>
-            {data.by_type.map((t, i) => (
-              <div key={t.type} title={`${t.type}: ${t.n}`}
-                style={{ width: `${(t.n / typeTotal) * 100}%`, background: PALETTE[i % PALETTE.length] }} />
-            ))}
+        {/* By status + type */}
+        <div style={{ background: "#fff", borderRadius: 14, padding: 22, boxShadow: "0 1px 6px rgba(0,0,0,.06)",
+          display: "flex", flexDirection: "column", gap: 20 }}>
+
+          {/* สถานะพนักงาน */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#0a1628", marginBottom: 12 }}>สัดส่วนสถานะพนักงาน</div>
+            <div style={{ display: "flex", height: 14, borderRadius: 6, overflow: "hidden", marginBottom: 12 }}>
+              {(data.by_status ?? []).map(t => (
+                <div key={t.status} title={`${t.status}: ${t.n}`}
+                  style={{ width: `${(t.n / statusTotal) * 100}%`,
+                    background: STATUS_COLOR[t.status] ?? "#64748b" }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {(data.by_status ?? []).map(t => (
+                <div key={t.status} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0,
+                    background: STATUS_COLOR[t.status] ?? "#64748b" }} />
+                  <span style={{ color: "#475569", flex: 1 }}>{t.status}</span>
+                  <span style={{ fontWeight: 700, color: "#0a1628" }}>{t.n}</span>
+                  <span style={{ color: "#94a3b8", width: 38, textAlign: "right" }}>
+                    {Math.round((t.n / statusTotal) * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {data.by_type.map((t, i) => (
-              <div key={t.type} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                <span style={{ width: 11, height: 11, borderRadius: 3, background: PALETTE[i % PALETTE.length] }} />
-                <span style={{ color: "#475569", flex: 1 }}>{t.type}</span>
-                <span style={{ fontWeight: 700, color: "#0a1628" }}>{t.n}</span>
-                <span style={{ color: "#94a3b8", width: 42, textAlign: "right" }}>
-                  {Math.round((t.n / typeTotal) * 100)}%
+
+          {/* ประเภทพนักงาน */}
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#0a1628", marginBottom: 12,
+              display: "flex", alignItems: "center", gap: 8 }}>
+              สัดส่วนประเภทพนักงาน
+              {!TYPE_MULTI && (
+                <span style={{ fontSize: 10, fontWeight: 400, color: "#94a3b8",
+                  background: "#f1f5f9", padding: "2px 8px", borderRadius: 4 }}>
+                  แก้ไขประเภทพนักงานในหน้า Master List
                 </span>
-              </div>
-            ))}
+              )}
+            </div>
+            <div style={{ display: "flex", height: 14, borderRadius: 6, overflow: "hidden", marginBottom: 12 }}>
+              {data.by_type.map((t, i) => (
+                <div key={t.type} title={`${t.type}: ${t.n}`}
+                  style={{ width: `${(t.n / typeTotal) * 100}%`, background: PALETTE[i % PALETTE.length] }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {data.by_type.map((t, i) => (
+                <div key={t.type} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0,
+                    background: PALETTE[i % PALETTE.length] }} />
+                  <span style={{ color: "#475569", flex: 1 }}>{t.type}</span>
+                  <span style={{ fontWeight: 700, color: "#0a1628" }}>{t.n}</span>
+                  <span style={{ color: "#94a3b8", width: 38, textAlign: "right" }}>
+                    {Math.round((t.n / typeTotal) * 100)}%
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
+
         </div>
       </div>
 

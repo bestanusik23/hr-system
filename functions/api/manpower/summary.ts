@@ -52,8 +52,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     SELECT COALESCE(NULLIF(TRIM(e.emp_type),''),'ไม่ระบุประเภท') AS type, COUNT(*) AS n
     FROM employees e
     WHERE e.emp_status != 'resigned'${scope}
-    GROUP BY type ORDER BY n DESC
+    GROUP BY e.emp_type ORDER BY n DESC
   `).bind(...sp).all<{ type: string; n: number }>();
+
+  // --- By employee status (non-resigned) ---
+  const byStatus = await db.prepare(`
+    SELECT
+      CASE e.emp_status
+        WHEN 'probation'   THEN 'ทดลองงาน'
+        WHEN 'passed'      THEN 'ผ่านทดลองงาน'
+        WHEN 'transferred' THEN 'ย้ายแผนก'
+        ELSE e.emp_status
+      END AS status, COUNT(*) AS n
+    FROM employees e
+    WHERE e.emp_status != 'resigned'${scope}
+    GROUP BY e.emp_status ORDER BY n DESC
+  `).bind(...sp).all<{ status: string; n: number }>();
 
   // --- Monthly trend (last 6 months): new hires vs resignations ---
   const hires = await db.prepare(`
@@ -113,6 +127,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     period_label: getPeriodLabel(),
     by_division: byDivision.results,
     by_type: byType.results,
+    by_status: byStatus.results,
     trend: { hires: hires.results, resigns: resigns.results },
     near_probation: nearProb.results,
     new_hire_list: newHireList.results,
