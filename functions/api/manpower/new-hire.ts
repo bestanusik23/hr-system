@@ -10,7 +10,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const b = await ctx.request.json() as Record<string, unknown>;
   const {
-    full_name, start_date, department_id, division_id, position,
+    full_name, name_en, start_date, department_id, division_id, position,
     emp_type, probation_days,
     license_number, license_expiry,
     car_plate_1, car_plate_2, moto_plate_1, moto_plate_2,
@@ -32,12 +32,12 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const result = await ctx.env.HR_DB.prepare(`
     INSERT INTO employees
-      (full_name, position, department_id, division_id, start_date,
+      (full_name, name_en, position, department_id, division_id, start_date,
        emp_status, emp_type, probation_days, probation_end_date, color, initial,
        license_number, license_expiry, car_plate_1, car_plate_2, moto_plate_1, moto_plate_2)
-    VALUES (?,?,?,?,?, 'probation', ?,?,?, ?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?, 'probation', ?,?,?, ?,?,?,?,?,?,?,?,?)
   `).bind(
-    name, position ?? null, department_id ?? null, division_id ?? null, start_date,
+    name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null, start_date,
     emp_type ?? null, days, probEnd, color, initial,
     license_number || null, license_expiry || null,
     car_plate_1 || null, car_plate_2 || null,

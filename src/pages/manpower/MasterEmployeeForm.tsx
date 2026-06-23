@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 
 export interface MasterEmployee {
-  id: number; emp_code: string | null; full_name: string; position: string | null;
+  id: number; emp_code: string | null; full_name: string; name_en: string | null;
+  position: string | null;
   start_date: string | null; emp_status: string;
   emp_type: string | null; supervisor: string | null;
   probation_days: number | null; probation_end_date: string | null; remark: string | null;
@@ -21,12 +22,13 @@ const inp: React.CSSProperties = {
   fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
 };
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
         letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 7 }}>{label}</label>
       {children}
+      {hint && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{hint}</div>}
     </div>
   );
 }
@@ -37,6 +39,7 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
   const [divisions, setDivs]   = useState<Division[]>([]);
   const [departments, setDeps] = useState<Department[]>([]);
   const [fullName, setName]    = useState(employee.full_name);
+  const [nameEn, setNameEn]    = useState(employee.name_en ?? "");
   const [position, setPos]     = useState(employee.position ?? "");
   const [divId, setDivId]      = useState<number | "">(employee.division_id ?? "");
   const [deptId, setDeptId]    = useState<number | "">(employee.department_id ?? "");
@@ -64,7 +67,8 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
     const r = await fetch(`/api/manpower/employees/${employee.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        full_name: fullName, position: position || null,
+        full_name: fullName, name_en: nameEn || null,
+        position: position || null,
         department_id: deptId || null, division_id: divId || null, start_date: startDate || null,
         emp_status: empStatus, emp_type: empType || null, supervisor: supervisor || null,
         probation_days: probDays, remark: remark || null,
@@ -89,8 +93,12 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
           แก้ไขข้อมูลพนักงาน
         </div>
 
-        <Field label="ชื่อ-นามสกุล *">
+        <Field label="ชื่อ-นามสกุล (ไทย) *">
           <input value={fullName} onChange={e => setName(e.target.value)} style={inp} />
+        </Field>
+        <Field label="ชื่อ-นามสกุล (English)" hint="ใช้สำหรับบัตรพนักงาน Canva">
+          <input value={nameEn} onChange={e => setNameEn(e.target.value)} style={inp}
+            placeholder="Firstname Lastname" />
         </Field>
         <Field label="ตำแหน่ง">
           <input value={position} onChange={e => setPos(e.target.value)} style={inp} />

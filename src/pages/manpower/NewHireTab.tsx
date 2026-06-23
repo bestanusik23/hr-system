@@ -71,6 +71,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   const [divisions, setDivs]    = useState<Division[]>([]);
   const [departments, setDeps]  = useState<Department[]>([]);
   const [fullName, setName]     = useState("");
+  const [nameEn, setNameEn]     = useState("");
   const [startDate, setStart]   = useState("");
   const [divId, setDivId]       = useState<number | "">("");
   const [deptId, setDeptId]     = useState<number | "">("");
@@ -125,7 +126,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   }, [licenseExp]);
 
   function reset() {
-    setName(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
+    setName(""); setNameEn(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
     setType(""); setProbDays(119);
     setLicNo(""); setLicExp("");
     setCar1(""); setCar2(""); setMoto1(""); setMoto2("");
@@ -138,7 +139,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
     const r = await fetch("/api/manpower/new-hire", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        full_name: fullName, start_date: startDate,
+        full_name: fullName, name_en: nameEn || null, start_date: startDate,
         department_id: deptId || null, division_id: divId || null,
         position: position || null, emp_type: empType || null, probation_days: probDays,
         license_number: licenseNo || null, license_expiry: licenseExp || null,
@@ -198,8 +199,11 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       </div>
 
       {/* ── ข้อมูลทั่วไป ── */}
-      <Field label="ชื่อ-นามสกุล *">
+      <Field label="ชื่อ-นามสกุล (ไทย) *">
         <input value={fullName} onChange={e => setName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" />
+      </Field>
+      <Field label="ชื่อ-นามสกุล (English)" hint="ใช้สำหรับบัตรพนักงาน Canva">
+        <input value={nameEn} onChange={e => setNameEn(e.target.value)} style={inp} placeholder="Firstname Lastname" />
       </Field>
       <Field label="วันที่เริ่มงาน *">
         <input type="date" value={startDate} onChange={e => setStart(e.target.value)} style={inp} />

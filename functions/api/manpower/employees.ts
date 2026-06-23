@@ -16,7 +16,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
            e.emp_type, e.probation_days, e.probation_end_date, e.remark,
            e.resign_date, e.resign_reason, e.resign_type,
            e.color, e.initial, e.department_id, e.division_id,
-           e.license_number, e.license_expiry,
+           e.name_en, e.license_number, e.license_expiry,
            e.car_plate_1, e.car_plate_2, e.moto_plate_1, e.moto_plate_2,
            d.name AS department_name, dv.name AS division_name
     FROM employees e

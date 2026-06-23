@@ -6,8 +6,9 @@ import ManpowerTable from "./ManpowerTable";
 import NewHireTab from "./NewHireTab";
 import ResignTab from "./ResignTab";
 import LicensePlateTab from "./LicensePlateTab";
+import CardExportTab from "./CardExportTab";
 
-type Tab = "dashboard" | "excel" | "newhire" | "resign" | "license";
+type Tab = "dashboard" | "excel" | "newhire" | "resign" | "license" | "cards";
 
 export default function ManpowerPage() {
   const { user } = useAuth();
@@ -22,6 +23,7 @@ export default function ManpowerPage() {
     { key: "newhire",   icon: "➕", label: "เพิ่มพนักงานเริ่มงานใหม่", hidden: !canEdit },
     { key: "resign",    icon: "📤", label: "เพิ่มพนักงานลาออก",       hidden: !canEdit },
     { key: "license",   icon: "🪪", label: "ใบประกอบ / ทะเบียนรถ" },
+    { key: "cards",     icon: "🎴", label: "บัตรพนักงาน Canva" },
   ];
 
   return (
@@ -52,6 +54,7 @@ export default function ManpowerPage() {
         <ResignTab onSaved={() => { setBump(b => b + 1); setTab("excel"); }} />
       )}
       {tab === "license"   && <LicensePlateTab />}
+      {tab === "cards"     && <CardExportTab />}
     </PageLayout>
   );
 }

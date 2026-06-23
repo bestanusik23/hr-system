@@ -27,7 +27,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const id = ctx.params.id as string;
   const b = await ctx.request.json() as Record<string, unknown>;
   const {
-    full_name, position, department_id, division_id, start_date,
+    full_name, name_en, position, department_id, division_id, start_date,
     emp_status, emp_type, supervisor, probation_days, remark,
   } = b;
 
@@ -41,13 +41,13 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   await ctx.env.HR_DB.prepare(`
     UPDATE employees SET
-      full_name=?, position=?, department_id=?, division_id=?,
+      full_name=?, name_en=?, position=?, department_id=?, division_id=?,
       start_date=?, emp_status=?, emp_type=?, supervisor=?,
       probation_days=?, probation_end_date=?, remark=?,
       updated_at=datetime('now')
     WHERE id=?
   `).bind(
-    full_name, position ?? null, department_id ?? null, division_id ?? null,
+    full_name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null,
     start_date ?? null, emp_status ?? "probation", emp_type ?? null, supervisor ?? null,
     days, probEnd?.d ?? null, remark ?? null, id,
   ).run();
