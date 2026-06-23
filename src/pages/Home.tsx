@@ -72,7 +72,7 @@ const SYSTEMS: SystemCard[] = [
   {
     key: "recruit", no: "02", icon: <IcSearch />,
     title: "ระบบสรรหาบุคลากร",
-    desc: "คัดเลือกใบสมัครออนไลน์ และตรวจสอบอัตรากำลัง Manpower ตามแผนก",
+    desc: "ตรวจสอบดูใบสมัครในแผนกที่เกี่ยวข้อง",
     roles: ["hr","head","deputy","deputyHR","admin"],
   },
   {
