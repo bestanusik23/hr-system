@@ -31,18 +31,25 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
   const [confirmDel, setConfirmDel] = useState<MasterEmployee | null>(null);
   const [delErr, setDelErr]   = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [loadErr, setLoadErr] = useState("");
 
   const canEdit = user && ["hr", "admin"].includes(user.role);
 
   async function load() {
     setLoading(true);
-    const params = new URLSearchParams();
-    if (status) params.set("status", status);
-    if (divId)  params.set("division_id", divId);
-    if (q.trim()) params.set("q", q.trim());
-    const r = await fetch(`/api/manpower/employees?${params}`);
-    const d = await r.json() as { employees: MasterEmployee[] };
-    setRows(d.employees ?? []);
+    setLoadErr("");
+    try {
+      const params = new URLSearchParams();
+      if (status) params.set("status", status);
+      if (divId)  params.set("division_id", divId);
+      if (q.trim()) params.set("q", q.trim());
+      const r = await fetch(`/api/manpower/employees?${params}`);
+      const d = await r.json() as { ok?: boolean; employees: MasterEmployee[]; error?: string };
+      if (d.ok === false) { setLoadErr(d.error ?? "โหลดข้อมูลไม่สำเร็จ"); setLoading(false); return; }
+      setRows(d.employees ?? []);
+    } catch {
+      setLoadErr("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    }
     setLoading(false);
   }
 
@@ -91,7 +98,11 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
         <span style={{ fontSize: 13, color: "#94a3b8", marginLeft: "auto" }}>{rows.length} คน</span>
       </div>
 
-      {loading ? (
+      {loadErr ? (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 12, padding: 24, color: "#dc2626" }}>
+          {loadErr}
+        </div>
+      ) : loading ? (
         <div style={{ textAlign: "center", padding: 50, color: "#94a3b8" }}>กำลังโหลด…</div>
       ) : rows.length === 0 ? (
         <div style={{ textAlign: "center", padding: 50, color: "#94a3b8", background: "#fff", borderRadius: 12 }}>
