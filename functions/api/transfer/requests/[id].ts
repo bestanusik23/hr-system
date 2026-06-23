@@ -3,9 +3,9 @@ import { getTokenFromCookie, getSessionUser } from "../../../lib/auth";
 
 interface TransferRow {
   id: number; name: string; position: string | null; reason: string | null; new_position: string | null;
-  from_dept_name: string | null; to_dept_name: string | null; from_department_id: number | null;
-  to_division_id: number; to_department_id: number;
-  head_status: string; deputy_status: string; hr_status: string; overall_status: string;
+  from_dept_name: string | null; to_dept_name: string | null;
+  from_department_id: number | null; to_division_id: number; to_department_id: number;
+  dest_head_status: string; deputyhr_status: string; overall_status: string;
   requester_user_id: number | null; created_at: string;
 }
 
@@ -16,13 +16,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const req = await ctx.env.HR_DB.prepare(`
-    SELECT tr.*, fd.name AS from_division_name, td.name AS to_division_name,
-           todept.name AS to_dept_name_full
+    SELECT tr.*, fd.name AS from_division_name, td.name AS to_division_name
     FROM transfer_requests tr
     LEFT JOIN departments fdept ON fdept.id = tr.from_department_id
     LEFT JOIN divisions fd ON fd.id = fdept.division_id
     LEFT JOIN divisions td ON td.id = tr.to_division_id
-    LEFT JOIN departments todept ON todept.id = tr.to_department_id
     WHERE tr.id = ?
   `).bind(id).first();
   if (!req) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
@@ -37,7 +35,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 };
 
 // PUT /api/transfer/requests/:id
-// actions: head_approve | head_reject | deputy_approve | deputy_reject | hr_approve | hr_reject
+// actions: dest_head_approve | dest_head_reject | deputyhr_approve | deputyhr_reject
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -49,50 +47,42 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const req = await ctx.env.HR_DB.prepare("SELECT * FROM transfer_requests WHERE id = ?").bind(id).first<TransferRow>();
   if (!req) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // LEVEL 4 — Head: ขั้นแรก (verify)
-  if (action === "head_approve" || action === "head_reject") {
-    if (!["head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    if (req.overall_status !== "submitted") return Response.json({ ok: false, error: "ไม่อยู่ในสถานะที่อนุมัติได้" }, { status: 409 });
-    // head: can only approve requests from their own department
-    if (user.role === "head" && user.scope_department_id && req.from_department_id !== user.scope_department_id) {
-      return Response.json({ ok: false, error: "ไม่มีสิทธิ์รับรองคำขอแผนกอื่น" }, { status: 403 });
+  // STEP 1 — หัวหน้าแผนกปลายทาง อนุมัติ/ปฏิเสธ
+  if (action === "dest_head_approve" || action === "dest_head_reject") {
+    if (!["head", "admin"].includes(user.role)) {
+      return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
     }
-    const approved = action === "head_approve";
+    if (req.overall_status !== "submitted") {
+      return Response.json({ ok: false, error: "ไม่อยู่ในสถานะที่อนุมัติได้" }, { status: 409 });
+    }
+    // head: scope must match the DESTINATION department
+    if (user.role === "head" && user.scope_department_id && req.to_department_id !== user.scope_department_id) {
+      return Response.json({ ok: false, error: "ไม่มีสิทธิ์อนุมัติคำขอที่ไม่ได้ย้ายมาที่แผนกของคุณ" }, { status: 403 });
+    }
+    const approved = action === "dest_head_approve";
     await ctx.env.HR_DB.prepare(
-      "UPDATE transfer_requests SET head_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
-    ).bind(approved ? "approved" : "rejected", approved ? "head_approved" : "rejected", id).run();
+      "UPDATE transfer_requests SET dest_head_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
+    ).bind(approved ? "approved" : "rejected", approved ? "dest_head_approved" : "rejected", id).run();
     await ctx.env.HR_DB.prepare(
       "INSERT INTO transfer_approvals (request_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
-    ).bind(id, "head", user.id, approved ? "approved" : "rejected", note ?? null).run();
+    ).bind(id, "dest_head", user.id, approved ? "approved" : "rejected", note ?? null).run();
 
-  // LEVEL 2 — Deputy/DeputyHR: ขั้นสอง (approve)
-  } else if (action === "deputy_approve" || action === "deputy_reject") {
-    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    if (req.overall_status !== "head_approved") return Response.json({ ok: false, error: "ยังไม่ผ่านการรับรองจากหัวหน้า" }, { status: 409 });
-    // Division scope check: deputy can only approve requests from their own division
-    if (user.scope_division_id && user.role !== "admin" && req.from_department_id) {
-      const dept = await ctx.env.HR_DB.prepare("SELECT division_id FROM departments WHERE id = ?").bind(req.from_department_id).first<{ division_id: number }>();
-      if (dept && dept.division_id !== user.scope_division_id) return Response.json({ ok: false, error: "ไม่มีสิทธิ์อนุมัติคำขอฝ่ายอื่น" }, { status: 403 });
+  // STEP 2 — รองผู้อำนวยการฝ่ายบริหารค่าตอบแทน อนุมัติขั้นสุดท้าย
+  } else if (action === "deputyhr_approve" || action === "deputyhr_reject") {
+    if (!["deputyHR", "admin"].includes(user.role)) {
+      return Response.json({ ok: false, error: "Forbidden — ต้องเป็น deputyHR หรือ admin" }, { status: 403 });
     }
-    const approved = action === "deputy_approve";
+    if (req.overall_status !== "dest_head_approved") {
+      return Response.json({ ok: false, error: "ยังไม่ผ่านการอนุมัติจากหัวหน้าแผนกปลายทาง" }, { status: 409 });
+    }
+    const approved = action === "deputyhr_approve";
     await ctx.env.HR_DB.prepare(
-      "UPDATE transfer_requests SET deputy_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
-    ).bind(approved ? "approved" : "rejected", approved ? "deputy_approved" : "rejected", id).run();
-    await ctx.env.HR_DB.prepare(
-      "INSERT INTO transfer_approvals (request_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
-    ).bind(id, "deputy", user.id, approved ? "approved" : "rejected", note ?? null).run();
-
-  // LEVEL 3 — HR: ขั้นสาม (process & update records)
-  } else if (action === "hr_approve" || action === "hr_reject") {
-    if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-    if (req.overall_status !== "deputy_approved") return Response.json({ ok: false, error: "ยังไม่ผ่านการอนุมัติจากรองผู้อำนวยการ" }, { status: 409 });
-    const approved = action === "hr_approve";
-    await ctx.env.HR_DB.prepare(
-      "UPDATE transfer_requests SET hr_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
+      "UPDATE transfer_requests SET deputyhr_status=?, overall_status=?, updated_at=datetime('now') WHERE id=?"
     ).bind(approved ? "approved" : "rejected", approved ? "completed" : "rejected", id).run();
     await ctx.env.HR_DB.prepare(
       "INSERT INTO transfer_approvals (request_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
-    ).bind(id, "hr", user.id, approved ? "approved" : "rejected", note ?? null).run();
+    ).bind(id, "deputyhr", user.id, approved ? "approved" : "rejected", note ?? null).run();
+    // On final approval: update employee record
     if (approved && req.to_department_id) {
       await ctx.env.HR_DB.prepare(
         "UPDATE employees SET department_id=?, division_id=?, emp_status='transferred', updated_at=datetime('now') WHERE full_name=? AND emp_status != 'resigned'"
@@ -104,7 +94,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   }
 
   await ctx.env.HR_DB.prepare(
-    "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'transfer',?,?, ?)"
+    "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'transfer',?,?,?)"
   ).bind(user.id, user.full_name, action, "transfer_request", id).run();
 
   return Response.json({ ok: true });

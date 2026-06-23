@@ -62,7 +62,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   // Transfer stats
   const transferTotal     = await db.prepare("SELECT COUNT(*) AS n FROM transfer_requests").first<{ n: number }>();
-  const transferPending   = await db.prepare("SELECT COUNT(*) AS n FROM transfer_requests WHERE overall_status IN ('submitted','head_approved')").first<{ n: number }>();
+  const transferPending   = await db.prepare("SELECT COUNT(*) AS n FROM transfer_requests WHERE overall_status IN ('submitted','dest_head_approved')").first<{ n: number }>();
   const transferCompleted = await db.prepare("SELECT COUNT(*) AS n FROM transfer_requests WHERE overall_status = 'completed'").first<{ n: number }>();
   const transferRejected  = await db.prepare("SELECT COUNT(*) AS n FROM transfer_requests WHERE overall_status = 'rejected'").first<{ n: number }>();
 

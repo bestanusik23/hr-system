@@ -5,12 +5,20 @@ interface TRequest {
   id: number; name: string; position: string | null; reason: string | null; new_position: string | null;
   from_dept_name: string | null; to_dept_name: string | null;
   from_division_name: string | null; to_division_name: string | null;
-  head_status: string; deputy_status: string; hr_status: string; overall_status: string; created_at: string;
+  from_department_id: number | null; to_department_id: number | null;
+  dest_head_status: string; deputyhr_status: string; overall_status: string; created_at: string;
 }
 interface Approval { step: string; status: string; note: string | null; created_at: string; approver_name: string; }
+
 const STEP_LABEL: Record<string, string> = {
-  head: "หัวหน้าแผนก", deputy: "รองผู้อำนวยการ", hr: "HR ดำเนินการ",
+  dest_head: "หัวหน้าแผนกปลายทาง",
+  deputyhr:  "รองผอ.ค่าตอบแทน",
+  // legacy labels for old records
+  head:    "หัวหน้าแผนก (เดิม)",
+  deputy:  "รองผู้อำนวยการ (เดิม)",
+  hr:      "HR (เดิม)",
 };
+
 interface Props { requestId: number; onClose: () => void; onSaved: () => void; }
 
 export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
@@ -47,20 +55,39 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
     </div>
   );
 
-  const isHead   = user && ["head",   "admin"].includes(user.role);
-  const isDeputy = user && ["deputy", "deputyHR", "admin"].includes(user.role);
-  const isHR     = user && ["hr",     "admin"].includes(user.role);
+  // Step 1: หัวหน้าแผนกปลายทาง — scope_department_id must match to_department_id
+  const canDestHeadApprove = (
+    req.overall_status === "submitted" &&
+    user && (
+      user.role === "admin" ||
+      (user.role === "head" && user.scope_department_id !== null && user.scope_department_id === req.to_department_id)
+    )
+  );
 
-  const canHeadApprove   = isHead   && req.overall_status === "submitted";
-  const canDeputyApprove = isDeputy && req.overall_status === "head_approved";
-  const canHRApprove     = isHR     && req.overall_status === "deputy_approved";
-  const canAct = canHeadApprove || canDeputyApprove || canHRApprove;
+  // Step 2: รองผอ.ค่าตอบแทน (deputyHR) or admin
+  const canDeputyHRApprove = (
+    req.overall_status === "dest_head_approved" &&
+    user && ["deputyHR", "admin"].includes(user.role)
+  );
+
+  const canAct = canDestHeadApprove || canDeputyHRApprove;
 
   const steps = [
-    { label: "① ส่งคำขอ",                   done: true,                                                                               rejected: false },
-    { label: "② หัวหน้าแผนกรับรอง",          done: ["head_approved","deputy_approved","completed"].includes(req.overall_status),        rejected: req.overall_status === "rejected" && req.head_status === "rejected" },
-    { label: "③ รองผู้อำนวยการอนุมัติ",       done: ["deputy_approved","completed"].includes(req.overall_status),                       rejected: req.overall_status === "rejected" && req.deputy_status === "rejected" },
-    { label: "④ HR ดำเนินการ — เสร็จสมบูรณ์", done: req.overall_status === "completed",                                                rejected: req.overall_status === "rejected" && req.hr_status === "rejected" },
+    {
+      label: "① หัวหน้าแผนกต้นทางยื่นคำขอ",
+      done: true,
+      rejected: false,
+    },
+    {
+      label: "② หัวหน้าแผนกปลายทางอนุมัติ",
+      done: ["dest_head_approved", "completed"].includes(req.overall_status),
+      rejected: req.overall_status === "rejected" && req.dest_head_status === "rejected",
+    },
+    {
+      label: "③ รองผอ.ค่าตอบแทนอนุมัติขั้นสุดท้าย — เสร็จสมบูรณ์",
+      done: req.overall_status === "completed",
+      rejected: req.overall_status === "rejected" && req.deputyhr_status === "rejected",
+    },
   ];
 
   const inp: React.CSSProperties = {
@@ -100,8 +127,8 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
             borderLeft: "4px solid #0038C6", padding: "16px 20px" }}>
             {([
               ["ตำแหน่งปัจจุบัน", req.position],
-              ["แผนกปัจจุบัน",    req.from_dept_name],
-              ["ย้ายไปแผนก",      req.to_dept_name],
+              ["แผนกต้นทาง",      req.from_dept_name],
+              ["แผนกปลายทาง",     req.to_dept_name],
               ["ตำแหน่งใหม่",     req.new_position],
               ["เหตุผล",          req.reason],
             ] as [string, string | null][]).filter(([, v]) => !!v).map(([label, val]) => (
@@ -132,7 +159,7 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
             ))}
           </div>
 
-          {/* History */}
+          {/* Approval history */}
           {approvals.length > 0 && (
             <div style={{ display: "grid", gap: 6 }}>
               {approvals.map((a, i) => (
@@ -155,7 +182,7 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
             </div>
           )}
 
-          {/* Note field */}
+          {/* Note */}
           {canAct && (
             <div style={{ background: "#fff8ed", border: "1px solid #fde68a",
               borderLeft: "4px solid #d97706", borderRadius: 7, padding: "14px 18px" }}>
@@ -182,42 +209,33 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
               ปิด
             </button>
 
-            {canHeadApprove && <>
-              <button onClick={() => act("head_reject")} disabled={saving}
+            {canDestHeadApprove && <>
+              <button onClick={() => act("dest_head_reject")} disabled={saving}
                 style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "none",
-                  background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
-                ไม่รับรอง
-              </button>
-              <button onClick={() => act("head_approve")} disabled={saving}
-                style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none",
-                  background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
-                {saving ? "กำลังบันทึก…" : "✓ รับรองคำขอ"}
-              </button>
-            </>}
-
-            {canDeputyApprove && <>
-              <button onClick={() => act("deputy_reject")} disabled={saving}
-                style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "none",
-                  background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+                  background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13 }}>
                 ไม่อนุมัติ
               </button>
-              <button onClick={() => act("deputy_approve")} disabled={saving}
+              <button onClick={() => act("dest_head_approve")} disabled={saving}
                 style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none",
-                  background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
-                {saving ? "กำลังอนุมัติ…" : "✓ อนุมัติ (รอง ผอ.)"}
+                  background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13 }}>
+                {saving ? "กำลังบันทึก…" : "✓ อนุมัติรับย้ายเข้าแผนก"}
               </button>
             </>}
 
-            {canHRApprove && <>
-              <button onClick={() => act("hr_reject")} disabled={saving}
+            {canDeputyHRApprove && <>
+              <button onClick={() => act("deputyhr_reject")} disabled={saving}
                 style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "none",
-                  background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
-                ยกเลิก
+                  background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13 }}>
+                ไม่อนุมัติ
               </button>
-              <button onClick={() => act("hr_approve")} disabled={saving}
+              <button onClick={() => act("deputyhr_approve")} disabled={saving}
                 style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none",
-                  background: "#16a34a", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
-                {saving ? "กำลังดำเนินการ…" : "✓ HR ดำเนินการเสร็จสิ้น"}
+                  background: "#16a34a", color: "#fff", fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13 }}>
+                {saving ? "กำลังอนุมัติ…" : "✓ อนุมัติขั้นสุดท้าย"}
               </button>
             </>}
           </div>

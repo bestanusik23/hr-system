@@ -192,35 +192,30 @@ export default function WorkflowPage() {
           <SectionTitle>ระบบโอนย้ายแผนก — 3 ขั้นตอน</SectionTitle>
 
           <div style={{ overflowX: "auto", paddingBottom: 8 }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 0, minWidth: 640 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 0, minWidth: 620 }}>
               <FlowStep box={{
                 step: "เริ่มต้น", status: "📤 submitted",
-                role: "HR", action: "สร้างคำขอโอนย้าย",
+                role: "หัวหน้าแผนกต้นทาง", action: "ยื่นคำขอย้ายพนักงาน",
                 color: "#1e3a8a", bg: "#f0f5ff", border: "#c4cfee",
               }} />
               <FlowStep box={{
-                step: "ขั้นตอน 1", status: "⏳ head_approved",
-                role: "หัวหน้าแผนก", action: "head_approve / reject",
+                step: "ขั้นตอน 1", status: "⏳ dest_head_approved",
+                role: "หัวหน้าแผนกปลายทาง", action: "dest_head_approve / reject",
                 reject: true, color: "#5b21b6", bg: "#ede9fe", border: "#c4b5fd",
               }} />
               <FlowStep box={{
-                step: "ขั้นตอน 2", status: "⏳ deputy_approved",
-                role: "รองผอ. / รองผอ.ค่าตอบแทน", action: "deputy_approve / reject",
-                reject: true, color: "#1e40af", bg: "#dbeafe", border: "#bfdbfe",
-              }} />
-              <FlowStep box={{
-                step: "สำเร็จ", status: "✅ completed",
-                role: "HR", action: "hr_approve + อัปเดตข้อมูล",
-                color: "#14532d", bg: "#dcfce7", border: "#bbf7d0",
+                step: "ขั้นสุดท้าย", status: "✅ completed",
+                role: "รองผอ.ค่าตอบแทน", action: "deputyhr_approve + อัปเดต dept พนักงาน",
+                reject: true, color: "#14532d", bg: "#dcfce7", border: "#bbf7d0",
               }} last />
             </div>
           </div>
 
           <NoteBox>
             <strong style={{ color: "#0038C6" }}>สิทธิ์แต่ละ Role</strong><br />
-            • <strong>hr</strong> — สร้างคำขอ + อนุมัติขั้นสุดท้าย (hr_approve) + อัปเดต department พนักงาน<br />
-            • <strong>head</strong> — head_approve/reject (เฉพาะแผนกที่รับผิดชอบ)<br />
-            • <strong>deputy / deputyHR</strong> — deputy_approve/reject (เฉพาะฝ่ายที่รับผิดชอบ)<br />
+            • <strong>head</strong> — ยื่นคำขอย้ายพนักงานในแผนกตัวเอง; และอนุมัติคำขอที่ย้าย <em>เข้า</em> แผนกตัวเอง (scope_department_id ต้องตรงกับ to_department_id)<br />
+            • <strong>hr / admin</strong> — ยื่นคำขอแทนได้ทุกแผนก<br />
+            • <strong>deputyHR</strong> — อนุมัติขั้นสุดท้าย + อัปเดตข้อมูลพนักงานในระบบ<br />
             • <strong>admin</strong> — ดำเนินการได้ทุกขั้นตอน
           </NoteBox>
 
@@ -230,11 +225,10 @@ export default function WorkflowPage() {
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {[
-                { s: "submitted", c: "#1e3a8a", bg: "#f0f5ff" },
-                { s: "head_approved", c: "#5b21b6", bg: "#ede9fe" },
-                { s: "deputy_approved", c: "#1e40af", bg: "#dbeafe" },
-                { s: "completed", c: "#14532d", bg: "#dcfce7" },
-                { s: "rejected", c: "#7f1d1d", bg: "#fee2e2" },
+                { s: "submitted",          c: "#1e3a8a", bg: "#f0f5ff" },
+                { s: "dest_head_approved", c: "#5b21b6", bg: "#ede9fe" },
+                { s: "completed",          c: "#14532d", bg: "#dcfce7" },
+                { s: "rejected",           c: "#7f1d1d", bg: "#fee2e2" },
               ].map(x => (
                 <span key={x.s} style={{ background: x.bg, color: x.c, borderRadius: 7,
                   padding: "4px 12px", fontSize: 12, fontWeight: 600,

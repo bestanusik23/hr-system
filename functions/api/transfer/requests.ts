@@ -12,7 +12,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   let sql = `
     SELECT tr.id, tr.name, tr.position, tr.reason, tr.new_position,
            tr.from_dept_name, tr.to_dept_name,
-           tr.head_status, tr.deputy_status, tr.hr_status, tr.overall_status,
+           tr.dest_head_status, tr.deputyhr_status, tr.overall_status,
+           tr.from_department_id, tr.to_department_id,
            tr.created_at, tr.updated_at,
            fd.name AS from_division_name, td.name AS to_division_name
     FROM transfer_requests tr
@@ -25,11 +26,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (status) { sql += " AND tr.overall_status = ?"; params.push(status); }
 
   if (user.role === "head" && user.scope_department_id) {
-    // head: see only requests from their department
-    sql += " AND tr.from_department_id = ?"; params.push(user.scope_department_id);
-  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
-    // deputy: see only requests from their division
-    sql += " AND fdept.division_id = ?"; params.push(user.scope_division_id);
+    // head: see requests they created (from) OR need to approve (to)
+    sql += " AND (tr.from_department_id = ? OR tr.to_department_id = ?)";
+    params.push(user.scope_department_id, user.scope_department_id);
   }
 
   sql += " ORDER BY tr.updated_at DESC";
@@ -38,10 +37,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true, requests: rows.results });
 };
 
-// POST /api/transfer/requests — submit a transfer request
+// POST /api/transfer/requests — submit a transfer request (head or hr or admin)
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!["head", "hr", "admin"].includes(user.role)) {
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   const body = await ctx.request.json() as Record<string, unknown>;
   const { name, position, from_department_id, to_division_id, to_department_id, new_position, reason } = body;
@@ -50,17 +52,28 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบ" }, { status: 400 });
   }
 
-  const fromDept = from_department_id
-    ? await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?").bind(from_department_id).first<{ name: string }>()
+  // head must submit from their own department
+  if (user.role === "head" && user.scope_department_id && from_department_id && from_department_id !== user.scope_department_id) {
+    return Response.json({ ok: false, error: "ไม่สามารถยื่นคำขอแทนแผนกอื่นได้" }, { status: 403 });
+  }
+
+  const fromDeptId = user.role === "head" && user.scope_department_id
+    ? user.scope_department_id
+    : (from_department_id ?? null);
+
+  const fromDept = fromDeptId
+    ? await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?").bind(fromDeptId).first<{ name: string }>()
     : null;
   const toDept = await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?").bind(to_department_id).first<{ name: string }>();
 
   const result = await ctx.env.HR_DB.prepare(`
     INSERT INTO transfer_requests
-      (name, position, from_department_id, from_dept_name, to_division_id, to_department_id, to_dept_name, new_position, reason, requester_user_id)
+      (name, position, from_department_id, from_dept_name, to_division_id, to_department_id, to_dept_name,
+       new_position, reason, requester_user_id)
     VALUES (?,?,?,?,?,?,?,?,?,?)
-  `).bind(name, position ?? null, from_department_id ?? null, fromDept?.name ?? null,
-    to_division_id, to_department_id, toDept?.name ?? null, new_position ?? null, reason ?? null, user.id).run();
+  `).bind(name, position ?? null, fromDeptId, fromDept?.name ?? null,
+    to_division_id, to_department_id, toDept?.name ?? null,
+    new_position ?? null, reason ?? null, user.id).run();
 
   await ctx.env.HR_DB.prepare(
     "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'transfer','submit_transfer','transfer_request',?)"
