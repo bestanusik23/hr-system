@@ -3,11 +3,12 @@ import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 import ManpowerDashboard from "./ManpowerDashboard";
 import MasterList from "./MasterList";
+import ManpowerTable from "./ManpowerTable";
 import PlanView from "./PlanView";
 import NewHireTab from "./NewHireTab";
 import ResignTab from "./ResignTab";
 
-type Tab = "dashboard" | "master" | "plan" | "newhire" | "resign";
+type Tab = "dashboard" | "excel" | "plan" | "master" | "newhire" | "resign";
 
 export default function ManpowerPage() {
   const { user } = useAuth();
@@ -18,8 +19,9 @@ export default function ManpowerPage() {
 
   const TABS: { key: Tab; icon: string; label: string; hidden?: boolean }[] = [
     { key: "dashboard", icon: "📊", label: "ภาพรวม Manpower" },
-    { key: "plan",      icon: "📋", label: "ตารางอัตรากำลัง" },
-    { key: "master",    icon: "🗂️", label: "รายชื่อพนักงาน" },
+    { key: "excel",     icon: "📋", label: "ตารางอัตรากำลัง" },
+    { key: "plan",      icon: "🗂️", label: "รายชื่อพนักงาน (DB)" },
+    { key: "master",    icon: "👥", label: "Master List" },
     { key: "newhire",   icon: "➕", label: "เพิ่มพนักงานเริ่มงานใหม่", hidden: !canEdit },
     { key: "resign",    icon: "📤", label: "เพิ่มพนักงานลาออก",       hidden: !canEdit },
   ];
@@ -44,6 +46,7 @@ export default function ManpowerPage() {
       </div>
 
       {tab === "dashboard" && <ManpowerDashboard key={`d${bump}`} />}
+      {tab === "excel"     && <ManpowerTable />}
       {tab === "plan"      && <PlanView key={`p${bump}`} />}
       {tab === "master"    && <MasterList key={`m${bump}`} onChanged={() => setBump(b => b + 1)} />}
       {tab === "newhire"   && (
