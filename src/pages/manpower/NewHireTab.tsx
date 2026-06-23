@@ -27,7 +27,6 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   const [divId, setDivId]      = useState<number | "">("");
   const [deptId, setDeptId]    = useState<number | "">("");
   const [position, setPos]     = useState("");
-  const [supervisor, setSup]   = useState("");
   const [empType, setType]     = useState("");
   const [probDays, setProbDays] = useState(119);
   const [saving, setSaving]    = useState(false);
@@ -59,7 +58,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         full_name: fullName, start_date: startDate, department_id: deptId || null,
-        division_id: divId || null, position: position || null, supervisor: supervisor || null,
+        division_id: divId || null, position: position || null,
         emp_type: empType || null, probation_days: probDays,
       }),
     });
@@ -87,7 +86,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
           <button onClick={() => {
             setDone(null); setName(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
-            setSup(""); setType(""); setProbDays(119);
+            setType(""); setProbDays(119);
           }} style={{ padding: "11px 22px", borderRadius: 8, border: "1.5px solid #c4cfee",
             background: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600 }}>
             + เพิ่มคนถัดไป
@@ -133,9 +132,6 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       </Field>
       <Field label="ตำแหน่ง">
         <input value={position} onChange={e => setPos(e.target.value)} style={inp} />
-      </Field>
-      <Field label="หัวหน้างาน">
-        <input value={supervisor} onChange={e => setSup(e.target.value)} style={inp} />
       </Field>
       <Field label="ประเภทพนักงาน">
         <input value={empType} onChange={e => setType(e.target.value)} style={inp} list="newhire-types" placeholder="เลือกหรือพิมพ์…" />
