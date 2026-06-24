@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import PrintEvalModal from "./PrintEvalModal";
 
 interface Topic { id: number; owner: string; text: string; sort_order: number; }
 interface EvalDetail {
@@ -184,6 +185,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const [signerDir, setSignerDir]   = useState("");
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
+  const [showPrint, setShowPrint]   = useState(false);
 
   useEffect(() => {
     fetch(`/api/eval/evaluations/${evalId}`).then(r => r.json())
@@ -222,6 +224,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const canDeputyAct = !!(user && ["deputy","admin"].includes(user.role)  && ev?.status === "pending_deputy");
   const canHRAct     = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "pending_hr");
   const canFinalAct  = !!(user && ["deputyHR","admin"].includes(user.role)&& ev?.status === "pending_final");
+  const canPrint     = !!(user && ["hr","admin","deputyHR"].includes(user.role) && ev?.status === "approved");
 
   async function save(action: string) {
     setSaving(true); setError("");
@@ -530,6 +533,16 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
             <button onClick={onClose} style={btnClose}>ปิด</button>
 
+            {canPrint && (
+              <button onClick={() => setShowPrint(true)}
+                style={{ flex: 1, minWidth: 160, padding: "11px 0", borderRadius: 4,
+                  border: "none", background: "#0038C6", color: "#fff", fontWeight: 700,
+                  cursor: "pointer", fontFamily: "inherit", fontSize: 13,
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                🖨️ Print Evaluation Form
+              </button>
+            )}
+
             {canEditHead && (
               <>
                 <button onClick={() => save("save")} disabled={saving} style={btnOutline("#0038C6")}>
@@ -580,5 +593,9 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
         </div>
       </div>
     </div>
+
+    {showPrint && ev && (
+      <PrintEvalModal evalId={ev.id} onClose={() => setShowPrint(false)} />
+    )}
   );
 }
