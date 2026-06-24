@@ -57,9 +57,13 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
         return Response.json({ ok: false, error: "ต้องมีผู้ดูแลระบบอย่างน้อย 1 คน" }, { status: 400 });
     }
 
+    // Remove FK-dependent rows first so D1 foreign key constraint doesn't block
+    try { await ctx.env.HR_DB.prepare("DELETE FROM sessions WHERE user_id=?").bind(id).run(); } catch { /* table may not exist */ }
+    try { await ctx.env.HR_DB.prepare("DELETE FROM activity_log WHERE user_id=?").bind(id).run(); } catch { /* ignore */ }
+
     await ctx.env.HR_DB.prepare("DELETE FROM users WHERE id=?").bind(id).run();
 
-    // Log — non-critical, do not let failure block the delete
+    // Log the deletion (use admin's own user_id, not the deleted one)
     try {
       await ctx.env.HR_DB.prepare(
         "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'admin','delete_user','user',?)"
