@@ -18,21 +18,27 @@ interface LiveEmp {
 interface OrgDiv  { id: number; name: string; }
 interface OrgDept { id: number; name: string; division_id: number; }
 
-// Build map: position (trimmed, lower-cased) → active employees
-// We intentionally do NOT use division_id here because the static
-// manpowerPlan.ts divIds may not match the DB division_ids for some
-// divisions (e.g. ฝ่ายการพยาบาล was not detected as a separate division
-// during generation). Matching by position name alone is safe in practice
-// because hospital position names are specific to their department.
-function buildLiveMap(employees: LiveEmp[]): Map<string, LiveEmp[]> {
-  const map = new Map<string, LiveEmp[]>();
+// Two-map structure for division-aware employee matching
+interface LiveMaps {
+  byDivPos: Map<string, LiveEmp[]>; // "divId|pos" — employees with division_id set
+  byPosAll: Map<string, LiveEmp[]>; // "pos" — ALL active employees (fallback)
+}
+
+function buildLiveMap(employees: LiveEmp[]): LiveMaps {
+  const byDivPos = new Map<string, LiveEmp[]>();
+  const byPosAll = new Map<string, LiveEmp[]>();
   for (const e of employees) {
     if (e.emp_status === "resigned") continue;
-    const key = (e.position ?? "").trim().toLowerCase();
-    if (!map.has(key)) map.set(key, []);
-    map.get(key)!.push(e);
+    const pos = (e.position ?? "").trim().toLowerCase();
+    if (e.division_id) {
+      const dk = `${e.division_id}|${pos}`;
+      if (!byDivPos.has(dk)) byDivPos.set(dk, []);
+      byDivPos.get(dk)!.push(e);
+    }
+    if (!byPosAll.has(pos)) byPosAll.set(pos, []);
+    byPosAll.get(pos)!.push(e);
   }
-  return map;
+  return { byDivPos, byPosAll };
 }
 
 interface AugRow extends ManpowerRow {
@@ -45,19 +51,46 @@ interface AugRow extends ManpowerRow {
   liveEmpObj: LiveEmp | null;
 }
 
-function buildAugRows(rows: ManpowerRow[], liveMap: Map<string, LiveEmp[]>): AugRow[] {
-  const ptrMap = new Map<string, number>();
-  return rows.map(r => {
-    if (r.type !== "slot") {
-      return { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
-    }
-    const key = r.pos.trim().toLowerCase();
-    const pool = liveMap.get(key) ?? [];
-    const ptr = ptrMap.get(key) ?? 0;
-    ptrMap.set(key, ptr + 1);
+function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps): AugRow[] {
+  const consumed = new Set<number>(); // employee ids already placed
+
+  // Pass 1 — division-aware: assign each slot the first employee in their exact
+  // division whose position matches. This lets "ผู้ช่วยพยาบาล" in OPD (divId:9)
+  // pull from div-9 employees, while ห้องคลอด (divId:8) pulls from div-8.
+  const ptrDiv = new Map<string, number>();
+  const p1 = new Map<number, LiveEmp>(); // rowIndex → employee
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.type !== "slot") continue;
+    const dk = `${r.divId}|${r.pos.trim().toLowerCase()}`;
+    const pool = byDivPos.get(dk) ?? [];
+    let ptr = ptrDiv.get(dk) ?? 0;
+    while (ptr < pool.length && consumed.has(pool[ptr].id)) ptr++;
     if (ptr < pool.length) {
-      const e = pool[ptr];
-      return { ...r, liveEmp: e.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: e.emp_status, liveEmpId: e.id, liveEmpRemark: e.remark ?? null, liveEmpObj: e };
+      ptrDiv.set(dk, ptr + 1);
+      consumed.add(pool[ptr].id);
+      p1.set(i, pool[ptr]);
+    }
+  }
+
+  // Pass 2 — position fallback: fill slots not matched in pass 1 using any
+  // unassigned employee with the matching position name (legacy / no div set).
+  const ptrPos = new Map<string, number>();
+  return rows.map((r, i) => {
+    const empty: AugRow = { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
+    if (r.type !== "slot") return empty;
+    const e = p1.get(i);
+    if (e) return { ...r, liveEmp: e.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: e.emp_status, liveEmpId: e.id, liveEmpRemark: e.remark ?? null, liveEmpObj: e };
+
+    const pos = r.pos.trim().toLowerCase();
+    const pool = byPosAll.get(pos) ?? [];
+    let ptr = ptrPos.get(pos) ?? 0;
+    while (ptr < pool.length && consumed.has(pool[ptr].id)) ptr++;
+    ptrPos.set(pos, ptr + 1);
+    if (ptr < pool.length) {
+      consumed.add(pool[ptr].id);
+      const fb = pool[ptr];
+      return { ...r, liveEmp: fb.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: fb.emp_status, liveEmpId: fb.id, liveEmpRemark: fb.remark ?? null, liveEmpObj: fb };
     }
     return { ...r, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
   });
@@ -196,9 +229,9 @@ export default function ManpowerTable() {
     };
   }, [fetchEmployees]);
 
-  const divNames = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
-  const liveMap  = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
-  const augRows  = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMap), [liveMap]);
+  const divNames  = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
+  const liveMaps  = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
+  const augRows   = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps), [liveMaps]);
 
   // Summary from live data
   const summary = useMemo(() => {
