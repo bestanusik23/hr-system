@@ -25,7 +25,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (empId)  { sql += " AND ev.employee_id = ?"; params.push(Number(empId)); }
 
   if (user.role === "head" && user.scope_department_id) {
-    sql += " AND e.department_id = ?"; params.push(user.scope_department_id);
+    // head sees only evaluations sent to them (not draft — draft is HR-only)
+    sql += " AND e.department_id = ? AND ev.status != 'draft'"; params.push(user.scope_department_id);
   } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   }

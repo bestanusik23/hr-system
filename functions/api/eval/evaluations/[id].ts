@@ -119,17 +119,33 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     return r?.t ?? 0;
   }
 
-  // ── SAVE draft (head in draft / hr in pending_hr) ───────────────
+  // ── STEP 0: HR sends to head → pending_head ────────────────────
+  if (action === "send_to_head") {
+    if (!["hr", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "draft") return conflict("ไม่อยู่ในสถานะร่าง");
+
+    await ctx.env.HR_DB.prepare(
+      "UPDATE evaluations SET status='pending_head', updated_at=datetime('now') WHERE id=?"
+    ).bind(id).run();
+    try {
+      await ctx.env.HR_DB.prepare(
+        "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','send_to_head','evaluation',?)"
+      ).bind(user.id, user.full_name, id).run();
+    } catch { /* non-critical */ }
+    return Response.json({ ok: true });
+  }
+
+  // ── SAVE draft (head in pending_head / hr in pending_hr) ────────
   if (action === "save") {
     const canSave =
-      (["head", "admin"].includes(user.role) && ev.status === "draft") ||
+      (["head", "admin"].includes(user.role) && ev.status === "pending_head") ||
       (["hr",   "admin"].includes(user.role) && ev.status === "pending_hr");
     if (!canSave) return forbidden;
 
     await saveScores();
     const total = scores ? Object.values(scores).reduce((a, b) => a + b, 0) : null;
 
-    if (ev.status === "draft") {
+    if (ev.status === "pending_head") {
       await ctx.env.HR_DB.prepare(`
         UPDATE evaluations SET suggestion=?, decision=?, grade=?,
           total_score=COALESCE(?,total_score),
@@ -150,7 +166,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   // ── STEP 1: Head submits → pending_deputy ───────────────────────
   if (action === "submit") {
     if (!["head", "admin"].includes(user.role)) return forbidden;
-    if (ev.status !== "draft") return conflict("ไม่อยู่ในสถานะร่าง");
+    if (ev.status !== "pending_head") return conflict("ไม่อยู่ในสถานะรอหัวหน้าแผนก");
 
     await saveScores();
     const total = await totalFromDB();
@@ -285,8 +301,8 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   `).bind(id).first<{ status: string; department_id: number }>();
 
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
-  if (ev.status !== "draft")
-    return Response.json({ ok: false, error: "ลบได้เฉพาะใบประเมินที่ยังเป็นร่าง" }, { status: 409 });
+  if (!["draft", "pending_head"].includes(ev.status))
+    return Response.json({ ok: false, error: "ลบได้เฉพาะใบประเมินที่ยังไม่ได้ส่งหัวหน้าประเมิน" }, { status: 409 });
 
   // head: scope check
   if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id)

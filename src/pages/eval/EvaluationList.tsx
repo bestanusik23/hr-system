@@ -9,7 +9,8 @@ interface Evaluation {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  draft:          "ร่าง",
+  draft:          "ร่าง (รอ HR ส่ง)",
+  pending_head:   "รอหัวหน้าแผนก",
   pending_deputy: "รอรองผู้อำนวยการ",
   pending_hr:     "รอ HR ประเมิน",
   pending_final:  "รออนุมัติสุดท้าย",
@@ -18,6 +19,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 const STATUS_COLOR: Record<string, string> = {
   draft:          "#94a3b8",
+  pending_head:   "#d97706",
   pending_deputy: "#c2410c",
   pending_hr:     "#1d4ed8",
   pending_final:  "#7c3aed",
@@ -45,6 +47,21 @@ export default function EvaluationList() {
     setEvals(prev => prev.filter(x => x.id !== ev.id));
   }
 
+  async function sendToHead(ev: Evaluation, e: React.MouseEvent) {
+    e.stopPropagation();
+    setDeleting(ev.id); // reuse loading state
+    const r = await fetch(`/api/eval/evaluations/${ev.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send_to_head" }),
+    });
+    const d = await r.json() as { ok: boolean; error?: string };
+    setDeleting(null);
+    if (!d.ok) { alert(d.error ?? "ส่งไม่สำเร็จ"); return; }
+    setEvals(prev => prev.map(x => x.id === ev.id ? { ...x, status: "pending_head" } : x));
+  }
+
+  const isHR = user && ["hr", "admin"].includes(user.role);
+
   async function load() {
     setLoading(true);
     const r = await fetch(`/api/eval/evaluations?status=${statusFilter}`);
@@ -59,10 +76,11 @@ export default function EvaluationList() {
 
   // Filter tabs scoped to what each role cares about
   const filters: [string, string][] =
-    user?.role === "deputy"    ? [["", "ทั้งหมด"], ["pending_deputy", "รอฉันอนุมัติ"], ["approved", "อนุมัติแล้ว"], ["rejected", "ไม่อนุมัติ"]]
-    : user?.role === "hr"      ? [["", "ทั้งหมด"], ["pending_hr", "รอ HR ประเมิน"], ["approved", "อนุมัติแล้ว"]]
+    user?.role === "head"      ? [["", "ทั้งหมด"], ["pending_head", "รอฉันประเมิน"], ["pending_deputy", "รอรองฯ"], ["approved", "อนุมัติแล้ว"]]
+    : user?.role === "deputy"  ? [["", "ทั้งหมด"], ["pending_deputy", "รอฉันอนุมัติ"], ["approved", "อนุมัติแล้ว"], ["rejected", "ไม่อนุมัติ"]]
+    : user?.role === "hr"      ? [["", "ทั้งหมด"], ["draft", "รอส่งให้หัวหน้า"], ["pending_head", "รอหัวหน้าประเมิน"], ["pending_hr", "รอ HR ประเมิน"], ["approved", "อนุมัติแล้ว"]]
     : user?.role === "deputyHR"? [["", "ทั้งหมด"], ["pending_final", "รอฉันอนุมัติ"], ["approved", "อนุมัติแล้ว"], ["rejected", "ไม่อนุมัติ"]]
-    : [["", "ทั้งหมด"], ["draft", "ร่าง"], ["pending_deputy", "รอรองฯ"], ["pending_hr", "รอ HR"], ["pending_final", "รออนุมัติสุดท้าย"], ["approved", "อนุมัติแล้ว"]];
+    : [["", "ทั้งหมด"], ["draft", "ร่าง"], ["pending_head", "รอหัวหน้า"], ["pending_deputy", "รอรองฯ"], ["pending_hr", "รอ HR"], ["pending_final", "รออนุมัติสุดท้าย"], ["approved", "อนุมัติแล้ว"]];
 
   return (
     <div>
@@ -92,11 +110,15 @@ export default function EvaluationList() {
         <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีใบประเมิน</div>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
-          {evals.map(ev => (
-            <div key={ev.id} onClick={() => setSelected(ev.id)} style={{ background: "#fff", borderRadius: 8, padding: "16px 20px", border: "1px solid #dce4f5", borderLeft: "4px solid #0038C6", cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "box-shadow .15s, transform .15s" }}
+          {evals.map(ev => {
+            const accentColor = ev.status === "draft" ? "#94a3b8"
+              : ev.status === "pending_head" ? "#d97706"
+              : "#0038C6";
+            return (
+            <div key={ev.id} onClick={() => setSelected(ev.id)} style={{ background: "#fff", borderRadius: 8, padding: "16px 20px", border: "1px solid #dce4f5", borderLeft: `4px solid ${accentColor}`, cursor: "pointer", display: "flex", alignItems: "center", gap: 16, transition: "box-shadow .15s, transform .15s" }}
               onMouseEnter={e => { e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,56,198,0.12)"; e.currentTarget.style.transform = "translateX(2px)"; }}
               onMouseLeave={e => { e.currentTarget.style.boxShadow = ""; e.currentTarget.style.transform = ""; }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "#e8eeff", color: "#0038C6", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: `${accentColor}18`, color: accentColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
                 {ev.round === 30 ? "①" : ev.round === 60 ? "②" : "③"}
               </div>
               <div style={{ flex: 1 }}>
@@ -107,7 +129,21 @@ export default function EvaluationList() {
               <span style={{ background: STATUS_COLOR[ev.status] + "22", color: STATUS_COLOR[ev.status], borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
                 {STATUS_LABEL[ev.status]}
               </span>
-              {ev.status === "draft" && (
+              {/* HR quick-send button on draft cards */}
+              {ev.status === "draft" && isHR && (
+                <button
+                  onClick={e => sendToHead(ev, e)}
+                  disabled={deleting === ev.id}
+                  title="ส่งให้หัวหน้าแผนกประเมิน"
+                  style={{ padding: "6px 14px", borderRadius: 8, border: "none",
+                    background: "#0038C6", color: "#fff", fontSize: 12, cursor: "pointer",
+                    fontFamily: "inherit", fontWeight: 700, flexShrink: 0,
+                    opacity: deleting === ev.id ? 0.5 : 1, transition: "all .15s" }}>
+                  {deleting === ev.id ? "…" : "ส่งให้หัวหน้า →"}
+                </button>
+              )}
+              {/* Delete button: draft or pending_head only */}
+              {["draft", "pending_head"].includes(ev.status) && (
                 <button
                   onClick={e => deleteEval(ev, e)}
                   disabled={deleting === ev.id}
@@ -120,7 +156,8 @@ export default function EvaluationList() {
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

@@ -45,12 +45,13 @@ function ScoreRing({ score, maxScore = 100 }: { score: number; maxScore?: number
 /* ── Status badge ───────────────────────────────────────────────── */
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
-    draft:          { label: "ร่าง",                  bg: "rgba(255,255,255,0.15)", color: "#fff" },
-    pending_deputy: { label: "รอรองผู้อำนวยการ",      bg: "#fff3cd",               color: "#b45309" },
-    pending_hr:     { label: "รอ HR ประเมิน",          bg: "#ede9fe",               color: "#7c3aed" },
-    pending_final:  { label: "รออนุมัติขั้นสุดท้าย", bg: "#dcfce7",               color: "#16a34a" },
-    approved:       { label: "อนุมัติแล้ว",           bg: "#dcfce7",               color: "#16a34a" },
-    rejected:       { label: "ไม่อนุมัติ",           bg: "#fee2e2",               color: "#dc2626" },
+    draft:          { label: "ร่าง (รอ HR ส่ง)",       bg: "rgba(255,255,255,0.15)", color: "#fff" },
+    pending_head:   { label: "รอหัวหน้าแผนก",          bg: "#fff3cd",               color: "#b45309" },
+    pending_deputy: { label: "รอรองผู้อำนวยการ",       bg: "#fed7aa",               color: "#c2410c" },
+    pending_hr:     { label: "รอ HR ประเมิน",           bg: "#ede9fe",               color: "#7c3aed" },
+    pending_final:  { label: "รออนุมัติขั้นสุดท้าย",  bg: "#dcfce7",               color: "#16a34a" },
+    approved:       { label: "อนุมัติแล้ว",            bg: "#dcfce7",               color: "#16a34a" },
+    rejected:       { label: "ไม่อนุมัติ",            bg: "#fee2e2",               color: "#dc2626" },
   };
   const s = map[status] ?? { label: status, bg: "rgba(255,255,255,0.15)", color: "#fff" };
   return (
@@ -63,12 +64,13 @@ function StatusBadge({ status }: { status: string }) {
 
 /* ── Workflow step bar ──────────────────────────────────────────── */
 const STEP_META = [
-  { key: "draft",          short: "01", label: "หัวหน้าแผนก" },
-  { key: "pending_deputy", short: "02", label: "รองผู้อำนวยการ" },
-  { key: "pending_hr",     short: "03", label: "HR ประเมิน" },
-  { key: "pending_final",  short: "04", label: "รองฯ อนุมัติสุดท้าย" },
+  { key: "draft",          short: "01", label: "HR สร้าง/ส่ง" },
+  { key: "pending_head",   short: "02", label: "หัวหน้าแผนก" },
+  { key: "pending_deputy", short: "03", label: "รองผู้อำนวยการ" },
+  { key: "pending_hr",     short: "04", label: "HR ประเมิน" },
+  { key: "pending_final",  short: "05", label: "รองฯ อนุมัติ" },
 ];
-const STATUS_ORDER = ["draft", "pending_deputy", "pending_hr", "pending_final", "approved"];
+const STATUS_ORDER = ["draft", "pending_head", "pending_deputy", "pending_hr", "pending_final", "approved"];
 
 function WorkflowSteps({ status }: { status: string }) {
   const cur = STATUS_ORDER.indexOf(status);
@@ -204,7 +206,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
         setScores(sc);
         // Auto-fill signature
         if (user) {
-          if (evaluation.status === "draft" && ["head","admin"].includes(user.role) && !evaluation.signer_head)
+          if (evaluation.status === "pending_head" && ["head","admin"].includes(user.role) && !evaluation.signer_head)
             setSignerHead(user.full_name ?? "");
           if (evaluation.status === "pending_hr" && ["hr","admin"].includes(user.role) && !evaluation.signer_hr)
             setSignerHR(user.full_name ?? "");
@@ -219,12 +221,13 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
-  const canEditHead  = !!(user && ["head","admin"].includes(user.role)    && ev?.status === "draft");
-  const canEditHR    = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "pending_hr");
-  const canDeputyAct = !!(user && ["deputy","admin"].includes(user.role)  && ev?.status === "pending_deputy");
-  const canHRAct     = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "pending_hr");
-  const canFinalAct  = !!(user && ["deputyHR","admin"].includes(user.role)&& ev?.status === "pending_final");
-  const canPrint     = !!(user && ["hr","admin","deputyHR"].includes(user.role) && ev?.status === "approved");
+  const canSendToHead = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "draft");
+  const canEditHead   = !!(user && ["head","admin"].includes(user.role)   && ev?.status === "pending_head");
+  const canEditHR     = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
+  const canDeputyAct  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy");
+  const canHRAct      = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
+  const canFinalAct   = !!(user && ["deputyHR","admin"].includes(user.role)&& ev?.status === "pending_final");
+  const canPrint      = !!(user && ["hr","admin","deputyHR"].includes(user.role) && ev?.status === "approved");
 
   async function save(action: string) {
     setSaving(true); setError("");
@@ -358,7 +361,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
             <div style={{ padding: "16px 20px 6px" }}>
               <SectionHeader color="#0038C6"
                 label={`หัวหน้าแผนกประเมิน · ${headTopics.length} ข้อ`}
-                note={!canEditHead ? (ev.status === "draft" ? "🔒 เฉพาะหัวหน้าแผนก" : "🔒 ดูเท่านั้น") : undefined} />
+                note={!canEditHead ? (ev.status === "draft" ? "🔒 HR ยังไม่ส่งให้หัวหน้า" : ev.status === "pending_head" ? "🔒 เฉพาะหัวหน้าแผนก" : "🔒 ดูเท่านั้น") : undefined} />
             </div>
             <div style={{ padding: "0 20px 16px" }}>
               {headTopics.map(t => (
@@ -533,6 +536,13 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
           {/* ── Action buttons ── */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
             <button onClick={onClose} style={btnClose}>ปิด</button>
+
+            {canSendToHead && (
+              <button onClick={() => save("send_to_head")} disabled={saving}
+                style={btnPrimary("#0038C6")}>
+                {saving ? "กำลังส่ง…" : "ส่งให้หัวหน้าแผนกประเมิน →"}
+              </button>
+            )}
 
             {canPrint && (
               <button onClick={() => setShowPrint(true)}
