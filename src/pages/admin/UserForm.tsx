@@ -78,8 +78,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
   };
 
   const fields = [
-    { label: "ชื่อ-นามสกุล *", el: <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" /> },
-    { label: "Username *",     el: <input value={username} onChange={e => setUsername(e.target.value)} style={inp} disabled={!isNew} placeholder="username" /> },
+    { label: "ชื่อ-นามสกุล *", el: <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" autoComplete="off" /> },
+    { label: "Username *",     el: <input value={username} onChange={e => setUsername(e.target.value)} style={inp} disabled={!isNew} placeholder="username" autoComplete="off" /> },
     { label: "สิทธิ์การใช้งาน *", el: (
         <select value={role} onChange={e => { setRole(e.target.value); setDivisionId(""); setDepartmentId(""); }} style={inp}>
           {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
@@ -102,7 +102,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
           <input type={showPwd ? "text" : "password"} value={password}
             onChange={e => setPassword(e.target.value)}
             style={{ ...inp, paddingRight: 40 }}
-            placeholder={isNew ? "อย่างน้อย 6 ตัวอักษร" : "เว้นว่างถ้าไม่เปลี่ยน"} />
+            placeholder={isNew ? "อย่างน้อย 6 ตัวอักษร" : "เว้นว่างถ้าไม่เปลี่ยน"}
+            autoComplete="new-password" />
           <button type="button" onClick={() => setShowPwd(v => !v)}
             style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
               background: "none", border: "none", cursor: "pointer", padding: 4,
