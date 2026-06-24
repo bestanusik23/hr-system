@@ -35,7 +35,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       (full_name, name_en, position, department_id, division_id, start_date,
        emp_status, emp_type, probation_days, probation_end_date, color, initial,
        license_number, license_expiry, car_plate_1, car_plate_2, moto_plate_1, moto_plate_2)
-    VALUES (?,?,?,?,?,?, 'probation', ?,?,?, ?,?,?,?,?,?,?,?,?)
+    VALUES (?,?,?,?,?,?, 'probation', ?,?,?, ?,?,?,?,?,?,?,?)
   `).bind(
     name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null, start_date,
     emp_type ?? null, days, probEnd, color, initial,
