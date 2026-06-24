@@ -25,12 +25,17 @@ export default function AdminPage() {
   async function deleteUser() {
     if (!confirmDelete) return;
     setDeleting(true); setDeleteError("");
-    const r = await fetch(`/api/admin/users/${confirmDelete.id}`, { method: "DELETE" });
-    const d = await r.json() as { ok: boolean; error?: string };
-    setDeleting(false);
-    if (!d.ok) { setDeleteError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    setConfirmDelete(null);
-    load();
+    try {
+      const r = await fetch(`/api/admin/users/${confirmDelete.id}`, { method: "DELETE" });
+      const d = await r.json() as { ok: boolean; error?: string };
+      if (!d.ok) { setDeleteError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      setConfirmDelete(null);
+      load();
+    } catch {
+      setDeleteError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   async function load() {
