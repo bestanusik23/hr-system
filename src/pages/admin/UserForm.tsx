@@ -100,8 +100,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     setSaving(true); setError("");
 
     const finalTitle = useCustom ? customTitle : roleTitle;
-    const scopeDivId  = ["deputy","deputyHR"].includes(role) ? (divisionId  || null) : null;
-    const scopeDeptId = role === "head"                       ? (departmentId || null) : null;
+    const scopeDivId  = ["deputy","deputyHR","hr"].includes(role) ? (divisionId  || null) : null;
+    const scopeDeptId = role === "head"                          ? (departmentId || null) : null;
 
     try {
       if (isNew) {
