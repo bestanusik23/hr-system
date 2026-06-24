@@ -49,6 +49,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   sql += " ORDER BY e.emp_status='resigned', e.created_at DESC";
 
-  const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
+  let rows;
+  try {
+    rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
+  } catch {
+    // eval_only column may not exist yet — fall back without that filter
+    const fallback = sql.replace("(e.eval_only = 0 OR e.eval_only IS NULL)", "1=1");
+    rows = await ctx.env.HR_DB.prepare(fallback).bind(...params).all();
+  }
   return Response.json({ ok: true, employees: rows.results });
 };
