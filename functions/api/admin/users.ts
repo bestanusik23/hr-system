@@ -5,7 +5,7 @@ import { getTokenFromCookie, getSessionUser, hashPassword } from "../../lib/auth
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const rows = await ctx.env.HR_DB.prepare(
     `SELECT u.id, u.username, u.full_name, u.role, u.role_title, u.scope_division_id, u.scope_department_id, u.is_active, u.created_at,
@@ -23,7 +23,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   try {
     const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
     if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
     const body = await ctx.request.json() as Record<string, unknown>;
     const { username, password, full_name, role, role_title, scope_division_id, scope_department_id } = body;

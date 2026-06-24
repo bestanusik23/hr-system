@@ -6,7 +6,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   try {
     const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
     if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
     const id = ctx.params.id as string;
     if (String(user.id) === id) return Response.json({ ok: false, error: "ไม่สามารถแก้ไข account ตัวเองได้" }, { status: 400 });
@@ -47,7 +47,7 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   try {
     const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
     if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    if (user.role !== "admin") return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
     const id = ctx.params.id as string;
     if (String(user.id) === id)

@@ -97,25 +97,25 @@ const SYSTEMS: SystemCard[] = [
     key: "exec", no: "06", icon: <IcChart />,
     title: "Executive Dashboard",
     desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม",
-    roles: ["hr","deputyHR","admin"],
+    roles: ["deputyHR","admin"],
   },
   {
     key: "admin", no: "07", icon: <IcUserCog />,
     title: "จัดการผู้ใช้งาน",
     desc: "เพิ่ม แก้ไข และกำหนดสิทธิ์ผู้ใช้งานในระบบ พร้อมกำกับดูแล Role ทุกระดับ",
-    roles: ["admin"],
+    roles: ["admin","deputyHR"],
   },
   {
     key: "admin/org", no: "08", icon: <IcBuilding />,
     title: "จัดการตำแหน่ง/แผนก",
     desc: "เพิ่ม แก้ไข ลบ ฝ่าย แผนก และตำแหน่งงานในระบบตามโครงสร้างองค์กร",
-    roles: ["hr","deputyHR","admin"],
+    roles: ["deputyHR","admin"],
   },
   {
     key: "workflow", no: "09", icon: <IcFlow />,
     title: "Workflow & สิทธิ์การอนุมัติ",
     desc: "ดูขั้นตอนการอนุมัติและสิทธิ์ของแต่ละ Role ในทุกระบบขององค์กร",
-    roles: ["hr","deputyHR","admin"],
+    roles: ["deputyHR","admin"],
   },
 ];
 
