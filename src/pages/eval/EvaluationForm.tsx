@@ -299,6 +299,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   };
 
   return (
+    <>
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
         display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
@@ -597,5 +598,6 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
     {showPrint && ev && (
       <PrintEvalModal evalId={ev.id} onClose={() => setShowPrint(false)} />
     )}
+    </>
   );
 }
