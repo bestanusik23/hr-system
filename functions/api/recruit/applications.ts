@@ -62,26 +62,42 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       return obj;
     });
 
-    // head: always scope to their department — return empty if not set or no match
+    // Nursing position keywords — head nurses can see all applicants for these positions
+    const NURSING_KEYWORDS = ["ผู้ช่วยเหลือคนไข้", "ผู้ช่วยพยาบาล", "PN", "NA"];
+    function matchNursing(val: string): boolean {
+      const v = val.trim();
+      return NURSING_KEYWORDS.some(kw => {
+        if (kw.length >= 5) return v.includes(kw);
+        // Short keyword (PN, NA) — whole-word check to avoid false positives
+        return v === kw || new RegExp(`(?:^|[\\s,/()-])${kw}(?:[\\s,/()-]|$)`).test(v);
+      });
+    }
+
+    // head: scope to their department + nursing position keywords
     let scopedDepartment: string | null = null;
     if (user.role === "head") {
-      if (!user.scope_department_id) {
-        // head without assigned department sees nothing
-        return Response.json({ ok: true, applications: [], headers, scopedDepartment: null, scopedDivision: null });
+      if (user.scope_department_id) {
+        const dept = await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?")
+          .bind(user.scope_department_id).first<{ name: string }>();
+        scopedDepartment = dept?.name ?? null;
       }
-      const dept = await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?")
-        .bind(user.scope_department_id).first<{ name: string }>();
-      scopedDepartment = dept?.name ?? null;
 
-      const deptColIdx = headers.findIndex(h =>
-        h.includes("แผนก") || h.toLowerCase().includes("department")
+      // Find position/department column in the sheet
+      const posColIdx = headers.findIndex(h =>
+        h.includes("แผนก") || h.includes("ตำแหน่ง") || h.toLowerCase().includes("department")
       );
-      if (deptColIdx >= 0 && scopedDepartment) {
-        const deptKey = headers[deptColIdx];
-        applications = applications.filter(a => a[deptKey] === scopedDepartment);
+      if (posColIdx >= 0) {
+        const posKey = headers[posColIdx];
+        applications = applications.filter(a => {
+          const val = (a[posKey] ?? "").trim();
+          if (scopedDepartment && val === scopedDepartment) return true;
+          return matchNursing(val);
+        });
       } else {
-        // column not found in sheet → return empty
-        applications = [];
+        // No position column — fall back to searching all fields for nursing keywords
+        applications = applications.filter(a =>
+          Object.values(a).some(v => matchNursing(v))
+        );
       }
     }
 
@@ -110,8 +126,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 };
 
 // PATCH /api/recruit/applications  — update a cell (e.g. status column)
-// Level 3 (hr): can set all statuses except รับเข้างาน
-// Level 2 (deputy/deputyHR): can set any status including รับเข้างาน (final hire decision)
+// hr/deputyHR/admin: full access to all statuses
+// head/deputy: can ONLY set "รอนัดสัมภาษณ์" (send to HR for contact)
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -121,20 +137,13 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const { row, col, value } = body;
   if (!row || !col) return Response.json({ ok: false, error: "Missing row/col" }, { status: 400 });
 
-  // head can ONLY set "รอนัดสัมภาษณ์" (flag for HR to call)
-  if (user.role === "head") {
+  // head and deputy can ONLY set "รอนัดสัมภาษณ์" (flag for HR to contact)
+  if (["head", "deputy"].includes(user.role)) {
     if (value !== "รอนัดสัมภาษณ์") {
-      return Response.json({ ok: false, error: "หัวหน้าแผนกสามารถส่งให้สัมภาษณ์เท่านั้น" }, { status: 403 });
+      return Response.json({ ok: false, error: "หัวหน้าและรองผู้อำนวยการสามารถส่งให้ HR ติดต่อเท่านั้น" }, { status: 403 });
     }
-    // head allowed through — GET already scoped their rows to their dept
-  } else if (!["hr", "deputy", "deputyHR", "admin"].includes(user.role)) {
+  } else if (!["hr", "deputyHR", "admin"].includes(user.role)) {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
-
-  // "รับเข้างาน" requires Level 2 (deputy) approval
-  const FINAL_STATUSES = ["รับเข้างาน", "ไม่ผ่าน"];
-  if (FINAL_STATUSES.includes(value) && !["deputy", "deputyHR", "admin"].includes(user.role)) {
-    return Response.json({ ok: false, error: "สถานะ \"รับเข้างาน\" และ \"ไม่ผ่าน\" ต้องการสิทธิ์รองผู้อำนวยการ" }, { status: 403 });
   }
 
   try {

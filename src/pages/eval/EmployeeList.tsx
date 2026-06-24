@@ -31,7 +31,8 @@ function daysSince(dateStr: string | null) {
 }
 
 // Determine state of each 30/60/90 round for a given employee
-function roundState(days: number | null, round: 30 | 60 | 90, evals: EvalSummary[], empId: number) {
+// isHR=true extends the alert window to 30 days (HR can create evals early)
+function roundState(days: number | null, round: 30 | 60 | 90, evals: EvalSummary[], empId: number, isHR: boolean) {
   const ev = evals.find(e => e.employee_id === empId && e.round === round);
   if (ev) {
     if (ev.status === "approved") return { state: "done", evalId: ev.id };
@@ -40,9 +41,9 @@ function roundState(days: number | null, round: 30 | 60 | 90, evals: EvalSummary
     return { state: "draft", evalId: ev.id };
   }
   if (days === null) return { state: "waiting", evalId: null };
-  const start = round - 7; // alert window: 7 days before due
+  const alertStart = isHR ? round - 30 : round - 7;
   if (days >= round) return { state: "overdue", evalId: null };
-  if (days >= start) return { state: "soon", evalId: null };
+  if (days >= alertStart) return { state: "soon", evalId: null };
   return { state: "waiting", evalId: null };
 }
 
@@ -145,7 +146,7 @@ export default function EmployeeList() {
             const allRounds = [30, 60, 90] as const;
             const numRounds = emp.eval_rounds ?? 3;
             const rounds = allRounds.slice(0, numRounds).map(r => ({
-              round: r, ...roundState(days, r, evals, emp.id),
+              round: r, ...roundState(days, r, evals, emp.id, !!canEdit),
             }));
             const hasAlert = rounds.some(r => r.state === "soon" || r.state === "overdue");
 

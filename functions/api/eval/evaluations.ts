@@ -46,11 +46,28 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const { employee_id, round } = body;
   if (!employee_id || !round) return Response.json({ ok: false, error: "Missing fields" }, { status: 400 });
 
+  const emp = await ctx.env.HR_DB.prepare(
+    "SELECT department_id, start_date FROM employees WHERE id = ?"
+  ).bind(employee_id).first<{ department_id: number; start_date: string | null }>();
+
   // head: can only create eval for employees in their department
   if (user.role === "head" && user.scope_department_id) {
-    const emp = await ctx.env.HR_DB.prepare("SELECT department_id FROM employees WHERE id = ?").bind(employee_id).first<{ department_id: number }>();
     if (!emp || emp.department_id !== user.scope_department_id) {
       return Response.json({ ok: false, error: "ไม่มีสิทธิ์สร้างประเมินพนักงานแผนกอื่น" }, { status: 403 });
+    }
+  }
+
+  // Time-window check: HR can create 30 days early, head 7 days early
+  if (emp?.start_date) {
+    const startMs = new Date(emp.start_date).getTime();
+    const daysWorked = Math.floor((Date.now() - startMs) / 86400000);
+    const roundDays = Number(round);
+    const earlyWindow = ["hr", "admin"].includes(user.role) ? 30 : 7;
+    if (daysWorked < roundDays - earlyWindow) {
+      return Response.json({
+        ok: false,
+        error: `ยังไม่ถึงกำหนดสร้างใบประเมิน (สามารถสร้างได้เมื่อครบ ${roundDays - earlyWindow} วัน)`,
+      }, { status: 422 });
     }
   }
 
@@ -60,9 +77,21 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (existing) return Response.json({ ok: false, error: "มีใบประเมินรอบนี้แล้ว" }, { status: 409 });
 
   const template_id = body.template_id ?? null;
-  const result = await ctx.env.HR_DB.prepare(
-    "INSERT INTO evaluations (employee_id, round, head_user_id, template_id) VALUES (?, ?, ?, ?)"
-  ).bind(employee_id, round, user.id, template_id).run();
+  const isEarlyGenerated = emp?.start_date
+    ? Math.floor((Date.now() - new Date(emp.start_date).getTime()) / 86400000) < Number(round)
+    : false;
+
+  let result;
+  try {
+    result = await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluations (employee_id, round, head_user_id, template_id, early_generated, generated_by) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(employee_id, round, user.id, template_id, isEarlyGenerated ? 1 : 0, user.id).run();
+  } catch {
+    // early_generated column may not exist yet — fall back to basic insert
+    result = await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluations (employee_id, round, head_user_id, template_id) VALUES (?, ?, ?, ?)"
+    ).bind(employee_id, round, user.id, template_id).run();
+  }
 
   return Response.json({ ok: true, id: result.meta.last_row_id }, { status: 201 });
 };

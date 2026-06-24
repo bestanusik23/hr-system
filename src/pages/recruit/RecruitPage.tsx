@@ -70,14 +70,14 @@ export default function RecruitPage() {
   const [detail, setDetail]             = useState<Application | null>(null);
   const [updating, setUpdating]         = useState<string | null>(null);
 
-  const isHR      = user && ["hr", "admin"].includes(user.role);
-  const isDeputy  = user && ["deputy", "deputyHR", "admin"].includes(user.role);
-  const isHead    = user?.role === "head";
-  const canUpdate = isHR || isDeputy;
+  const isHR        = user && ["hr", "deputyHR", "admin"].includes(user.role);
+  const isHead      = user?.role === "head";
+  const isDeputy    = user?.role === "deputy";
+  const canUpdate   = !!isHR;
+  const canSendToHR = isHead || isDeputy;
 
-  const HR_STATUSES     = ["รอพิจารณา", "รอนัดสัมภาษณ์", "รอกรอกใบสมัคร", "ผ่านการสัมภาษณ์"];
-  const DEPUTY_STATUSES = Object.keys(STATUS_COLOR);
-  const allowedStatuses = isDeputy ? DEPUTY_STATUSES : HR_STATUSES;
+  const ALL_STATUSES = Object.keys(STATUS_COLOR);
+  const allowedStatuses = ALL_STATUSES;
 
   const statusColIdx = headers.findIndex(h => isStatusCol(h));
   const statusKey    = statusColIdx >= 0 ? headers[statusColIdx] : "";
@@ -422,18 +422,16 @@ export default function RecruitPage() {
                 ))}
               </div>
 
-              {/* ── Head action: send to HR for interview ── */}
-              {isHead && statusKey && (
+              {/* ── Head / Deputy action: send to HR for contact ── */}
+              {canSendToHR && statusKey && (
                 <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #f1f5f9" }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12 }}>
-                    การดำเนินการ
-                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12 }}>การดำเนินการ</div>
                   {detail[statusKey] === "รอนัดสัมภาษณ์" ? (
                     <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 12,
                       padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
                       <span style={{ fontSize: 20 }}>📞</span>
                       <div>
-                        <div style={{ fontWeight: 700, color: "#c2410c", fontSize: 14 }}>ส่งให้ HR เรียกสัมภาษณ์แล้ว</div>
+                        <div style={{ fontWeight: 700, color: "#c2410c", fontSize: 14 }}>ส่งให้ HR ติดต่อแล้ว</div>
                         <div style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>รอ HR ติดต่อผู้สมัคร</div>
                       </div>
                     </div>
@@ -446,19 +444,18 @@ export default function RecruitPage() {
                         gap: 10, opacity: updating === detail._row ? 0.7 : 1,
                         boxShadow: "0 4px 14px rgba(194,65,12,.35)", transition: "opacity .15s" }}>
                       <span style={{ fontSize: 20 }}>📞</span>
-                      ส่งให้ HR เรียกสัมภาษณ์
+                      ส่งให้ HR ติดต่อผู้สมัคร
                     </button>
                   )}
                 </div>
               )}
 
-              {/* ── HR/Deputy status update panel ── */}
+              {/* ── HR status update panel (full access) ── */}
               {canUpdate && statusKey && (
                 <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #f1f5f9" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#334155" }}>อัปเดตผลการพิจารณา</div>
-                    {!isDeputy && <span style={{ fontSize: 11, background: "#fef9c3", color: "#b45309", borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>HR</span>}
-                    {isDeputy  && <span style={{ fontSize: 11, background: "#ede9fe", color: "#7c3aed", borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>รองผู้อำนวยการ</span>}
+                    <span style={{ fontSize: 11, background: "#fef9c3", color: "#b45309", borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>HR</span>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {allowedStatuses.map(s => {
