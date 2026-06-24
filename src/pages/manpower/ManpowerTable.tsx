@@ -49,16 +49,15 @@ interface AugRow extends ManpowerRow {
   liveEmpId: number | null;
   liveEmpRemark: string | null;
   liveEmpObj: LiveEmp | null;
+  isOverflow?: boolean;
 }
 
-function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps): AugRow[] {
+function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, allEmps: LiveEmp[]): AugRow[] {
   const consumed = new Set<number>(); // employee ids already placed
 
-  // Pass 1 — division-aware: assign each slot the first employee in their exact
-  // division whose position matches. This lets "ผู้ช่วยพยาบาล" in OPD (divId:9)
-  // pull from div-9 employees, while ห้องคลอด (divId:8) pulls from div-8.
+  // Pass 1 — division-aware
   const ptrDiv = new Map<string, number>();
-  const p1 = new Map<number, LiveEmp>(); // rowIndex → employee
+  const p1 = new Map<number, LiveEmp>();
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
     if (r.type !== "slot") continue;
@@ -73,10 +72,9 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps): Au
     }
   }
 
-  // Pass 2 — position fallback: fill slots not matched in pass 1 using any
-  // unassigned employee with the matching position name (legacy / no div set).
+  // Pass 2 — position fallback
   const ptrPos = new Map<string, number>();
-  return rows.map((r, i) => {
+  const result: AugRow[] = rows.map((r, i) => {
     const empty: AugRow = { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
     if (r.type !== "slot") return empty;
     const e = p1.get(i);
@@ -94,6 +92,62 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps): Au
     }
     return { ...r, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
   });
+
+  // Pass 3 — overflow: employees with a known position but no slot left get
+  // an auto-generated slot inserted after the last slot of that position.
+  const knownPos = new Set(rows.filter(r => r.type === "slot").map(r => r.pos.trim().toLowerCase()));
+  const overflow = allEmps.filter(e =>
+    !consumed.has(e.id) &&
+    e.emp_status !== "resigned" &&
+    knownPos.has((e.position ?? "").trim().toLowerCase())
+  );
+
+  if (overflow.length > 0) {
+    // Find last index in result for each position
+    const posLastIdx = new Map<string, number>();
+    for (let i = result.length - 1; i >= 0; i--) {
+      const r = result[i];
+      if (r.type === "slot") {
+        const p = r.pos.trim().toLowerCase();
+        if (!posLastIdx.has(p)) posLastIdx.set(p, i);
+      }
+    }
+    // Group overflow by position
+    const overflowByPos = new Map<string, LiveEmp[]>();
+    for (const e of overflow) {
+      const p = (e.position ?? "").trim().toLowerCase();
+      if (!overflowByPos.has(p)) overflowByPos.set(p, []);
+      overflowByPos.get(p)!.push(e);
+    }
+    // Insert in descending index order so earlier inserts don't shift later ones
+    const insertions = [...overflowByPos.entries()]
+      .map(([p, emps]) => ({ afterIdx: posLastIdx.get(p) ?? -1, emps }))
+      .filter(x => x.afterIdx >= 0)
+      .sort((a, b) => b.afterIdx - a.afterIdx);
+
+    for (const { afterIdx, emps } of insertions) {
+      const ref = result[afterIdx];
+      const extras: AugRow[] = emps.map(e => ({
+        ...ref,
+        plan: 1,
+        filled: 1,
+        vac: 0,
+        emp: "",
+        note: "",
+        liveEmp: e.full_name,
+        liveFilled: 1,
+        liveVac: 0,
+        empStatus: e.emp_status,
+        liveEmpId: e.id,
+        liveEmpRemark: e.remark ?? null,
+        liveEmpObj: e,
+        isOverflow: true,
+      }));
+      result.splice(afterIdx + 1, 0, ...extras);
+    }
+  }
+
+  return result;
 }
 
 // Division names loaded from DB at runtime (see orgDivs state)
@@ -231,7 +285,7 @@ export default function ManpowerTable() {
 
   const divNames  = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
   const liveMaps  = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
-  const augRows   = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps), [liveMaps]);
+  const augRows   = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps, liveEmps), [liveMaps, liveEmps]);
 
   // Summary from live data
   const summary = useMemo(() => {
@@ -439,11 +493,17 @@ export default function ManpowerTable() {
                     const vacColor = r.liveVac > 0 ? "#dc2626" : r.liveVac < 0 ? "#0891b2" : "#16a34a";
                     const badge = r.empStatus ? STATUS_BADGE[r.empStatus] : null;
                     return (
-                      <tr key={i} style={{ background: slotNum % 2 === 0 ? "#fafbff" : "#fff",
+                      <tr key={i} style={{ background: r.isOverflow ? "#f0fdf4" : slotNum % 2 === 0 ? "#fafbff" : "#fff",
                         borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ ...td, textAlign: "center", color: "#94a3b8", fontSize: 11 }}>{slotNum}</td>
                         <td style={{ ...td, fontWeight: r.pos ? 500 : 400 }}>
                           {r.pos || <span style={{ color: "#cbd5e1" }}>—</span>}
+                          {r.isOverflow && (
+                            <span style={{ marginLeft: 6, fontSize: 9, color: "#0891b2",
+                              background: "#e0f2fe", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
+                              +เพิ่มอัตโนมัติ
+                            </span>
+                          )}
                         </td>
                         <td style={{ ...td, textAlign: "center" }}>{r.plan || "—"}</td>
                         <td style={{ ...td, textAlign: "center", color: "#16a34a", fontWeight: 600 }}>
