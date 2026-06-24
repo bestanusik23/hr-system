@@ -12,7 +12,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   let sql = `
     SELECT e.id, e.emp_code, e.full_name, e.position, e.start_date, e.emp_status,
-           e.color, e.initial,
+           e.color, e.initial, e.eval_rounds,
            d.name AS department_name, dv.name AS division_name,
            e.department_id, e.division_id
     FROM employees e
@@ -46,13 +46,14 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, emp_code, position, department_id, division_id, start_date } = body;
+  const { full_name, emp_code, position, department_id, division_id, start_date, eval_rounds } = body;
   if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
 
+  const rounds = Number(eval_rounds) > 0 ? Number(eval_rounds) : 3;
   const result = await ctx.env.HR_DB.prepare(`
-    INSERT INTO employees (emp_code, full_name, position, department_id, division_id, start_date)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null, start_date ?? null).run();
+    INSERT INTO employees (emp_code, full_name, position, department_id, division_id, start_date, eval_only, eval_rounds)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+  `).bind(emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null, start_date ?? null, rounds).run();
 
   return Response.json({ ok: true, id: result.meta.last_row_id }, { status: 201 });
 };

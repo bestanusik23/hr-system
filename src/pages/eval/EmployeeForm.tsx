@@ -7,7 +7,7 @@ interface Employee {
   id: number; emp_code: string | null; full_name: string; position: string | null;
   start_date: string | null; emp_status: string;
   department_id: number | null; division_id: number | null;
-  color: string | null; initial: string | null;
+  color: string | null; initial: string | null; eval_rounds?: number;
 }
 
 interface Props { employee: Employee | null; onClose: () => void; onSaved: () => void; }
@@ -25,6 +25,7 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
   const [posOpen, setPosOpen]       = useState(false);
   const [startDate, setStartDate]   = useState(employee?.start_date ?? "");
   const [empStatus, setEmpStatus]   = useState(employee?.emp_status ?? "probation");
+  const [evalRounds, setEvalRounds] = useState(employee?.eval_rounds ?? 3);
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState("");
   const posRef = useRef<HTMLDivElement>(null);
@@ -64,6 +65,7 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
       division_id: divId || null,
       start_date: startDate || null,
       emp_status: empStatus,
+      eval_rounds: evalRounds,
     };
     const url    = employee ? `/api/eval/employees/${employee.id}` : "/api/eval/employees";
     const method = employee ? "PUT" : "POST";
@@ -140,6 +142,14 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
 
         <Field label="วันที่เริ่มงาน">
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={inp} />
+        </Field>
+
+        <Field label="จำนวนรอบประเมิน">
+          <select value={evalRounds} onChange={e => setEvalRounds(Number(e.target.value))} style={inp}>
+            <option value={1}>1 รอบ — ประเมิน 30 วัน</option>
+            <option value={2}>2 รอบ — ประเมิน 30 และ 60 วัน</option>
+            <option value={3}>3 รอบ — ประเมิน 30, 60 และ 90 วัน</option>
+          </select>
         </Field>
 
         {employee && (

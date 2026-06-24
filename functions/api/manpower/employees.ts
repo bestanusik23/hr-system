@@ -22,7 +22,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     FROM employees e
     LEFT JOIN departments d  ON d.id  = e.department_id
     LEFT JOIN divisions  dv ON dv.id = e.division_id
-    WHERE 1=1`;
+    WHERE (e.eval_only = 0 OR e.eval_only IS NULL)`;
   const params: (string | number)[] = [];
 
   if (status === "active") {

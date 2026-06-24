@@ -7,6 +7,7 @@ interface Employee {
   id: number; emp_code: string | null; full_name: string; position: string | null; start_date: string | null;
   emp_status: string; department_name: string | null; division_name: string | null;
   color: string | null; initial: string | null; department_id: number | null; division_id: number | null;
+  eval_rounds?: number;
 }
 interface EvalSummary { employee_id: number; round: number; status: string; id: number; }
 
@@ -141,7 +142,9 @@ export default function EmployeeList() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {employees.map(emp => {
             const days = daysSince(emp.start_date);
-            const rounds = ([30, 60, 90] as const).map(r => ({
+            const allRounds = [30, 60, 90] as const;
+            const numRounds = emp.eval_rounds ?? 3;
+            const rounds = allRounds.slice(0, numRounds).map(r => ({
               round: r, ...roundState(days, r, evals, emp.id),
             }));
             const hasAlert = rounds.some(r => r.state === "soon" || r.state === "overdue");

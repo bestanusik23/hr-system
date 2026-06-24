@@ -9,7 +9,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const db = ctx.env.HR_DB;
 
   // Scope clause (head → department, deputy → division). Applies to alias e.
-  let scope = "";
+  let scope = " AND (e.eval_only = 0 OR e.eval_only IS NULL)";
   const sp: (string | number)[] = [];
   if (user.role === "head" && user.scope_department_id) {
     scope = " AND e.department_id = ?"; sp.push(user.scope_department_id);
