@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { MANPOWER_ROWS, type ManpowerRow } from "../../data/manpowerPlan";
 
@@ -63,12 +63,12 @@ function buildAugRows(rows: ManpowerRow[], liveMap: Map<string, LiveEmp[]>): Aug
   });
 }
 
-const DIV_NAMES: Record<number, string> = {
-  1: "ฝ่ายการแพทย์", 2: "ฝ่ายเทคนิคบริการ", 3: "ฝ่ายบริหารค่าตอบแทน",
-  4: "ฝ่ายการเงิน", 5: "ฝ่ายบัญชี", 6: "ฝ่ายสนับสนุน",
-  7: "ฝ่ายพัฒนาองค์กร", 8: "ฝ่ายการพยาบาลส่วนใน", 9: "ฝ่ายการพยาบาลส่วนหน้า",
-  10: "สำนักงานผู้อำนวยการ", 11: "ศูนย์มะเร็ง",
-};
+// Division names loaded from DB at runtime (see orgDivs state)
+function buildDivNames(orgDivs: OrgDiv[]): Record<number, string> {
+  const m: Record<number, string> = {};
+  for (const d of orgDivs) m[d.id] = d.name;
+  return m;
+}
 
 function Card({ label, value, color, sub }: { label: string; value: string | number; color: string; sub?: string }) {
   return (
@@ -99,6 +99,9 @@ export default function ManpowerTable() {
   const [liveEmps, setLiveEmps]   = useState<LiveEmp[]>([]);
   const [loading, setLoading]     = useState(true);
   const [liveError, setLiveError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [refreshing, setRefreshing]   = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Edit modal state
   const [editEmp,    setEditEmp]    = useState<LiveEmp | null>(null);
@@ -132,6 +135,27 @@ export default function ManpowerTable() {
     }
   }, [editEmp]);
 
+  const fetchEmployees = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
+    else setRefreshing(true);
+    try {
+      const r = await fetch("/api/manpower/employees");
+      const d = await r.json() as { ok: boolean; employees: LiveEmp[] };
+      if (d.ok) {
+        setLiveEmps(d.employees ?? []);
+        setLastUpdated(new Date());
+        setLiveError("");
+      } else {
+        setLiveError("โหลดข้อมูลพนักงานไม่สำเร็จ");
+      }
+    } catch {
+      setLiveError("เชื่อมต่อ API ไม่ได้");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
   async function saveEdit() {
     if (!editEmp) return;
     if (!editName.trim()) { setEditError("กรุณากรอกชื่อพนักงาน"); return; }
@@ -151,9 +175,7 @@ export default function ManpowerTable() {
       const d = await r.json() as { ok: boolean; error?: string };
       if (!d.ok) { setEditError(d.error ?? "เกิดข้อผิดพลาด"); return; }
       setEditEmp(null);
-      // Reload live data
-      fetch("/api/manpower/employees").then(r => r.json())
-        .then((d: { ok: boolean; employees: LiveEmp[] }) => { if (d.ok) setLiveEmps(d.employees ?? []); });
+      fetchEmployees(true);
     } catch {
       setEditError("เกิดข้อผิดพลาดในการเชื่อมต่อ");
     } finally {
@@ -161,21 +183,22 @@ export default function ManpowerTable() {
     }
   }
 
-  // Fetch live employees
+  // Initial fetch + auto-refresh every 60 seconds
+  // Also listens for "manpower:refresh" custom event fired by hire/resign/transfer actions
   useEffect(() => {
-    setLoading(true);
-    fetch("/api/manpower/employees")
-      .then(r => r.json())
-      .then((d: { ok: boolean; employees: LiveEmp[] }) => {
-        if (d.ok) setLiveEmps(d.employees ?? []);
-        else setLiveError("โหลดข้อมูลพนักงานไม่สำเร็จ");
-      })
-      .catch(() => setLiveError("เชื่อมต่อ API ไม่ได้"))
-      .finally(() => setLoading(false));
-  }, []);
+    fetchEmployees();
+    intervalRef.current = setInterval(() => fetchEmployees(true), 60_000);
+    const handler = () => fetchEmployees(true);
+    window.addEventListener("manpower:refresh", handler);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      window.removeEventListener("manpower:refresh", handler);
+    };
+  }, [fetchEmployees]);
 
-  const liveMap = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
-  const augRows = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMap), [liveMap]);
+  const divNames = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
+  const liveMap  = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
+  const augRows  = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMap), [liveMap]);
 
   // Summary from live data
   const summary = useMemo(() => {
@@ -245,8 +268,10 @@ export default function ManpowerTable() {
       {!loading && !liveError && (
         <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 10,
           padding: "9px 16px", fontSize: 12.5, color: "#166534", display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ fontSize: 14 }}>●</span>
-          ข้อมูลบรรจุ Real-time จากฐานข้อมูล ({liveEmps.filter(e => e.emp_status !== "resigned").length} คน)
+          <span style={{ fontSize: 14, color: refreshing ? "#d97706" : "#16a34a" }}>●</span>
+          ข้อมูล Real-time จากฐานข้อมูล — {liveEmps.filter(e => e.emp_status !== "resigned").length} คน
+          {" · "}อัปเดตอัตโนมัติทุก 60 วินาที
+          {refreshing && <span style={{ color: "#d97706", marginLeft: 4 }}>กำลังซิงค์…</span>}
         </div>
       )}
 
@@ -272,7 +297,7 @@ export default function ManpowerTable() {
           style={{ padding: "8px 12px", borderRadius: 9, border: "1.5px solid #e2e8f0",
             fontSize: 13, fontFamily: "inherit", background: "#fff", cursor: "pointer" }}>
           <option value={0}>ทุกฝ่าย</option>
-          {divIds.map(id => <option key={id} value={id}>{DIV_NAMES[id] ?? `ฝ่าย ${id}`}</option>)}
+          {divIds.map(id => <option key={id} value={id}>{divNames[id] ?? `ฝ่าย ${id}`}</option>)}
         </select>
         <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#64748b", cursor: "pointer" }}>
           <input type="checkbox" checked={vacOnly} onChange={e => setVacOnly(e.target.checked)} />
@@ -282,14 +307,29 @@ export default function ManpowerTable() {
           <input type="checkbox" checked={sortVac} onChange={e => setSortVac(e.target.checked)} />
           เรียงตาม vacancy มาก→น้อย
         </label>
-        <button onClick={() => {
-          const all = Object.fromEntries(allDivIds.map(id => [id, true]));
-          setCollapsed(prev => Object.values(prev).every(Boolean) ? {} : all);
-        }} style={{ marginLeft: "auto", padding: "7px 14px", borderRadius: 9,
-          border: "1.5px solid #e2e8f0", background: "#fff", fontSize: 12,
-          cursor: "pointer", fontFamily: "inherit", color: "#64748b" }}>
-          {Object.values(collapsed).every(Boolean) ? "ขยายทั้งหมด" : "ยุบทั้งหมด"}
-        </button>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
+          {lastUpdated && (
+            <span style={{ fontSize: 11, color: "#94a3b8" }}>
+              อัปเดต {lastUpdated.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          )}
+          <button onClick={() => fetchEmployees(true)} disabled={refreshing}
+            style={{ padding: "7px 14px", borderRadius: 9, border: "1.5px solid #c4cfee",
+              background: refreshing ? "#f0f5ff" : "#fff", fontSize: 12,
+              cursor: refreshing ? "default" : "pointer", fontFamily: "inherit",
+              color: "#0038C6", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
+            {refreshing ? "กำลังอัปเดต…" : "รีเฟรช"}
+          </button>
+          <button onClick={() => {
+            const all = Object.fromEntries(allDivIds.map(id => [id, true]));
+            setCollapsed(prev => Object.values(prev).every(Boolean) ? {} : all);
+          }} style={{ padding: "7px 14px", borderRadius: 9,
+            border: "1.5px solid #e2e8f0", background: "#fff", fontSize: 12,
+            cursor: "pointer", fontFamily: "inherit", color: "#64748b" }}>
+            {Object.values(collapsed).every(Boolean) ? "ขยายทั้งหมด" : "ยุบทั้งหมด"}
+          </button>
+        </div>
       </div>
 
       {/* Table */}
