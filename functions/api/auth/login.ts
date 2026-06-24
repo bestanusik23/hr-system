@@ -35,9 +35,11 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const ua = ctx.request.headers.get("User-Agent") ?? "";
   const token = await createSession(ctx.env.HR_DB, user.id, ua);
 
-  await ctx.env.HR_DB.prepare(
-    "INSERT INTO activity_log (user_id, actor_name, module, action, detail) VALUES (?, ?, 'auth', 'login', ?)"
-  ).bind(user.id, user.full_name, `login from ${ctx.request.headers.get("CF-Connecting-IP") ?? "unknown"}`).run();
+  try {
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, detail) VALUES (?, ?, 'auth', 'login', ?)"
+    ).bind(user.id, user.full_name, `login from ${ctx.request.headers.get("CF-Connecting-IP") ?? "unknown"}`).run();
+  } catch { /* ignore */ }
 
   return new Response(JSON.stringify({
     ok: true,
