@@ -46,14 +46,22 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, emp_code, position, department_id, division_id, start_date, eval_rounds } = body;
+  const { full_name, emp_code, position, department_id, division_id, start_date, eval_rounds,
+          license_number, license_expiry, vehicle_plate, profession_type, emp_remark } = body;
   if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
 
   const rounds = Number(eval_rounds) > 0 ? Number(eval_rounds) : 3;
   const result = await ctx.env.HR_DB.prepare(`
-    INSERT INTO employees (emp_code, full_name, position, department_id, division_id, start_date, eval_only, eval_rounds)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?)
-  `).bind(emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null, start_date ?? null, rounds).run();
+    INSERT INTO employees
+      (emp_code, full_name, position, department_id, division_id, start_date, eval_only, eval_rounds,
+       license_number, license_expiry, vehicle_plate, profession_type, emp_remark)
+    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null,
+    start_date ?? null, rounds,
+    license_number ?? null, license_expiry ?? null, vehicle_plate ?? null,
+    profession_type ?? null, emp_remark ?? null,
+  ).run();
 
   return Response.json({ ok: true, id: result.meta.last_row_id }, { status: 201 });
 };

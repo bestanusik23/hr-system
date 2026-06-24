@@ -16,18 +16,23 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
   const [divisions, setDivisions]   = useState<Division[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [templates, setTemplates]   = useState<Template[]>([]);
-  const [empCode, setEmpCode]       = useState(employee?.emp_code ?? "");
-  const [divId, setDivId]           = useState<number | "">(employee?.division_id ?? "");
-  const [deptId, setDeptId]         = useState<number | "">(employee?.department_id ?? "");
-  const [fullName, setFullName]     = useState(employee?.full_name ?? "");
-  const [position, setPosition]     = useState(employee?.position ?? "");
-  const [posSearch, setPosSearch]   = useState(employee?.position ?? "");
-  const [posOpen, setPosOpen]       = useState(false);
-  const [startDate, setStartDate]   = useState(employee?.start_date ?? "");
-  const [empStatus, setEmpStatus]   = useState(employee?.emp_status ?? "probation");
-  const [evalRounds, setEvalRounds] = useState(employee?.eval_rounds ?? 3);
-  const [saving, setSaving]         = useState(false);
-  const [error, setError]           = useState("");
+  const [empCode, setEmpCode]             = useState(employee?.emp_code ?? "");
+  const [divId, setDivId]                 = useState<number | "">(employee?.division_id ?? "");
+  const [deptId, setDeptId]               = useState<number | "">(employee?.department_id ?? "");
+  const [fullName, setFullName]           = useState(employee?.full_name ?? "");
+  const [position, setPosition]           = useState(employee?.position ?? "");
+  const [posSearch, setPosSearch]         = useState(employee?.position ?? "");
+  const [posOpen, setPosOpen]             = useState(false);
+  const [startDate, setStartDate]         = useState(employee?.start_date ?? "");
+  const [empStatus, setEmpStatus]         = useState(employee?.emp_status ?? "probation");
+  const [evalRounds, setEvalRounds]       = useState(employee?.eval_rounds ?? 3);
+  const [licenseNumber, setLicenseNumber] = useState((employee as Record<string, unknown>)?.license_number as string ?? "");
+  const [licenseExpiry, setLicenseExpiry] = useState((employee as Record<string, unknown>)?.license_expiry as string ?? "");
+  const [vehiclePlate, setVehiclePlate]   = useState((employee as Record<string, unknown>)?.vehicle_plate as string ?? "");
+  const [professionType, setProfessionType] = useState((employee as Record<string, unknown>)?.profession_type as string ?? "");
+  const [empRemark, setEmpRemark]         = useState((employee as Record<string, unknown>)?.emp_remark as string ?? "");
+  const [saving, setSaving]               = useState(false);
+  const [error, setError]                 = useState("");
   const posRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,6 +71,11 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
       start_date: startDate || null,
       emp_status: empStatus,
       eval_rounds: evalRounds,
+      license_number: licenseNumber.trim() || null,
+      license_expiry: licenseExpiry || null,
+      vehicle_plate: vehiclePlate.trim() || null,
+      profession_type: professionType.trim() || null,
+      emp_remark: empRemark.trim() || null,
     };
     const url    = employee ? `/api/eval/employees/${employee.id}` : "/api/eval/employees";
     const method = employee ? "PUT" : "POST";
@@ -162,6 +172,39 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
             </select>
           </Field>
         )}
+
+        {/* ── Extra profile fields ── */}
+        <div style={{ borderTop: "1.5px solid #f1f5f9", margin: "18px 0 14px",
+          paddingTop: 14, fontSize: 11, fontWeight: 700, color: "#94a3b8",
+          letterSpacing: "0.08em", textTransform: "uppercase" as const }}>
+          ข้อมูลเพิ่มเติม
+        </div>
+
+        <Field label="ประเภทวิชาชีพ">
+          <input value={professionType} onChange={e => setProfessionType(e.target.value)}
+            style={inp} placeholder="เช่น พยาบาลวิชาชีพ, นักเทคนิคการแพทย์" />
+        </Field>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="เลขที่ใบประกอบวิชาชีพ">
+            <input value={licenseNumber} onChange={e => setLicenseNumber(e.target.value)}
+              style={inp} placeholder="เช่น ภ.26112" />
+          </Field>
+          <Field label="วันหมดอายุใบประกอบ">
+            <input type="date" value={licenseExpiry} onChange={e => setLicenseExpiry(e.target.value)} style={inp} />
+          </Field>
+        </div>
+
+        <Field label="ทะเบียนรถ">
+          <input value={vehiclePlate} onChange={e => setVehiclePlate(e.target.value)}
+            style={inp} placeholder="เช่น กข 1234 เชียงใหม่" />
+        </Field>
+
+        <Field label="หมายเหตุ">
+          <textarea value={empRemark} onChange={e => setEmpRemark(e.target.value)}
+            rows={2} style={{ ...inp, resize: "vertical" as const }}
+            placeholder="บันทึกเพิ่มเติม เช่น สัญญาทุน, เงื่อนไขพิเศษ" />
+        </Field>
 
         {error && (
           <div style={{ background: "#fee2e2", border: "1px solid #fecaca",

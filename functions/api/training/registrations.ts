@@ -20,11 +20,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true, registrations: rows.results });
 };
 
-// POST /api/training/registrations  — manual registration (hr/admin)
+// POST /api/training/registrations  — register attendee (hr/admin/head/deputy can register)
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!["hr", "admin", "head", "deputy", "deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as Record<string, unknown>;
   const { course_id, emp_code, name, department, position, phone } = body;
