@@ -3,7 +3,7 @@ import PageLayout from "../../components/PageLayout";
 import UserForm from "./UserForm";
 
 interface UserRow {
-  id: number; username: string; full_name: string; role: string;
+  id: number; username: string; full_name: string; role: string; role_title: string | null;
   scope_division_id: number | null; scope_department_id: number | null;
   division_name: string | null; department_name: string | null;
   is_active: number; created_at: string;

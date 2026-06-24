@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 interface Division   { id: number; name: string; }
 interface Department { id: number; name: string; division_id: number; }
 interface UserRow {
-  id: number; username: string; full_name: string; role: string;
+  id: number; username: string; full_name: string; role: string; role_title: string | null;
   scope_division_id: number | null; scope_department_id: number | null; is_active: number;
 }
 interface Props { user: UserRow | null; onClose: () => void; onSaved: () => void; }
@@ -21,6 +21,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
   const [fullName,     setFullName]     = useState(user?.full_name ?? "");
   const [username,     setUsername]     = useState(user?.username ?? "");
   const [role,         setRole]         = useState(user?.role ?? "hr");
+  const [roleTitle,    setRoleTitle]    = useState(user?.role_title ?? "");
   const [divisionId,   setDivisionId]   = useState<number | "">(user?.scope_division_id ?? "");
   const [departmentId, setDepartmentId] = useState<number | "">(user?.scope_department_id ?? "");
   const [isActive,     setIsActive]     = useState(user?.is_active !== 0);
@@ -50,12 +51,12 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
       if (isNew) {
         const r = await fetch("/api/admin/users", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, full_name: fullName, role, scope_division_id: scopeDivId, scope_department_id: scopeDeptId }),
+          body: JSON.stringify({ username, password, full_name: fullName, role, role_title: roleTitle || null, scope_division_id: scopeDivId, scope_department_id: scopeDeptId }),
         });
         const d = await r.json() as { ok: boolean; error?: string };
         if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
       } else {
-        const body: Record<string, unknown> = { full_name: fullName, role, scope_division_id: scopeDivId, scope_department_id: scopeDeptId, is_active: isActive };
+        const body: Record<string, unknown> = { full_name: fullName, role, role_title: roleTitle || null, scope_division_id: scopeDivId, scope_department_id: scopeDeptId, is_active: isActive };
         if (password.length >= 6) body.new_password = password;
         const r = await fetch(`/api/admin/users/${user.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -79,6 +80,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
 
   const fields = [
     { label: "ชื่อ-นามสกุล *", el: <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" autoComplete="off" /> },
+    { label: "ตำแหน่ง", el: <input value={roleTitle} onChange={e => setRoleTitle(e.target.value)} style={inp} placeholder="เช่น ผู้จัดการฝ่ายบุคคล, หัวหน้าแผนกการพยาบาล" autoComplete="off" /> },
     { label: "Username *",     el: <input value={username} onChange={e => setUsername(e.target.value)} style={inp} disabled={!isNew} placeholder="username" autoComplete="off" /> },
     { label: "สิทธิ์การใช้งาน *", el: (
         <select value={role} onChange={e => { setRole(e.target.value); setDivisionId(""); setDepartmentId(""); }} style={inp}>
@@ -97,13 +99,18 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
           {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
     )}] : []),
-    { label: isNew ? "Password *" : "Password ใหม่ (เว้นว่างถ้าไม่เปลี่ยน)", el: (
+    { label: isNew ? "Password *" : "เปลี่ยน Password (เว้นว่างถ้าไม่เปลี่ยน)", el: (
         <div style={{ position: "relative" }}>
           <input type={showPwd ? "text" : "password"} value={password}
             onChange={e => setPassword(e.target.value)}
             style={{ ...inp, paddingRight: 40 }}
-            placeholder={isNew ? "อย่างน้อย 6 ตัวอักษร" : "เว้นว่างถ้าไม่เปลี่ยน"}
+            placeholder={isNew ? "อย่างน้อย 6 ตัวอักษร" : "กรอกเพื่อตั้งรหัสใหม่ (อย่างน้อย 6 ตัว)"}
             autoComplete="new-password" />
+          {!isNew && (
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>
+              🔒 รหัสผ่านถูกเข้ารหัสไว้ ไม่สามารถแสดงรหัสเดิมได้ — กรอกเพื่อตั้งใหม่เท่านั้น
+            </div>
+          )}
           <button type="button" onClick={() => setShowPwd(v => !v)}
             style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
               background: "none", border: "none", cursor: "pointer", padding: 4,

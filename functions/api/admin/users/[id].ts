@@ -12,15 +12,15 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     if (String(user.id) === id) return Response.json({ ok: false, error: "ไม่สามารถแก้ไข account ตัวเองได้" }, { status: 400 });
 
     const body = await ctx.request.json() as Record<string, unknown>;
-    const { role, is_active, scope_division_id, scope_department_id, full_name, new_password } = body;
+    const { role, role_title, is_active, scope_division_id, scope_department_id, full_name, new_password } = body;
 
     // head → scope by department; deputy/deputyHR → scope by division
     const divId  = (role === "head") ? null : (scope_division_id ?? null);
     const deptId = (role === "head") ? (scope_department_id ?? null) : null;
 
     await ctx.env.HR_DB.prepare(
-      "UPDATE users SET role=?, is_active=?, scope_division_id=?, scope_department_id=?, full_name=?, updated_at=datetime('now') WHERE id=?"
-    ).bind(role, is_active ? 1 : 0, divId, deptId, full_name, id).run();
+      "UPDATE users SET role=?, role_title=?, is_active=?, scope_division_id=?, scope_department_id=?, full_name=?, updated_at=datetime('now') WHERE id=?"
+    ).bind(role, role_title ?? null, is_active ? 1 : 0, divId, deptId, full_name, id).run();
 
     if (new_password && String(new_password).length >= 6) {
       const { hash, salt } = await hashPassword(new_password as string);
