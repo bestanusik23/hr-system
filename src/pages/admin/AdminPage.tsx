@@ -88,7 +88,7 @@ export default function AdminPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f4f7ff" }}>
-                {["#", "ชื่อ-นามสกุล", "Username", "สิทธิ์", "แผนก/ฝ่าย", "สถานะ", ""].map(h => (
+                {["#", "ชื่อ-นามสกุล", "ตำแหน่ง", "Username", "สิทธิ์", "แผนก / ฝ่าย", "สถานะ", ""].map(h => (
                   <th key={h} style={{ padding: "12px 16px", textAlign: "left", fontWeight: 700, color: "#475569", borderBottom: "2px solid #dce4f5", whiteSpace: "nowrap", fontSize: 11, letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</th>
                 ))}
               </tr>
@@ -97,30 +97,54 @@ export default function AdminPage() {
               {filtered.map((u, i) => (
                 <tr key={u.id} style={{ borderBottom: "1px solid #f0f5ff", background: i % 2 === 0 ? "#fff" : "#fafcff", opacity: u.is_active ? 1 : 0.5 }}>
                   <td style={{ padding: "11px 16px", color: "#94a3b8", width: 36 }}>{i + 1}</td>
+
+                  {/* ชื่อ */}
                   <td style={{ padding: "11px 16px", fontWeight: 600, color: "#0a1628" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: 10, background: (ROLE_COLOR[u.role] ?? "#94a3b8") + "1c", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: ROLE_COLOR[u.role] ?? "#94a3b8" }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0,
+                        background: (ROLE_COLOR[u.role] ?? "#94a3b8") + "1c",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 15, fontWeight: 700, color: ROLE_COLOR[u.role] ?? "#94a3b8" }}>
                         {u.full_name.charAt(0)}
                       </div>
                       {u.full_name}
                     </div>
                   </td>
-                  <td style={{ padding: "11px 16px", color: "#64748b", fontFamily: "monospace" }}>{u.username}</td>
+
+                  {/* ตำแหน่ง */}
+                  <td style={{ padding: "11px 16px", color: "#475569", fontSize: 12 }}>
+                    {u.role_title
+                      ? <span style={{ background: "#f0f5ff", borderRadius: 5, padding: "3px 9px", color: "#0038C6", fontWeight: 600 }}>{u.role_title}</span>
+                      : <span style={{ color: "#cbd5e1" }}>—</span>}
+                  </td>
+
+                  {/* Username */}
+                  <td style={{ padding: "11px 16px", color: "#64748b", fontFamily: "monospace", fontSize: 12 }}>{u.username}</td>
+
+                  {/* สิทธิ์ */}
                   <td style={{ padding: "11px 16px" }}>
                     <span style={{ background: (ROLE_COLOR[u.role] ?? "#94a3b8") + "1c", color: ROLE_COLOR[u.role] ?? "#94a3b8", borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
                       {ROLE_LABEL[u.role] ?? u.role}
                     </span>
                   </td>
-                  <td style={{ padding: "11px 16px", color: "#64748b" }}>
-                    {u.role === "head"
-                      ? (u.department_name ?? "—")
-                      : (u.division_name ?? "—")}
+
+                  {/* แผนก / ฝ่าย */}
+                  <td style={{ padding: "11px 16px", color: "#64748b", fontSize: 12 }}>
+                    {u.role === "head" && u.department_name
+                      ? <><span style={{ fontSize: 10, color: "#94a3b8" }}>แผนก </span>{u.department_name}</>
+                      : u.division_name
+                      ? <><span style={{ fontSize: 10, color: "#94a3b8" }}>ฝ่าย </span>{u.division_name}</>
+                      : <span style={{ color: "#cbd5e1" }}>—</span>}
                   </td>
+
+                  {/* สถานะ */}
                   <td style={{ padding: "11px 16px" }}>
                     <span style={{ background: u.is_active ? "#dcfce7" : "#f1f5f9", color: u.is_active ? "#16a34a" : "#94a3b8", borderRadius: 6, padding: "3px 10px", fontSize: 12, fontWeight: 700 }}>
                       {u.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
                     </span>
                   </td>
+
+                  {/* Actions */}
                   <td style={{ padding: "11px 16px" }}>
                     <div style={{ display: "flex", gap: 6 }}>
                       <button onClick={() => setEditing(u)}
