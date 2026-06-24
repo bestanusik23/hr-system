@@ -43,26 +43,32 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     if (isNew && password.length < 6) { setError("Password ต้องมีอย่างน้อย 6 ตัวอักษร"); return; }
     setSaving(true); setError("");
 
-    const scopeDivId  = ["deputy","deputyHR"].includes(role) ? (divisionId   || null) : null;
-    const scopeDeptId = role === "head"                       ? (departmentId || null) : null;
+    try {
+      const scopeDivId  = ["deputy","deputyHR"].includes(role) ? (divisionId   || null) : null;
+      const scopeDeptId = role === "head"                       ? (departmentId || null) : null;
 
-    if (isNew) {
-      const r = await fetch("/api/admin/users", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, full_name: fullName, role, scope_division_id: scopeDivId, scope_department_id: scopeDeptId }),
-      });
-      const d = await r.json() as { ok: boolean; error?: string };
-      if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); setSaving(false); return; }
-    } else {
-      const body: Record<string, unknown> = { full_name: fullName, role, scope_division_id: scopeDivId, scope_department_id: scopeDeptId, is_active: isActive };
-      if (password.length >= 6) body.new_password = password;
-      const r = await fetch(`/api/admin/users/${user.id}`, {
-        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-      });
-      const d = await r.json() as { ok: boolean; error?: string };
-      if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); setSaving(false); return; }
+      if (isNew) {
+        const r = await fetch("/api/admin/users", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password, full_name: fullName, role, scope_division_id: scopeDivId, scope_department_id: scopeDeptId }),
+        });
+        const d = await r.json() as { ok: boolean; error?: string };
+        if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      } else {
+        const body: Record<string, unknown> = { full_name: fullName, role, scope_division_id: scopeDivId, scope_department_id: scopeDeptId, is_active: isActive };
+        if (password.length >= 6) body.new_password = password;
+        const r = await fetch(`/api/admin/users/${user.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        const d = await r.json() as { ok: boolean; error?: string };
+        if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      }
+      onSaved();
+    } catch {
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่อีกครั้ง");
+    } finally {
+      setSaving(false);
     }
-    onSaved();
   }
 
   const inp: React.CSSProperties = {
