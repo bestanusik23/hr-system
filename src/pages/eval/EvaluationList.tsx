@@ -32,6 +32,18 @@ export default function EvaluationList() {
   const [statusFilter, setStatusFilter] = useState("");
   const [selected, setSelected] = useState<number | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+
+  async function deleteEval(ev: Evaluation, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`ยืนยันลบใบประเมินของ "${ev.full_name}" รอบ ${ev.round} วัน?`)) return;
+    setDeleting(ev.id);
+    const r = await fetch(`/api/eval/evaluations/${ev.id}`, { method: "DELETE" });
+    const d = await r.json() as { ok: boolean; error?: string };
+    setDeleting(null);
+    if (!d.ok) { alert(d.error ?? "ลบไม่สำเร็จ"); return; }
+    setEvals(prev => prev.filter(x => x.id !== ev.id));
+  }
 
   async function load() {
     setLoading(true);
@@ -95,6 +107,18 @@ export default function EvaluationList() {
               <span style={{ background: STATUS_COLOR[ev.status] + "22", color: STATUS_COLOR[ev.status], borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
                 {STATUS_LABEL[ev.status]}
               </span>
+              {ev.status === "draft" && (
+                <button
+                  onClick={e => deleteEval(ev, e)}
+                  disabled={deleting === ev.id}
+                  title="ลบใบประเมิน"
+                  style={{ width: 32, height: 32, borderRadius: 8, border: "1.5px solid #fecaca",
+                    background: "#fff", color: "#dc2626", fontSize: 16, cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+                    opacity: deleting === ev.id ? 0.5 : 1, transition: "all .15s" }}>
+                  {deleting === ev.id ? "…" : "×"}
+                </button>
+              )}
             </div>
           ))}
         </div>

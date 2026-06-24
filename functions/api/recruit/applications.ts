@@ -149,13 +149,14 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   try {
     const token = await getGoogleAccessToken(ctx.env);
     const sheetId = ctx.env.SHEET_APPLICATIONS;
-    const range = `Sheet1!${col}${row}`;
+    const rawRange  = `การตอบแบบฟอร์ม 1!${col}${row}`;
+    const urlRange  = `${encodeURIComponent("การตอบแบบฟอร์ม 1")}!${col}${row}`;
     const res = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=USER_ENTERED`,
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${urlRange}?valueInputOption=USER_ENTERED`,
       {
         method: "PUT",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ range, majorDimension: "ROWS", values: [[value]] }),
+        body: JSON.stringify({ range: rawRange, majorDimension: "ROWS", values: [[value]] }),
       }
     );
     const d = await res.json() as { updatedCells?: number };

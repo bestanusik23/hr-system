@@ -270,3 +270,31 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   return Response.json({ ok: false, error: "Unknown action" }, { status: 400 });
 };
+
+// DELETE /api/eval/evaluations/:id — only draft evaluations can be deleted
+export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
+  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!["hr", "admin", "head"].includes(user.role))
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const id = ctx.params.id as string;
+  const ev = await ctx.env.HR_DB.prepare(`
+    SELECT ev.status, e.department_id FROM evaluations ev
+    JOIN employees e ON e.id = ev.employee_id WHERE ev.id = ?
+  `).bind(id).first<{ status: string; department_id: number }>();
+
+  if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+  if (ev.status !== "draft")
+    return Response.json({ ok: false, error: "ลบได้เฉพาะใบประเมินที่ยังเป็นร่าง" }, { status: 409 });
+
+  // head: scope check
+  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id)
+    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  await ctx.env.HR_DB.prepare("DELETE FROM evaluation_scores WHERE evaluation_id = ?").bind(id).run();
+  await ctx.env.HR_DB.prepare("DELETE FROM evaluation_approvals WHERE evaluation_id = ?").bind(id).run();
+  await ctx.env.HR_DB.prepare("DELETE FROM evaluations WHERE id = ?").bind(id).run();
+
+  return Response.json({ ok: true });
+};
