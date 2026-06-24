@@ -59,6 +59,33 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true });
 };
 
+// PATCH /api/manpower/employees/:id — quick edit: name, position, division, dept, remark only
+export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
+  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!["hr", "admin", "deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const id = ctx.params.id as string;
+  const b = await ctx.request.json() as Record<string, unknown>;
+  const { full_name, position, division_id, department_id, remark } = b;
+
+  if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
+
+  await ctx.env.HR_DB.prepare(`
+    UPDATE employees SET full_name=?, position=?, division_id=?, department_id=?, remark=?,
+      updated_at=datetime('now')
+    WHERE id=?
+  `).bind(String(full_name), position ?? null, division_id ?? null, department_id ?? null, remark ?? null, id).run();
+
+  try {
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','quick_edit','employee',?)"
+    ).bind(user.id, user.full_name, id).run();
+  } catch { /* ignore */ }
+
+  return Response.json({ ok: true });
+};
+
 // DELETE /api/manpower/employees/:id — admin/hr; blocks if approved evaluations exist
 export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));

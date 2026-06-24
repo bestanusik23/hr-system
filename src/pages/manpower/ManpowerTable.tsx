@@ -1,16 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { MANPOWER_ROWS, type ManpowerRow } from "../../data/manpowerPlan";
 
 interface LiveEmp {
   id: number;
   full_name: string;
   position: string;
-  division_id: number;
+  division_id: number | null;
+  department_id: number | null;
   emp_status: string;
   emp_type: string;
   start_date: string;
   resign_date?: string;
+  remark?: string | null;
 }
+
+interface OrgDiv  { id: number; name: string; }
+interface OrgDept { id: number; name: string; division_id: number; }
 
 // Build map: position (trimmed, lower-cased) → active employees
 // We intentionally do NOT use division_id here because the static
@@ -34,13 +40,16 @@ interface AugRow extends ManpowerRow {
   liveFilled: number;
   liveVac: number;
   empStatus: string;
+  liveEmpId: number | null;
+  liveEmpRemark: string | null;
+  liveEmpObj: LiveEmp | null;
 }
 
 function buildAugRows(rows: ManpowerRow[], liveMap: Map<string, LiveEmp[]>): AugRow[] {
   const ptrMap = new Map<string, number>();
   return rows.map(r => {
     if (r.type !== "slot") {
-      return { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "" };
+      return { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
     }
     const key = r.pos.trim().toLowerCase();
     const pool = liveMap.get(key) ?? [];
@@ -48,9 +57,9 @@ function buildAugRows(rows: ManpowerRow[], liveMap: Map<string, LiveEmp[]>): Aug
     ptrMap.set(key, ptr + 1);
     if (ptr < pool.length) {
       const e = pool[ptr];
-      return { ...r, liveEmp: e.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: e.emp_status };
+      return { ...r, liveEmp: e.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: e.emp_status, liveEmpId: e.id, liveEmpRemark: e.remark ?? null, liveEmpObj: e };
     }
-    return { ...r, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "" };
+    return { ...r, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
   });
 }
 
@@ -79,6 +88,9 @@ const STATUS_BADGE: Record<string, { label: string; color: string }> = {
 };
 
 export default function ManpowerTable() {
+  const { user } = useAuth();
+  const canEdit = user && ["hr", "admin", "deputyHR"].includes(user.role);
+
   const [q, setQ]                 = useState("");
   const [filterDiv, setFilterDiv] = useState(0);
   const [vacOnly, setVacOnly]     = useState(false);
@@ -87,6 +99,67 @@ export default function ManpowerTable() {
   const [liveEmps, setLiveEmps]   = useState<LiveEmp[]>([]);
   const [loading, setLoading]     = useState(true);
   const [liveError, setLiveError] = useState("");
+
+  // Edit modal state
+  const [editEmp,    setEditEmp]    = useState<LiveEmp | null>(null);
+  const [editName,   setEditName]   = useState("");
+  const [editPos,    setEditPos]    = useState("");
+  const [editDivId,  setEditDivId]  = useState<number | "">("");
+  const [editDeptId, setEditDeptId] = useState<number | "">("");
+  const [editRemark, setEditRemark] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError,  setEditError]  = useState("");
+  const [orgDivs,    setOrgDivs]    = useState<OrgDiv[]>([]);
+  const [orgDepts,   setOrgDepts]   = useState<OrgDept[]>([]);
+
+  // Fetch org structure for edit modal
+  useEffect(() => {
+    fetch("/api/eval/org").then(r => r.json()).then((d: { divisions: OrgDiv[]; departments: OrgDept[] }) => {
+      setOrgDivs(d.divisions ?? []);
+      setOrgDepts(d.departments ?? []);
+    }).catch(() => { /* silent */ });
+  }, []);
+
+  // Populate edit form when employee selected
+  useEffect(() => {
+    if (editEmp) {
+      setEditName(editEmp.full_name ?? "");
+      setEditPos(editEmp.position ?? "");
+      setEditDivId(editEmp.division_id ?? "");
+      setEditDeptId(editEmp.department_id ?? "");
+      setEditRemark(editEmp.remark ?? "");
+      setEditError("");
+    }
+  }, [editEmp]);
+
+  async function saveEdit() {
+    if (!editEmp) return;
+    if (!editName.trim()) { setEditError("กรุณากรอกชื่อพนักงาน"); return; }
+    setEditSaving(true); setEditError("");
+    try {
+      const r = await fetch(`/api/manpower/employees/${editEmp.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: editName.trim(),
+          position: editPos.trim() || null,
+          division_id: editDivId || null,
+          department_id: editDeptId || null,
+          remark: editRemark.trim() || null,
+        }),
+      });
+      const d = await r.json() as { ok: boolean; error?: string };
+      if (!d.ok) { setEditError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      setEditEmp(null);
+      // Reload live data
+      fetch("/api/manpower/employees").then(r => r.json())
+        .then((d: { ok: boolean; employees: LiveEmp[] }) => { if (d.ok) setLiveEmps(d.employees ?? []); });
+    } catch {
+      setEditError("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setEditSaving(false);
+    }
+  }
 
   // Fetch live employees
   useEffect(() => {
@@ -238,6 +311,7 @@ export default function ManpowerTable() {
                   <th style={{ ...th, textAlign: "center", width: 70 }}>คงเหลือ</th>
                   <th style={{ ...th, minWidth: 180 }}>ชื่อ-นามสกุล</th>
                   <th style={{ ...th, minWidth: 120 }}>หมายเหตุ</th>
+                  {canEdit && <th style={{ ...th, width: 50 }}></th>}
                 </tr>
               </thead>
               <tbody>
@@ -246,12 +320,14 @@ export default function ManpowerTable() {
                   return visibleRows.map((r, i) => {
                     if (r._hidden) return null;
 
+                    const colSpan = canEdit ? 8 : 7;
+
                     if (r.type === "division") {
                       const isCollapsed = collapsed[r.divId];
                       return (
                         <tr key={i} onClick={() => toggleDiv(r.divId)}
                           style={{ cursor: "pointer", userSelect: "none" }}>
-                          <td colSpan={7} style={{ background: "#FFFF00", padding: "9px 14px",
+                          <td colSpan={colSpan} style={{ background: "#FFFF00", padding: "9px 14px",
                             fontWeight: 800, fontSize: 13, color: "#1a1a00",
                             borderBottom: "1px solid #e5e000" }}>
                             <span style={{ marginRight: 8, fontSize: 10 }}>{isCollapsed ? "▶" : "▼"}</span>
@@ -264,7 +340,7 @@ export default function ManpowerTable() {
                     if (r.type === "subdept") {
                       return (
                         <tr key={i}>
-                          <td colSpan={7} style={{ background: "#fffde7", padding: "7px 22px",
+                          <td colSpan={colSpan} style={{ background: "#fffde7", padding: "7px 22px",
                             fontWeight: 700, fontSize: 12.5, color: "#78690a",
                             borderBottom: "1px solid #f0e000" }}>
                             {r.name}
@@ -276,7 +352,7 @@ export default function ManpowerTable() {
                     if (r.type === "section") {
                       return (
                         <tr key={i}>
-                          <td colSpan={7} style={{ background: "#f0f4ff", padding: "6px 30px",
+                          <td colSpan={colSpan} style={{ background: "#f0f4ff", padding: "6px 30px",
                             fontWeight: 600, fontSize: 12, color: "#3b4a8f",
                             borderBottom: "1px solid #dce4f5" }}>
                             {r.name}
@@ -319,7 +395,22 @@ export default function ManpowerTable() {
                             <span style={{ color: "#f87171", fontSize: 12 }}>ว่าง</span>
                           )}
                         </td>
-                        <td style={{ ...td, color: "#94a3b8", fontSize: 11.5 }}>{r.note || ""}</td>
+                        <td style={{ ...td, color: "#94a3b8", fontSize: 11.5 }}>
+                          {r.liveEmpRemark || r.note || ""}
+                        </td>
+                        {canEdit && (
+                          <td style={{ ...td, textAlign: "center", padding: "4px 8px" }}>
+                            {r.liveEmpObj && (
+                              <button
+                                onClick={() => setEditEmp(r.liveEmpObj)}
+                                title="แก้ไขข้อมูล"
+                                style={{ background: "none", border: "1px solid #c4cfee", borderRadius: 6,
+                                  padding: "3px 8px", cursor: "pointer", fontSize: 12, color: "#0038C6" }}>
+                                ✏️
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     );
                   });
@@ -329,6 +420,118 @@ export default function ManpowerTable() {
           </div>
         )}
       </div>
+
+      {/* Edit Employee Modal */}
+      {editEmp && (
+        <div onClick={e => { if (e.target === e.currentTarget) setEditEmp(null); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 460,
+            boxShadow: "0 24px 60px rgba(0,56,198,0.22)", border: "1px solid #c4cfee",
+            borderTop: "4px solid #0038C6", padding: "28px 30px" }}>
+
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#0a1628", marginBottom: 20,
+              display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 4, height: 18, borderRadius: 2, background: "#0038C6" }} />
+              แก้ไขข้อมูลพนักงาน
+            </div>
+
+            {/* Name */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                ชื่อ-นามสกุล *
+              </label>
+              <input value={editName} onChange={e => setEditName(e.target.value)}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  outline: "none", boxSizing: "border-box" as const }} />
+            </div>
+
+            {/* Position */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                ตำแหน่ง
+              </label>
+              <input value={editPos} onChange={e => setEditPos(e.target.value)}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  outline: "none", boxSizing: "border-box" as const }} />
+            </div>
+
+            {/* Division */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                ฝ่าย
+              </label>
+              <select value={editDivId}
+                onChange={e => { setEditDivId(e.target.value ? Number(e.target.value) : ""); setEditDeptId(""); }}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  outline: "none", background: "#fff", boxSizing: "border-box" as const }}>
+                <option value="">-- เลือกฝ่าย --</option>
+                {orgDivs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+
+            {/* Department */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                แผนก
+              </label>
+              <select value={editDeptId}
+                onChange={e => setEditDeptId(e.target.value ? Number(e.target.value) : "")}
+                disabled={!editDivId}
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  outline: "none", background: "#fff", boxSizing: "border-box" as const }}>
+                <option value="">{editDivId ? "-- เลือกแผนก (ไม่บังคับ) --" : "-- เลือกฝ่ายก่อน --"}</option>
+                {orgDepts.filter(d => d.division_id === Number(editDivId)).map(d =>
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                )}
+              </select>
+            </div>
+
+            {/* Remark */}
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                หมายเหตุ
+              </label>
+              <input value={editRemark} onChange={e => setEditRemark(e.target.value)}
+                placeholder="เช่น แจ้งเข้า สพ.6, ลาคลอด, รออัตรา..."
+                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  outline: "none", boxSizing: "border-box" as const }} />
+            </div>
+
+            {editError && (
+              <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 7,
+                padding: "9px 12px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>
+                {editError}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setEditEmp(null)} disabled={editSaving}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+                  background: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+                ยกเลิก
+              </button>
+              <button onClick={saveEdit} disabled={editSaving}
+                style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none",
+                  background: editSaving ? "#94a3b8" : "#0038C6", color: "#fff",
+                  fontWeight: 700, cursor: editSaving ? "not-allowed" : "pointer",
+                  fontFamily: "inherit", fontSize: 13 }}>
+                {editSaving ? "กำลังบันทึก…" : "บันทึก"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
