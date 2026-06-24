@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 interface Division   { id: number; name: string; }
 interface Department { id: number; name: string; division_id: number; }
+interface Position   { position: string; division_id: number; department_id: number | null; }
 interface UserRow {
   id: number; username: string; full_name: string; role: string; role_title: string | null;
   scope_division_id: number | null; scope_department_id: number | null; is_active: number;
@@ -16,47 +17,111 @@ const ROLES = [
   { value: "admin",    label: "ผู้ดูแลระบบ (Admin)" },
 ];
 
+const inp: React.CSSProperties = {
+  width: "100%", padding: "9px 12px", borderRadius: 7,
+  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+  outline: "none", boxSizing: "border-box" as const, background: "#fff",
+};
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+        letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 7 }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
 export default function UserForm({ user, onClose, onSaved }: Props) {
   const isNew = !user;
+
   const [fullName,     setFullName]     = useState(user?.full_name ?? "");
   const [username,     setUsername]     = useState(user?.username ?? "");
   const [role,         setRole]         = useState(user?.role ?? "hr");
   const [roleTitle,    setRoleTitle]    = useState(user?.role_title ?? "");
+  const [customTitle,  setCustomTitle]  = useState("");
+  const [useCustom,    setUseCustom]    = useState(false);
   const [divisionId,   setDivisionId]   = useState<number | "">(user?.scope_division_id ?? "");
   const [departmentId, setDepartmentId] = useState<number | "">(user?.scope_department_id ?? "");
   const [isActive,     setIsActive]     = useState(user?.is_active !== 0);
   const [password,     setPassword]     = useState("");
+  const [showPwd,      setShowPwd]      = useState(false);
+
   const [divisions,    setDivisions]    = useState<Division[]>([]);
   const [departments,  setDepartments]  = useState<Department[]>([]);
-  const [saving,       setSaving]       = useState(false);
-  const [error,        setError]        = useState("");
-  const [showPwd,      setShowPwd]      = useState(false);
+  const [positions,    setPositions]    = useState<Position[]>([]);
+
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState("");
 
   useEffect(() => {
     fetch("/api/eval/org").then(r => r.json())
-      .then((d: { divisions: Division[]; departments: Department[] }) => {
-        setDivisions(d.divisions ?? []); setDepartments(d.departments ?? []);
+      .then((d: { divisions: Division[]; departments: Department[]; positions: Position[] }) => {
+        setDivisions(d.divisions ?? []);
+        setDepartments(d.departments ?? []);
+        setPositions(d.positions ?? []);
       });
   }, []);
+
+  // derived
+  const filteredDepts = departments.filter(d => !divisionId || d.division_id === divisionId);
+
+  const filteredPositions = positions.filter(p => {
+    if (divisionId && p.division_id !== divisionId) return false;
+    if (departmentId && p.department_id !== null && p.department_id !== departmentId) return false;
+    return true;
+  });
+  const uniquePositions = [...new Set(filteredPositions.map(p => p.position))].sort();
+
+  function handleDivisionChange(val: number | "") {
+    setDivisionId(val);
+    setDepartmentId("");
+    setRoleTitle("");
+    setCustomTitle("");
+    setUseCustom(false);
+  }
+  function handleDeptChange(val: number | "") {
+    setDepartmentId(val);
+    setRoleTitle("");
+    setCustomTitle("");
+    setUseCustom(false);
+  }
+  function handlePositionChange(val: string) {
+    if (val === "__custom__") { setUseCustom(true); setRoleTitle(""); }
+    else { setUseCustom(false); setRoleTitle(val); }
+  }
 
   async function save() {
     if (!fullName.trim() || !username.trim()) { setError("กรุณากรอกชื่อและ username"); return; }
     if (isNew && password.length < 6) { setError("Password ต้องมีอย่างน้อย 6 ตัวอักษร"); return; }
     setSaving(true); setError("");
 
-    try {
-      const scopeDivId  = ["deputy","deputyHR"].includes(role) ? (divisionId   || null) : null;
-      const scopeDeptId = role === "head"                       ? (departmentId || null) : null;
+    const finalTitle = useCustom ? customTitle : roleTitle;
+    const scopeDivId  = ["deputy","deputyHR"].includes(role) ? (divisionId  || null) : null;
+    const scopeDeptId = role === "head"                       ? (departmentId || null) : null;
 
+    try {
       if (isNew) {
         const r = await fetch("/api/admin/users", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password, full_name: fullName, role, role_title: roleTitle || null, scope_division_id: scopeDivId, scope_department_id: scopeDeptId }),
+          body: JSON.stringify({
+            username, password, full_name: fullName, role,
+            role_title: finalTitle || null,
+            scope_division_id: scopeDivId, scope_department_id: scopeDeptId,
+          }),
         });
         const d = await r.json() as { ok: boolean; error?: string };
         if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
       } else {
-        const body: Record<string, unknown> = { full_name: fullName, role, role_title: roleTitle || null, scope_division_id: scopeDivId, scope_department_id: scopeDeptId, is_active: isActive };
+        const body: Record<string, unknown> = {
+          full_name: fullName, role,
+          role_title: finalTitle || null,
+          scope_division_id: scopeDivId, scope_department_id: scopeDeptId,
+          is_active: isActive,
+        };
         if (password.length >= 6) body.new_password = password;
         const r = await fetch(`/api/admin/users/${user.id}`, {
           method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
@@ -72,89 +137,124 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     }
   }
 
-  const inp: React.CSSProperties = {
-    width: "100%", padding: "9px 12px", borderRadius: 7,
-    border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
-    outline: "none", boxSizing: "border-box" as const,
-  };
-
-  const fields = [
-    { label: "ชื่อ-นามสกุล *", el: <input value={fullName} onChange={e => setFullName(e.target.value)} style={inp} placeholder="ชื่อ นามสกุล" autoComplete="off" /> },
-    { label: "ตำแหน่ง", el: <input value={roleTitle} onChange={e => setRoleTitle(e.target.value)} style={inp} placeholder="เช่น ผู้จัดการฝ่ายบุคคล, หัวหน้าแผนกการพยาบาล" autoComplete="off" /> },
-    { label: "Username *",     el: <input value={username} onChange={e => setUsername(e.target.value)} style={inp} disabled={!isNew} placeholder="username" autoComplete="off" /> },
-    { label: "สิทธิ์การใช้งาน *", el: (
-        <select value={role} onChange={e => { setRole(e.target.value); setDivisionId(""); setDepartmentId(""); }} style={inp}>
-          {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-        </select>
-    )},
-    ...(role === "head" ? [{ label: "แผนกที่รับผิดชอบ *", el: (
-        <select value={departmentId} onChange={e => setDepartmentId(Number(e.target.value))} style={inp}>
-          <option value="">-- เลือกแผนก --</option>
-          {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-    )}] : []),
-    ...(["deputy","deputyHR"].includes(role) ? [{ label: "ฝ่ายที่รับผิดชอบ *", el: (
-        <select value={divisionId} onChange={e => setDivisionId(Number(e.target.value))} style={inp}>
-          <option value="">-- เลือกฝ่าย (เว้นว่าง = ดูแลทุกฝ่าย) --</option>
-          {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-        </select>
-    )}] : []),
-    { label: isNew ? "Password *" : "เปลี่ยน Password (เว้นว่างถ้าไม่เปลี่ยน)", el: (
-        <div style={{ position: "relative" }}>
-          <input type={showPwd ? "text" : "password"} value={password}
-            onChange={e => setPassword(e.target.value)}
-            style={{ ...inp, paddingRight: 40 }}
-            placeholder={isNew ? "อย่างน้อย 6 ตัวอักษร" : "กรอกเพื่อตั้งรหัสใหม่ (อย่างน้อย 6 ตัว)"}
-            autoComplete="new-password" />
-          {!isNew && (
-            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>
-              🔒 รหัสผ่านถูกเข้ารหัสไว้ ไม่สามารถแสดงรหัสเดิมได้ — กรอกเพื่อตั้งใหม่เท่านั้น
-            </div>
-          )}
-          <button type="button" onClick={() => setShowPwd(v => !v)}
-            style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
-              background: "none", border: "none", cursor: "pointer", padding: 4,
-              color: "#94a3b8", display: "flex", alignItems: "center" }}>
-            {showPwd
-              ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                  <line x1="1" y1="1" x2="23" y2="23"/>
-                </svg>
-              : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-            }
-          </button>
-        </div>
-    )},
-  ];
-
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
         display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 20 }}>
-      <div style={{ background: "#fff", borderRadius: 10, width: "100%", maxWidth: 480,
-        maxHeight: "90vh", overflowY: "auto",
+      <div style={{ background: "#fff", borderRadius: 10, width: "100%", maxWidth: 500,
+        maxHeight: "92vh", overflowY: "auto",
         boxShadow: "0 24px 60px rgba(0,56,198,0.25)",
         border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
         <div style={{ padding: "26px 28px" }}>
+
+          {/* Title */}
           <div style={{ fontSize: 17, fontWeight: 700, color: "#0a1628", marginBottom: 22,
             display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 4, height: 18, borderRadius: 2, background: "#0038C6" }} />
             {isNew ? "เพิ่มผู้ใช้งานใหม่" : `แก้ไข: ${user.full_name}`}
           </div>
 
-          {fields.map(({ label, el }) => (
-            <div key={label} style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 7 }}>
-                {label}
-              </label>
-              {el}
-            </div>
-          ))}
+          {/* ชื่อ */}
+          <Field label="ชื่อ-นามสกุล *">
+            <input value={fullName} onChange={e => setFullName(e.target.value)}
+              style={inp} placeholder="ชื่อ นามสกุล" autoComplete="off" />
+          </Field>
 
+          {/* ฝ่าย */}
+          <Field label="ฝ่าย">
+            <select value={divisionId} onChange={e => handleDivisionChange(e.target.value ? Number(e.target.value) : "")} style={inp}>
+              <option value="">-- เลือกฝ่าย --</option>
+              {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </Field>
+
+          {/* แผนก (กรองตามฝ่าย) */}
+          <Field label="แผนก">
+            <select value={departmentId} onChange={e => handleDeptChange(e.target.value ? Number(e.target.value) : "")} style={inp}
+              disabled={!divisionId}>
+              <option value="">{divisionId ? "-- เลือกแผนก (ไม่บังคับ) --" : "-- เลือกฝ่ายก่อน --"}</option>
+              {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </Field>
+
+          {/* ตำแหน่ง (กรองตามฝ่าย+แผนก) */}
+          <Field label="ตำแหน่ง">
+            {divisionId ? (
+              <>
+                <select
+                  value={useCustom ? "__custom__" : roleTitle}
+                  onChange={e => handlePositionChange(e.target.value)}
+                  style={inp}>
+                  <option value="">-- เลือกตำแหน่ง --</option>
+                  {uniquePositions.map(p => <option key={p} value={p}>{p}</option>)}
+                  <option value="__custom__">✏️ พิมพ์เอง…</option>
+                </select>
+                {useCustom && (
+                  <input value={customTitle} onChange={e => setCustomTitle(e.target.value)}
+                    style={{ ...inp, marginTop: 7 }} placeholder="พิมพ์ตำแหน่ง..." autoComplete="off" />
+                )}
+                {!useCustom && roleTitle && (
+                  <div style={{ fontSize: 11, color: "#0038C6", marginTop: 4 }}>
+                    ✓ ตำแหน่งที่เลือก: {roleTitle}
+                  </div>
+                )}
+              </>
+            ) : (
+              <input value={roleTitle} onChange={e => setRoleTitle(e.target.value)}
+                style={inp} placeholder="เลือกฝ่ายก่อนเพื่อดูตำแหน่ง หรือพิมพ์ตรงนี้" autoComplete="off" />
+            )}
+          </Field>
+
+          {/* Username */}
+          <Field label="Username *">
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              style={{ ...inp, background: !isNew ? "#f8fafc" : "#fff" }}
+              disabled={!isNew} placeholder="username" autoComplete="off" />
+          </Field>
+
+          {/* Role */}
+          <Field label="สิทธิ์การใช้งาน *">
+            <select value={role} onChange={e => setRole(e.target.value)} style={inp}>
+              {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+            </select>
+          </Field>
+
+          {/* Scope hint */}
+          {(role === "head" || ["deputy","deputyHR"].includes(role)) && (
+            <div style={{ background: "#f0f5ff", borderRadius: 7, padding: "10px 14px",
+              marginBottom: 14, fontSize: 12, color: "#475569", border: "1px solid #dce4f5" }}>
+              {role === "head"
+                ? `🏥 หัวหน้าแผนก: จะเห็นเฉพาะข้อมูลใน${departmentId ? `แผนก "${filteredDepts.find(d=>d.id===departmentId)?.name ?? ""}"` : "แผนกที่เลือก (กรุณาเลือกแผนก)"}`
+                : `🏢 รองผู้อำนวยการ: จะเห็นข้อมูลใน${divisionId ? `ฝ่าย "${divisions.find(d=>d.id===divisionId)?.name ?? ""}"` : "ทุกฝ่าย (หากไม่เลือกฝ่าย)"}`}
+            </div>
+          )}
+
+          {/* Password */}
+          <Field label={isNew ? "Password *" : "เปลี่ยน Password"}>
+            <div style={{ position: "relative" }}>
+              <input type={showPwd ? "text" : "password"} value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{ ...inp, paddingRight: 40 }}
+                placeholder={isNew ? "อย่างน้อย 6 ตัวอักษร" : "กรอกเพื่อตั้งรหัสใหม่ (อย่างน้อย 6 ตัว)"}
+                autoComplete="new-password" />
+              <button type="button" onClick={() => setShowPwd(v => !v)}
+                style={{ position: "absolute", right: 8, top: 10,
+                  background: "none", border: "none", cursor: "pointer", padding: 4,
+                  color: "#94a3b8", display: "flex", alignItems: "center" }}>
+                {showPwd
+                  ? <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                }
+              </button>
+            </div>
+            {!isNew && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 5 }}>
+                🔒 รหัสผ่านถูกเข้ารหัสไว้ ไม่สามารถแสดงรหัสเดิมได้ — กรอกเพื่อตั้งใหม่เท่านั้น
+              </div>
+            )}
+          </Field>
+
+          {/* สถานะ (edit only) */}
           {!isNew && (
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 700, color: "#475569", letterSpacing: "0.08em" }}>สถานะ</label>
@@ -169,15 +269,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
             </div>
           )}
 
-          {(role === "head" || ["deputy","deputyHR"].includes(role)) && (
-            <div style={{ background: "#f0f5ff", borderRadius: 7, padding: "10px 14px",
-              marginBottom: 14, fontSize: 12, color: "#475569", border: "1px solid #dce4f5" }}>
-              {role === "head"
-                ? "หัวหน้าแผนก: เห็นเฉพาะข้อมูลในแผนกที่เลือก"
-                : "รองผู้อำนวยการ: เห็นเฉพาะข้อมูลในฝ่ายที่เลือก (หากไม่เลือก = เห็นทุกฝ่าย)"}
-            </div>
-          )}
-
+          {/* Error */}
           {error && (
             <div style={{ background: "#fee2e2", border: "1px solid #fecaca",
               borderRadius: 7, padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>
@@ -185,6 +277,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
             </div>
           )}
 
+          {/* Buttons */}
           <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
             <button onClick={onClose}
               style={{ flex: 1, padding: "11px 0", borderRadius: 7,
@@ -194,11 +287,12 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
             </button>
             <button onClick={save} disabled={saving}
               style={{ flex: 2, padding: "11px 0", borderRadius: 7, border: "none",
-                background: "#0038C6", color: "#fff", fontWeight: 700,
-                cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+                background: saving ? "#94a3b8" : "#0038C6", color: "#fff", fontWeight: 700,
+                cursor: saving ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 13 }}>
               {saving ? "กำลังบันทึก…" : isNew ? "สร้างผู้ใช้" : "บันทึก"}
             </button>
           </div>
+
         </div>
       </div>
     </div>
