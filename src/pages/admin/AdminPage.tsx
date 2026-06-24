@@ -135,8 +135,8 @@ export default function AdminPage() {
         </div>
       )}
 
-      {showNew && <UserForm user={null} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />}
-      {editing && <UserForm user={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />}
+      {showNew && <UserForm user={null} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); setSearch(""); load(); }} />}
+      {editing && <UserForm user={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); setSearch(""); load(); }} />}
 
       {/* Delete confirmation modal */}
       {confirmDelete && (
