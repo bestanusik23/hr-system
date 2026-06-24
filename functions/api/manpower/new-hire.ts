@@ -46,9 +46,11 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const newId = result.meta.last_row_id as number;
 
-  await ctx.env.HR_DB.prepare(
-    "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','new_hire','employee',?)"
-  ).bind(user.id, user.full_name, newId).run();
+  try {
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','new_hire','employee',?)"
+    ).bind(user.id, user.full_name, newId).run();
+  } catch { /* activity_log is non-critical */ }
 
   return Response.json({ ok: true, id: newId, probation_end_date: probEnd }, { status: 201 });
 };

@@ -136,21 +136,31 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
     if (!fullName.trim()) { setError("กรุณากรอกชื่อพนักงาน"); return; }
     if (!startDate) { setError("กรุณาระบุวันที่เริ่มงาน"); return; }
     setSaving(true); setError("");
-    const r = await fetch("/api/manpower/new-hire", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        full_name: fullName, name_en: nameEn || null, start_date: startDate,
-        department_id: deptId || null, division_id: divId || null,
-        position: position || null, emp_type: empType || null, probation_days: probDays,
-        license_number: licenseNo || null, license_expiry: licenseExp || null,
-        car_plate_1: car1 || null, car_plate_2: car2 || null,
-        moto_plate_1: moto1 || null, moto_plate_2: moto2 || null,
-      }),
-    });
-    const d = await r.json() as { ok: boolean; error?: string; probation_end_date?: string | null };
-    setSaving(false);
-    if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    setDone({ probation_end_date: d.probation_end_date ?? null });
+    try {
+      const r = await fetch("/api/manpower/new-hire", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          full_name: fullName, name_en: nameEn || null, start_date: startDate,
+          department_id: deptId || null, division_id: divId || null,
+          position: position || null, emp_type: empType || null, probation_days: probDays,
+          license_number: licenseNo || null, license_expiry: licenseExp || null,
+          car_plate_1: car1 || null, car_plate_2: car2 || null,
+          moto_plate_1: moto1 || null, moto_plate_2: moto2 || null,
+        }),
+      });
+      let d: { ok: boolean; error?: string; probation_end_date?: string | null };
+      try {
+        d = await r.json() as typeof d;
+      } catch {
+        throw new Error(`Server error (${r.status})`);
+      }
+      if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      setDone({ probation_end_date: d.probation_end_date ?? null });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (done) {
