@@ -36,6 +36,7 @@ export default function EvaluationList() {
   const [showNew, setShowNew] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
   function showToast(msg: string, type: "success" | "error" = "success") {
+    console.log("[EvaluationList] showToast:", msg, type);
     const el = document.createElement("div");
     el.textContent = msg;
     Object.assign(el.style, {

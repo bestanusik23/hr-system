@@ -241,6 +241,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
       }),
     });
     const d = await r.json() as { ok: boolean; error?: string };
+    console.log("[EvalForm] save response:", action, d);
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     const ACTION_MSG: Record<string, string> = {

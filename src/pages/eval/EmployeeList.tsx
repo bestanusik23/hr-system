@@ -69,6 +69,7 @@ export default function EmployeeList() {
   const [confirmDelete, setConfirmDelete] = useState<Employee | null>(null);
   const [deleteError, setDeleteError] = useState("");
   function showToast(msg: string) {
+    console.log("[EmployeeList] showToast:", msg);
     const el = document.createElement("div");
     el.textContent = msg;
     Object.assign(el.style, {
