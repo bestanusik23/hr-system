@@ -35,6 +35,12 @@ export default function EvaluationList() {
   const [selected, setSelected] = useState<number | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+
+  function showToast(msg: string, type: "success" | "error" = "success") {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  }
 
   async function deleteEval(ev: Evaluation, e: React.MouseEvent) {
     e.stopPropagation();
@@ -56,8 +62,9 @@ export default function EvaluationList() {
     });
     const d = await r.json() as { ok: boolean; error?: string };
     setDeleting(null);
-    if (!d.ok) { alert(d.error ?? "ส่งไม่สำเร็จ"); return; }
+    if (!d.ok) { showToast(d.error ?? "ส่งไม่สำเร็จ", "error"); return; }
     setEvals(prev => prev.map(x => x.id === ev.id ? { ...x, status: "pending_head" } : x));
+    showToast(`✅ ส่งใบประเมินของ "${ev.full_name}" ให้หัวหน้าแผนกเรียบร้อยแล้ว`);
   }
 
   const isHR = user && ["hr", "admin"].includes(user.role);
@@ -166,6 +173,20 @@ export default function EvaluationList() {
       )}
       {showNew && (
         <NewEvalDialog onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />
+      )}
+
+      {/* Toast notification */}
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: toast.type === "success" ? "#16a34a" : "#dc2626",
+          color: "#fff", borderRadius: 10, padding: "13px 22px",
+          fontSize: 14, fontWeight: 600, boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
+          zIndex: 999, whiteSpace: "nowrap", maxWidth: "90vw",
+          animation: "fadeInUp .2s ease",
+        }}>
+          {toast.msg}
+        </div>
       )}
     </div>
   );
