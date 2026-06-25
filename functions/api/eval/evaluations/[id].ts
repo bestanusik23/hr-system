@@ -71,6 +71,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
 // PUT /api/eval/evaluations/:id — 4-step workflow
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
+  try {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
@@ -285,6 +286,9 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   }
 
   return Response.json({ ok: false, error: "Unknown action" }, { status: 400 });
+  } catch (e) {
+    return Response.json({ ok: false, error: String(e) }, { status: 500 });
+  }
 };
 
 // DELETE /api/eval/evaluations/:id — only draft evaluations can be deleted

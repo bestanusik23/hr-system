@@ -240,7 +240,14 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
         signer_hr: signerHR || null, signer_director: signerDir || null,
       }),
     });
-    const d = await r.json() as { ok: boolean; error?: string };
+    let d: { ok: boolean; error?: string };
+    try {
+      d = await r.json() as { ok: boolean; error?: string };
+    } catch {
+      setSaving(false);
+      setError(`เซิร์ฟเวอร์ผิดพลาด (${r.status}) — กรุณาลองใหม่`);
+      return;
+    }
     console.log("[EvalForm] save response:", action, d);
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
