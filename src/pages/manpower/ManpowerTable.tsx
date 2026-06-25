@@ -159,6 +159,36 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, all
   return result;
 }
 
+interface RowMeta {
+  blockPosKeys: string[];   // all posKeys in this slot-block (in current display order)
+  posKey: string;           // this row's posKey
+  isFirstInGroup: boolean;  // first row of this position group
+}
+
+// Apply custom ordering: reorder position groups within each consecutive slot-block.
+function applyOrder(rows: AugRow[], order: Record<string, number>): AugRow[] {
+  const out: AugRow[] = [];
+  let i = 0;
+  while (i < rows.length) {
+    if (rows[i].type !== "slot") { out.push(rows[i]); i++; continue; }
+    const groups = new Map<string, AugRow[]>();
+    const origSeq: string[] = [];
+    while (i < rows.length && rows[i].type === "slot") {
+      const k = `${rows[i].divId}|${rows[i].pos.trim().toLowerCase()}`;
+      if (!groups.has(k)) { groups.set(k, []); origSeq.push(k); }
+      groups.get(k)!.push(rows[i]);
+      i++;
+    }
+    const sorted = [...origSeq].sort((a, b) => {
+      const ai = a in order ? order[a] : origSeq.indexOf(a) * 100;
+      const bi = b in order ? order[b] : origSeq.indexOf(b) * 100;
+      return ai - bi;
+    });
+    for (const k of sorted) out.push(...groups.get(k)!);
+  }
+  return out;
+}
+
 // Division names loaded from DB at runtime (see orgDivs state)
 function buildDivNames(orgDivs: OrgDiv[]): Record<number, string> {
   const m: Record<number, string> = {};
@@ -200,6 +230,10 @@ export default function ManpowerTable() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Edit modal state
+  const [customOrder, setCustomOrder] = useState<Record<string, number>>(() => {
+    try { return JSON.parse(localStorage.getItem("mpRowOrder") ?? "{}"); } catch { return {}; }
+  });
+
   const [editEmp,    setEditEmp]    = useState<LiveEmp | null>(null);
   const [editName,   setEditName]   = useState("");
   const [editPos,    setEditPos]    = useState("");
@@ -292,9 +326,28 @@ export default function ManpowerTable() {
     };
   }, [fetchEmployees]);
 
-  const divNames  = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
-  const liveMaps  = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
-  const augRows   = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps, liveEmps), [liveMaps, liveEmps]);
+  // Persist row order to localStorage
+  useEffect(() => {
+    localStorage.setItem("mpRowOrder", JSON.stringify(customOrder));
+  }, [customOrder]);
+
+  function moveGroup(blockPosKeys: string[], posKey: string, direction: "up" | "down") {
+    const idx = blockPosKeys.indexOf(posKey);
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= blockPosKeys.length) return;
+    const targetKey = blockPosKeys[targetIdx];
+    setCustomOrder(prev => {
+      const updated = { ...prev };
+      blockPosKeys.forEach((k, i) => { if (!(k in updated)) updated[k] = i * 10; });
+      [updated[posKey], updated[targetKey]] = [updated[targetKey], updated[posKey]];
+      return updated;
+    });
+  }
+
+  const divNames     = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
+  const liveMaps     = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
+  const augRows      = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps, liveEmps), [liveMaps, liveEmps]);
+  const orderedRows  = useMemo(() => applyOrder(augRows, customOrder), [augRows, customOrder]);
 
   // Summary from live data
   const summary = useMemo(() => {
@@ -305,7 +358,7 @@ export default function ManpowerTable() {
       if (r.type === "division") deptSet.add(r.divId);
     }
     return { totalPlan, totalFilled, totalVac: totalPlan - totalFilled, totalDepts: deptSet.size };
-  }, [augRows]);
+  }, [orderedRows]);
 
   function toggleDiv(divId: number) {
     setCollapsed(prev => ({ ...prev, [divId]: !prev[divId] }));
@@ -313,7 +366,7 @@ export default function ManpowerTable() {
 
   const filtered = useMemo(() => {
     const ql = q.toLowerCase();
-    return augRows.filter(r => {
+    return orderedRows.filter(r => {
       if (filterDiv && r.divId !== filterDiv) return false;
       if (vacOnly && r.type === "slot" && r.liveVac <= 0) return false;
       if (ql && r.type === "slot") {
@@ -330,6 +383,32 @@ export default function ManpowerTable() {
       return b.liveVac - a.liveVac;
     });
   }, [filtered, sortVac]);
+
+  // Pre-compute block metadata for ↑↓ buttons (disabled when sort-by-vac is on)
+  const blockMeta = useMemo((): (RowMeta | null)[] => {
+    if (sortVac) return display.map(() => null);
+    const meta: (RowMeta | null)[] = [];
+    let i = 0;
+    while (i < display.length) {
+      if (display[i].type !== "slot") { meta.push(null); i++; continue; }
+      const posKeys: string[] = [];
+      const rowKeys: string[] = [];
+      let j = i;
+      while (j < display.length && display[j].type === "slot") {
+        const k = `${display[j].divId}|${display[j].pos.trim().toLowerCase()}`;
+        if (!posKeys.includes(k)) posKeys.push(k);
+        rowKeys.push(k);
+        j++;
+      }
+      for (let r = i; r < j; r++) {
+        const k = rowKeys[r - i];
+        const isFirst = r === i || rowKeys[r - 1 - i] !== k;
+        meta.push({ blockPosKeys: posKeys, posKey: k, isFirstInGroup: isFirst });
+      }
+      i = j;
+    }
+    return meta;
+  }, [display, sortVac]);
 
   const th: React.CSSProperties = {
     padding: "10px 12px", textAlign: "left", fontWeight: 700,
@@ -417,6 +496,14 @@ export default function ManpowerTable() {
             <span style={{ display: "inline-block", animation: refreshing ? "spin 1s linear infinite" : "none" }}>↻</span>
             {refreshing ? "กำลังอัปเดต…" : "รีเฟรช"}
           </button>
+          {canEdit && Object.keys(customOrder).length > 0 && (
+            <button onClick={() => setCustomOrder({})}
+              style={{ padding: "7px 12px", borderRadius: 9, border: "1.5px solid #fecaca",
+                background: "#fff", fontSize: 12, cursor: "pointer",
+                fontFamily: "inherit", color: "#dc2626" }}>
+              รีเซ็ตลำดับ
+            </button>
+          )}
           <button onClick={() => {
             const all = Object.fromEntries(allDivIds.map(id => [id, true]));
             setCollapsed(prev => Object.values(prev).every(Boolean) ? {} : all);
@@ -548,16 +635,38 @@ export default function ManpowerTable() {
                           {r.liveEmpRemark || r.note || ""}
                         </td>
                         {canEdit && (
-                          <td style={{ ...td, textAlign: "center", padding: "4px 8px" }}>
-                            {r.liveEmpObj && (
-                              <button
-                                onClick={() => setEditEmp(r.liveEmpObj)}
-                                title="แก้ไขข้อมูล"
-                                style={{ background: "none", border: "1px solid #c4cfee", borderRadius: 6,
-                                  padding: "3px 8px", cursor: "pointer", fontSize: 12, color: "#0038C6" }}>
-                                ✏️
-                              </button>
-                            )}
+                          <td style={{ ...td, textAlign: "center", padding: "4px 6px" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "center" }}>
+                              {(() => {
+                                const meta = blockMeta[i];
+                                if (!meta || !meta.isFirstInGroup) return null;
+                                const posIdx = meta.blockPosKeys.indexOf(meta.posKey);
+                                const canUp = posIdx > 0;
+                                const canDown = posIdx < meta.blockPosKeys.length - 1;
+                                const btnStyle = (active: boolean): React.CSSProperties => ({
+                                  background: "none", border: "1px solid #e2e8f0", borderRadius: 3,
+                                  padding: "1px 5px", lineHeight: 1, fontSize: 9,
+                                  cursor: active ? "pointer" : "default",
+                                  color: active ? "#475569" : "#e2e8f0",
+                                });
+                                return (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                    <button disabled={!canUp} style={btnStyle(canUp)} title="เลื่อนขึ้น"
+                                      onClick={() => moveGroup(meta.blockPosKeys, meta.posKey, "up")}>▲</button>
+                                    <button disabled={!canDown} style={btnStyle(canDown)} title="เลื่อนลง"
+                                      onClick={() => moveGroup(meta.blockPosKeys, meta.posKey, "down")}>▼</button>
+                                  </div>
+                                );
+                              })()}
+                              {r.liveEmpObj && (
+                                <button onClick={() => setEditEmp(r.liveEmpObj)}
+                                  title="แก้ไขข้อมูล"
+                                  style={{ background: "none", border: "1px solid #c4cfee", borderRadius: 6,
+                                    padding: "3px 8px", cursor: "pointer", fontSize: 12, color: "#0038C6" }}>
+                                  ✏️
+                                </button>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
