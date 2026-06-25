@@ -24,6 +24,11 @@ interface LiveMaps {
   byPosAll: Map<string, LiveEmp[]>; // "pos" — ALL active employees (fallback)
 }
 
+// DB division_id → plan divId when they differ (e.g. ฝ่ายบัญชี DB=5 merged into plan divId=4)
+const DB_TO_PLAN_DIVID: Record<number, number> = {
+  5: 4,  // ฝ่ายบัญชี (DB id 5) → show under ฝ่ายการเงิน/บัญชี section (plan divId 4)
+};
+
 function buildLiveMap(employees: LiveEmp[]): LiveMaps {
   const byDivPos = new Map<string, LiveEmp[]>();
   const byPosAll = new Map<string, LiveEmp[]>();
@@ -123,7 +128,10 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, all
       if (!isUnknownPos) {
         afterIdx = posLastIdx.get(pos) ?? result.length - 1;
       } else {
-        afterIdx = e.division_id ? (divLastIdx.get(e.division_id) ?? result.length - 1) : result.length - 1;
+        const planDivId = e.division_id
+          ? (DB_TO_PLAN_DIVID[e.division_id] ?? e.division_id)
+          : null;
+        afterIdx = planDivId ? (divLastIdx.get(planDivId) ?? result.length - 1) : result.length - 1;
       }
       if (!insertMap.has(afterIdx)) insertMap.set(afterIdx, []);
       insertMap.get(afterIdx)!.push({ emp: e, isUnknownPos });
