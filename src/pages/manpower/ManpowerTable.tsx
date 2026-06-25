@@ -50,6 +50,7 @@ interface AugRow extends ManpowerRow {
   liveEmpRemark: string | null;
   liveEmpObj: LiveEmp | null;
   isOverflow?: boolean;
+  isUnknownPos?: boolean;
 }
 
 function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, allEmps: LiveEmp[]): AugRow[] {
@@ -93,55 +94,55 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, all
     return { ...r, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
   });
 
-  // Pass 3 — overflow: employees with a known position but no slot left get
-  // an auto-generated slot inserted after the last slot of that position.
+  // Pass 3 — ALL remaining active employees: overflow (known pos) + unmatched (unknown pos).
+  // Every active employee always appears in the table regardless of whether their position
+  // is in the plan. Unknown-position rows are flagged with isUnknownPos=true.
   const knownPos = new Set(rows.filter(r => r.type === "slot").map(r => r.pos.trim().toLowerCase()));
-  const overflow = allEmps.filter(e =>
-    !consumed.has(e.id) &&
-    e.emp_status !== "resigned" &&
-    knownPos.has((e.position ?? "").trim().toLowerCase())
-  );
+  const remaining = allEmps.filter(e => !consumed.has(e.id) && e.emp_status !== "resigned");
 
-  if (overflow.length > 0) {
-    // Find last index in result for each position
+  if (remaining.length > 0) {
+    // Last slot index per position (known-position overflow)
     const posLastIdx = new Map<string, number>();
+    // Last row index per divId (unknown-position employees insert at end of their division)
+    const divLastIdx = new Map<number, number>();
     for (let i = result.length - 1; i >= 0; i--) {
       const r = result[i];
+      if (r.divId != null && !divLastIdx.has(r.divId)) divLastIdx.set(r.divId, i);
       if (r.type === "slot") {
         const p = r.pos.trim().toLowerCase();
         if (!posLastIdx.has(p)) posLastIdx.set(p, i);
       }
     }
-    // Group overflow by position
-    const overflowByPos = new Map<string, LiveEmp[]>();
-    for (const e of overflow) {
-      const p = (e.position ?? "").trim().toLowerCase();
-      if (!overflowByPos.has(p)) overflowByPos.set(p, []);
-      overflowByPos.get(p)!.push(e);
-    }
-    // Insert in descending index order so earlier inserts don't shift later ones
-    const insertions = [...overflowByPos.entries()]
-      .map(([p, emps]) => ({ afterIdx: posLastIdx.get(p) ?? -1, emps }))
-      .filter(x => x.afterIdx >= 0)
-      .sort((a, b) => b.afterIdx - a.afterIdx);
 
-    for (const { afterIdx, emps } of insertions) {
+    // Map afterIdx → employees to insert there
+    const insertMap = new Map<number, { emp: LiveEmp; isUnknownPos: boolean }[]>();
+    for (const e of remaining) {
+      const pos = (e.position ?? "").trim().toLowerCase();
+      const isUnknownPos = !knownPos.has(pos);
+      let afterIdx: number;
+      if (!isUnknownPos) {
+        afterIdx = posLastIdx.get(pos) ?? result.length - 1;
+      } else {
+        afterIdx = e.division_id ? (divLastIdx.get(e.division_id) ?? result.length - 1) : result.length - 1;
+      }
+      if (!insertMap.has(afterIdx)) insertMap.set(afterIdx, []);
+      insertMap.get(afterIdx)!.push({ emp: e, isUnknownPos });
+    }
+
+    // Insert in descending index order so earlier inserts don't shift later indices
+    const insertions = [...insertMap.entries()].sort((a, b) => b[0] - a[0]);
+    for (const [afterIdx, items] of insertions) {
       const ref = result[afterIdx];
-      const extras: AugRow[] = emps.map(e => ({
+      const extras: AugRow[] = items.map(({ emp: e, isUnknownPos }) => ({
         ...ref,
-        plan: 1,
-        filled: 1,
-        vac: 0,
-        emp: "",
-        note: "",
-        liveEmp: e.full_name,
-        liveFilled: 1,
-        liveVac: 0,
-        empStatus: e.emp_status,
-        liveEmpId: e.id,
-        liveEmpRemark: e.remark ?? null,
-        liveEmpObj: e,
-        isOverflow: true,
+        type: "slot" as const,
+        pos: e.position ?? "",
+        name: e.position ?? "",
+        plan: 1, filled: 1, vac: 0, emp: "", note: "",
+        liveEmp: e.full_name, liveFilled: 1, liveVac: 0,
+        empStatus: e.emp_status, liveEmpId: e.id,
+        liveEmpRemark: e.remark ?? null, liveEmpObj: e,
+        isOverflow: true, isUnknownPos,
       }));
       result.splice(afterIdx + 1, 0, ...extras);
     }
@@ -493,15 +494,22 @@ export default function ManpowerTable() {
                     const vacColor = r.liveVac > 0 ? "#dc2626" : r.liveVac < 0 ? "#0891b2" : "#16a34a";
                     const badge = r.empStatus ? STATUS_BADGE[r.empStatus] : null;
                     return (
-                      <tr key={i} style={{ background: r.isOverflow ? "#f0fdf4" : slotNum % 2 === 0 ? "#fafbff" : "#fff",
+                      <tr key={i} style={{
+                        background: r.isUnknownPos ? "#fffbeb" : r.isOverflow ? "#f0fdf4" : slotNum % 2 === 0 ? "#fafbff" : "#fff",
                         borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ ...td, textAlign: "center", color: "#94a3b8", fontSize: 11 }}>{slotNum}</td>
                         <td style={{ ...td, fontWeight: r.pos ? 500 : 400 }}>
                           {r.pos || <span style={{ color: "#cbd5e1" }}>—</span>}
-                          {r.isOverflow && (
+                          {r.isOverflow && !r.isUnknownPos && (
                             <span style={{ marginLeft: 6, fontSize: 9, color: "#0891b2",
                               background: "#e0f2fe", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
                               +เพิ่มอัตโนมัติ
+                            </span>
+                          )}
+                          {r.isUnknownPos && (
+                            <span style={{ marginLeft: 6, fontSize: 9, color: "#b45309",
+                              background: "#fef3c7", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
+                              ไม่มีในแผน
                             </span>
                           )}
                         </td>
