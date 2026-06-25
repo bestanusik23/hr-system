@@ -56,6 +56,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   });
 };
 
+// Position renames: old name → new name (for plan/DB alignment)
+const POSITION_RENAMES: [string, string][] = [
+  ["ผู้ช่วยผู้จัดการฝ่ายบัญชี", "เจ้าหน้าที่บัญชี"],
+];
+
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -75,6 +80,15 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       AND (${likeWhere(DIV9_LIKE)})
   `).run();
 
+  // Rename positions to match updated plan
+  let renamedPositions = 0;
+  for (const [oldName, newName] of POSITION_RENAMES) {
+    const rr = await ctx.env.HR_DB.prepare(
+      "UPDATE employees SET position = ?, updated_at = datetime('now') WHERE position = ? AND emp_status != 'resigned'"
+    ).bind(newName, oldName).run();
+    renamedPositions += rr.meta.changes ?? 0;
+  }
+
   try {
     await ctx.env.HR_DB.prepare(
       "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'admin','migrate_divisions','bulk',0)"
@@ -85,6 +99,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     ok: true,
     updated_div8: r8.meta.changes,
     updated_div9: r9.meta.changes,
-    total_updated: (r8.meta.changes ?? 0) + (r9.meta.changes ?? 0),
+    renamed_positions: renamedPositions,
+    total_updated: (r8.meta.changes ?? 0) + (r9.meta.changes ?? 0) + renamedPositions,
   });
 };
