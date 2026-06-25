@@ -4,7 +4,7 @@ import EvaluationForm from "./EvaluationForm";
 
 interface Evaluation {
   id: number; round: number; status: string; grade: string | null; total_score: number | null;
-  full_name: string; position: string | null; department_name: string | null; division_name: string | null;
+  full_name: string; emp_code: string | null; position: string | null; department_name: string | null; division_name: string | null;
   start_date: string | null; updated_at: string;
 }
 
@@ -138,7 +138,10 @@ export default function EvaluationList() {
                 {ev.round === 30 ? "①" : ev.round === 60 ? "②" : "③"}
               </div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{ev.full_name}</div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>
+                  {ev.emp_code && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#0038c6", fontWeight: 700, marginRight: 6, background: "#eff6ff", padding: "2px 6px", borderRadius: 5 }}>{ev.emp_code}</span>}
+                  {ev.full_name}
+                </div>
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>รอบ {ev.round} วัน · {ev.department_name ?? "—"} · {ev.division_name ?? "—"}</div>
                 {ev.total_score !== null && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>คะแนน {ev.total_score}/100{ev.grade ? ` · เกรด ${ev.grade}` : ""}</div>}
               </div>

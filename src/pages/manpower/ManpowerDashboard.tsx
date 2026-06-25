@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { daysUntil, formatThaiDate } from "../../utils/date";
 import { useAuth } from "../../context/AuthContext";
+import OnboardingChecklist from "./OnboardingChecklist";
 
 interface NewHireRow  { id: number; full_name: string; position: string; start_date: string; emp_type: string; division_name: string }
 interface ResignRow   { id: number; full_name: string; position: string; resign_date: string; resign_reason: string; division_name: string }
@@ -99,6 +100,7 @@ export default function ManpowerDashboard() {
   const [histLoad, setHL]       = useState(false);
   const [saving, setSaving]     = useState(false);
   const [saveMsg, setSaveMsg]   = useState("");
+  const [checklistEmp, setChecklistEmp] = useState<{ id: number; name: string } | null>(null);
 
   // Load live summary
   useEffect(() => {
@@ -262,7 +264,7 @@ export default function ManpowerDashboard() {
                   ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานเข้าใหม่ในรอบนี้</div>
                   : <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead><tr style={{ background: "#f8fafc" }}>
-                        {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","ประเภท","วันที่เริ่มงาน"].map(h => (
+                        {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","ประเภท","วันที่เริ่มงาน","Onboarding"].map(h => (
                           <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
                             fontWeight: 700, color: "#475569", borderBottom: "2px solid #e2e8f0" }}>{h}</th>
                         ))}
@@ -276,6 +278,15 @@ export default function ManpowerDashboard() {
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.division_name}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.emp_type || "—"}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#0891b2", fontWeight: 600 }}>{formatThaiDate(e.start_date)}</td>
+                            <td style={{ padding: "9px 12px" }}>
+                              <button onClick={() => setChecklistEmp({ id: e.id, name: e.full_name })}
+                                style={{ padding: "5px 12px", borderRadius: 8, border: "1.5px solid #c4cfee",
+                                  background: "#f4f7ff", fontSize: 11, cursor: "pointer",
+                                  color: "#0038C6", fontWeight: 700, fontFamily: "inherit",
+                                  whiteSpace: "nowrap" }}>
+                                📋 Checklist
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -308,6 +319,15 @@ export default function ManpowerDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Onboarding Checklist Modal ───────────────────────────────── */}
+      {checklistEmp && (
+        <OnboardingChecklist
+          employeeId={checklistEmp.id}
+          employeeName={checklistEmp.name}
+          onClose={() => setChecklistEmp(null)}
+        />
       )}
 
       {/* ── Summary cards ───────────────────────────────────────────────── */}

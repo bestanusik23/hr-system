@@ -38,6 +38,7 @@ interface Props { employee: MasterEmployee; onClose: () => void; onSaved: () => 
 export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props) {
   const [divisions, setDivs]   = useState<Division[]>([]);
   const [departments, setDeps] = useState<Department[]>([]);
+  const [empCode, setEmpCode]  = useState(employee.emp_code ?? "");
   const [fullName, setName]    = useState(employee.full_name);
   const [nameEn, setNameEn]    = useState(employee.name_en ?? "");
   const [position, setPos]     = useState(employee.position ?? "");
@@ -67,6 +68,7 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
     const r = await fetch(`/api/manpower/employees/${employee.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        emp_code: empCode || null,
         full_name: fullName, name_en: nameEn || null,
         position: position || null,
         department_id: deptId || null, division_id: divId || null, start_date: startDate || null,
@@ -93,6 +95,10 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
           แก้ไขข้อมูลพนักงาน
         </div>
 
+        <Field label="รหัสพนักงาน" hint="Format: EMP0001 (กรอกเพื่อแก้ไข, ระบบออกให้อัตโนมัติเมื่อเพิ่มใหม่)">
+          <input value={empCode} onChange={e => setEmpCode(e.target.value.toUpperCase())} style={{ ...inp, fontFamily: "monospace", fontWeight: 700, color: "#0038c6" }}
+            placeholder="EMP0001" />
+        </Field>
         <Field label="ชื่อ-นามสกุล (ไทย) *">
           <input value={fullName} onChange={e => setName(e.target.value)} style={inp} />
         </Field>

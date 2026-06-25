@@ -89,7 +89,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
 
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState("");
-  const [done, setDone]         = useState<{ probation_end_date: string | null } | null>(null);
+  const [done, setDone]         = useState<{ probation_end_date: string | null; emp_code?: string | null } | null>(null);
 
   useEffect(() => {
     fetch("/api/eval/org").then(r => r.json())
@@ -148,14 +148,14 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
           moto_plate_1: moto1 || null, moto_plate_2: moto2 || null,
         }),
       });
-      let d: { ok: boolean; error?: string; probation_end_date?: string | null };
+      let d: { ok: boolean; error?: string; probation_end_date?: string | null; emp_code?: string | null };
       try {
         d = await r.json() as typeof d;
       } catch {
         throw new Error(`Server error (${r.status})`);
       }
       if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-      setDone({ probation_end_date: d.probation_end_date ?? null });
+      setDone({ probation_end_date: d.probation_end_date ?? null, emp_code: d.emp_code ?? null });
     } catch (err) {
       setError(err instanceof Error ? err.message : "เกิดข้อผิดพลาดในการเชื่อมต่อ");
     } finally {
@@ -174,6 +174,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         </div>
         <div style={{ display: "inline-flex", flexDirection: "column", gap: 8, textAlign: "left",
           background: "#f0fdfa", border: "1px solid #99f6e4", borderRadius: 12, padding: "16px 22px", marginBottom: 24 }}>
+          {done.emp_code && <div><b>รหัสพนักงาน:</b> <span style={{ fontFamily: "monospace", fontWeight: 800, color: "#0038c6" }}>{done.emp_code}</span></div>}
           <div><b>ชื่อ:</b> {fullName}</div>
           {position && <div><b>ตำแหน่ง:</b> {position}</div>}
           {licenseNo && <div><b>ใบประกอบวิชาชีพ:</b> {licenseNo}{licenseExp ? ` (หมด ${formatThaiDate(licenseExp)})` : ""}</div>}

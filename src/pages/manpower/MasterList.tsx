@@ -114,6 +114,7 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f8fafc" }}>
+                  <th style={th}>รหัสพนักงาน</th>
                   <th style={th}>ชื่อ-นามสกุล</th>
                   <th style={th}>ตำแหน่ง</th>
                   <th style={th}>แผนก</th>
@@ -132,6 +133,9 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
                   return (
                     <tr key={e.id} style={{ borderBottom: "1px solid #f1f5f9", background: i % 2 ? "#fafbff" : "#fff",
                       opacity: e.emp_status === "resigned" ? 0.6 : 1 }}>
+                      <td style={{ ...td, fontFamily: "monospace", fontSize: 12, color: "#0038c6", fontWeight: 700 }}>
+                        {(e as unknown as { emp_code?: string }).emp_code ?? "—"}
+                      </td>
                       <td style={{ ...td, fontWeight: 600 }}>{e.full_name}</td>
                       <td style={td}>{e.position ?? "—"}</td>
                       <td style={td}>{e.department_name ?? "—"}</td>

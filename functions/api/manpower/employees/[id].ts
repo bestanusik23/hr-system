@@ -28,10 +28,18 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const b = await ctx.request.json() as Record<string, unknown>;
   const {
     full_name, name_en, position, department_id, division_id, start_date,
-    emp_status, emp_type, supervisor, probation_days, remark,
+    emp_status, emp_type, supervisor, probation_days, remark, emp_code,
   } = b;
 
   if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
+
+  // Validate unique emp_code if provided
+  if (emp_code) {
+    const dup = await ctx.env.HR_DB.prepare(
+      "SELECT id FROM employees WHERE emp_code = ? AND id != ?"
+    ).bind(emp_code, id).first<{ id: number }>();
+    if (dup) return Response.json({ ok: false, error: `รหัสพนักงาน ${emp_code} ซ้ำกับพนักงานคนอื่น` }, { status: 409 });
+  }
 
   // Recompute probation_end_date when start_date or probation_days present
   const days = Number(probation_days) > 0 ? Number(probation_days) : 119;
@@ -39,18 +47,34 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     ? await ctx.env.HR_DB.prepare("SELECT date(?, '+' || ? || ' days') AS d").bind(start_date, days).first<{ d: string }>()
     : null;
 
-  await ctx.env.HR_DB.prepare(`
-    UPDATE employees SET
-      full_name=?, name_en=?, position=?, department_id=?, division_id=?,
-      start_date=?, emp_status=?, emp_type=?, supervisor=?,
-      probation_days=?, probation_end_date=?, remark=?,
-      updated_at=datetime('now')
-    WHERE id=?
-  `).bind(
-    full_name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null,
-    start_date ?? null, emp_status ?? "probation", emp_type ?? null, supervisor ?? null,
-    days, probEnd?.d ?? null, remark ?? null, id,
-  ).run();
+  try {
+    await ctx.env.HR_DB.prepare(`
+      UPDATE employees SET
+        full_name=?, name_en=?, position=?, department_id=?, division_id=?,
+        start_date=?, emp_status=?, emp_type=?, supervisor=?,
+        probation_days=?, probation_end_date=?, remark=?, emp_code=?,
+        updated_at=datetime('now')
+      WHERE id=?
+    `).bind(
+      full_name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null,
+      start_date ?? null, emp_status ?? "probation", emp_type ?? null, supervisor ?? null,
+      days, probEnd?.d ?? null, remark ?? null, emp_code || null, id,
+    ).run();
+  } catch {
+    // Fallback without emp_code if column doesn't exist yet
+    await ctx.env.HR_DB.prepare(`
+      UPDATE employees SET
+        full_name=?, name_en=?, position=?, department_id=?, division_id=?,
+        start_date=?, emp_status=?, emp_type=?, supervisor=?,
+        probation_days=?, probation_end_date=?, remark=?,
+        updated_at=datetime('now')
+      WHERE id=?
+    `).bind(
+      full_name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null,
+      start_date ?? null, emp_status ?? "probation", emp_type ?? null, supervisor ?? null,
+      days, probEnd?.d ?? null, remark ?? null, id,
+    ).run();
+  }
 
   await ctx.env.HR_DB.prepare(
     "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','edit_employee','employee',?)"

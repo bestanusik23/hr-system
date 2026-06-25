@@ -38,11 +38,17 @@ function isStatusCol(h: string) {
 
 // Fixed 5 table columns with keyword matching against Sheets headers
 const TABLE_COL_DEFS = [
-  { label: "วันที่เขียนใบสมัคร", keys: ["วันที่เขียน", "วันที่สมัคร", "วันที่", "date"] },
-  { label: "แผนกที่สมัคร",        keys: ["แผนก", "ตำแหน่งที่สมัคร", "สมัครงาน", "สมัคร", "department"] },
-  { label: "อัตราจ้างที่คาดหวัง",  keys: ["อัตราจ้าง", "อัตรา", "เงินเดือน", "ค่าจ้าง", "salary", "คาดหวัง"] },
-  { label: "ชื่อ-นามสกุล",         keys: ["ชื่อ-นามสกุล", "ชื่อและนามสกุล", "ชื่อ นามสกุล", "full name", "fullname", "ชื่อ"] },
+  { label: "วันที่เขียนใบสมัคร", keys: ["วันที่เขียน", "วันที่สมัคร", "วันที่", "date"],                              salaryCol: false },
+  { label: "แผนกที่สมัคร",        keys: ["แผนก", "ตำแหน่งที่สมัคร", "สมัครงาน", "สมัคร", "department"],              salaryCol: false },
+  { label: "อัตราจ้างที่คาดหวัง",  keys: ["อัตราจ้าง", "อัตรา", "เงินเดือน", "ค่าจ้าง", "salary", "คาดหวัง"],        salaryCol: true  },
+  { label: "ชื่อ-นามสกุล",         keys: ["ชื่อ-นามสกุล", "ชื่อและนามสกุล", "ชื่อ นามสกุล", "full name", "fullname", "ชื่อ"], salaryCol: false },
 ] as const;
+
+const SALARY_KEYWORDS = ["อัตราจ้าง", "อัตรา", "เงินเดือน", "ค่าจ้าง", "salary", "คาดหวัง", "เงิน"];
+function isSalaryCol(h: string): boolean {
+  const low = h.toLowerCase();
+  return SALARY_KEYWORDS.some(k => low.includes(k.toLowerCase()));
+}
 
 // คอลัมน์ระยะเวลาลาออก — แสดงใน detail modal เท่านั้น (ไม่แสดงในตาราง)
 const NOTICE_KEYS = [
@@ -108,13 +114,19 @@ export default function RecruitPage() {
     setUpdating(null);
   }
 
-  const allDataCols = headers.filter(h => !isHiddenCol(h) && h !== statusKey && h.trim() !== "");
+  const allDataCols = headers.filter(h => {
+    if (isHiddenCol(h) || h === statusKey || h.trim() === "") return false;
+    if (!isHR && isSalaryCol(h)) return false;
+    return true;
+  });
 
-  // Resolve the 5 fixed columns to their actual Sheets header keys
-  const resolvedTableCols = TABLE_COL_DEFS.map(def => ({
-    label: def.label,
-    key: findColKey(allDataCols, def.keys),
-  }));
+  // Resolve the fixed columns to their actual Sheets header keys (skip salary for non-HR)
+  const resolvedTableCols = TABLE_COL_DEFS
+    .filter(def => isHR || !def.salaryCol)
+    .map(def => ({
+      label: def.label,
+      key: findColKey(allDataCols, def.keys as unknown as string[]),
+    }));
 
   // Detect phone/contact column dynamically
   const phoneKey = allDataCols.find(h =>

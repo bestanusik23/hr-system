@@ -46,11 +46,19 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const newId = result.meta.last_row_id as number;
 
+  // Auto-generate emp_code (graceful — column may not exist on older DBs)
+  let empCode: string | null = null;
+  try {
+    empCode = `EMP${String(newId).padStart(4, "0")}`;
+    await ctx.env.HR_DB.prepare("UPDATE employees SET emp_code = ? WHERE id = ?")
+      .bind(empCode, newId).run();
+  } catch { /* emp_code column not yet in schema */ }
+
   try {
     await ctx.env.HR_DB.prepare(
       "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','new_hire','employee',?)"
     ).bind(user.id, user.full_name, newId).run();
   } catch { /* activity_log is non-critical */ }
 
-  return Response.json({ ok: true, id: newId, probation_end_date: probEnd }, { status: 201 });
+  return Response.json({ ok: true, id: newId, emp_code: empCode, probation_end_date: probEnd }, { status: 201 });
 };
