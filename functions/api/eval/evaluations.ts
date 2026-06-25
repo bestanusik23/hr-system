@@ -58,16 +58,15 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     }
   }
 
-  // Time-window check: HR can create 30 days early, head 7 days early
-  if (emp?.start_date) {
+  // Time-window check: head can create 7 days early only; HR/admin can create any time
+  if (emp?.start_date && !["hr", "admin"].includes(user.role)) {
     const startMs = new Date(emp.start_date).getTime();
     const daysWorked = Math.floor((Date.now() - startMs) / 86400000);
     const roundDays = Number(round);
-    const earlyWindow = ["hr", "admin"].includes(user.role) ? 30 : 7;
-    if (daysWorked < roundDays - earlyWindow) {
+    if (daysWorked < roundDays - 7) {
       return Response.json({
         ok: false,
-        error: `ยังไม่ถึงกำหนดสร้างใบประเมิน (สามารถสร้างได้เมื่อครบ ${roundDays - earlyWindow} วัน)`,
+        error: `ยังไม่ถึงกำหนดสร้างใบประเมิน (สามารถสร้างได้เมื่อครบ ${roundDays - 7} วัน)`,
       }, { status: 422 });
     }
   }

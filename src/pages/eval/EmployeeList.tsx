@@ -105,7 +105,8 @@ export default function EmployeeList() {
     });
     const d = await r.json() as { ok: boolean; id?: number; error?: string };
     setCreatingFor(null);
-    if (d.ok && d.id) { await load(); setOpenEvalId(d.id); }
+    if (!d.ok) { alert(d.error ?? "เกิดข้อผิดพลาดในการสร้างใบประเมิน"); return; }
+    if (d.id) { await load(); setOpenEvalId(d.id); }
   }
 
   return (
@@ -144,7 +145,7 @@ export default function EmployeeList() {
           {employees.map(emp => {
             const days = daysSince(emp.start_date);
             const allRounds = [30, 60, 90] as const;
-            const numRounds = emp.eval_rounds ?? 3;
+            const numRounds = (emp.eval_rounds != null && emp.eval_rounds > 0) ? emp.eval_rounds : 3;
             const rounds = allRounds.slice(0, numRounds).map(r => ({
               round: r, ...roundState(days, r, evals, emp.id, !!canEdit),
             }));
@@ -240,11 +241,12 @@ export default function EmployeeList() {
                                 fontFamily: "inherit", fontWeight: 600 }}>
                               เปิดใบประเมิน
                             </button>
-                          ) : (state === "soon" || state === "overdue") && (canEdit || user?.role === "head") ? (
+                          ) : (canEdit || ((state === "soon" || state === "overdue") && user?.role === "head")) ? (
                             <button onClick={() => createEval(emp.id, round)} disabled={!!isCreating}
                               style={{ width: "100%", padding: "5px 0", borderRadius: 8,
-                                border: "none", background: s.color, color: "#fff",
-                                fontSize: 12, cursor: "pointer",
+                                border: "none",
+                                background: (state === "soon" || state === "overdue") ? s.color : "#64748b",
+                                color: "#fff", fontSize: 12, cursor: "pointer",
                                 fontFamily: "inherit", fontWeight: 700,
                                 opacity: isCreating ? 0.7 : 1 }}>
                               {isCreating ? "กำลังสร้าง…" : "สร้างใบประเมิน"}
