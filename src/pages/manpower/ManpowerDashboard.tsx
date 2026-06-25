@@ -103,6 +103,49 @@ export default function ManpowerDashboard() {
   const [saveMsg, setSaveMsg]   = useState("");
   const [checklistEmp, setChecklistEmp]         = useState<{ id: number; name: string } | null>(null);
   const [exitChecklistEmp, setExitChecklistEmp] = useState<{ id: number; name: string } | null>(null);
+  const [showEmpCode, setShowEmpCode]           = useState(false);
+  const [empCodeList, setEmpCodeList]           = useState<{ id: number; full_name: string; emp_code: string | null; position: string | null }[]>([]);
+  const [empCodeQ, setEmpCodeQ]                 = useState("");
+  const [empCodeEdits, setEmpCodeEdits]         = useState<Record<number, string>>({});
+  const [empCodeSaving, setEmpCodeSaving]       = useState<number | null>(null);
+  const [empCodeMsg, setEmpCodeMsg]             = useState<Record<number, string>>({});
+
+  function openEmpCodeEditor() {
+    setShowEmpCode(true);
+    setEmpCodeQ("");
+    setEmpCodeEdits({});
+    setEmpCodeMsg({});
+    fetch("/api/manpower/employees")
+      .then(r => r.json())
+      .then((d: { employees: { id: number; full_name: string; emp_code: string | null; position: string | null; emp_status: string }[] }) => {
+        const active = (d.employees ?? []).filter(e => e.emp_status !== "resigned");
+        setEmpCodeList(active);
+        const drafts: Record<number, string> = {};
+        active.forEach(e => { drafts[e.id] = e.emp_code ?? ""; });
+        setEmpCodeEdits(drafts);
+      });
+  }
+
+  async function saveEmpCode(emp: { id: number; full_name: string; emp_code: string | null }) {
+    const newCode = (empCodeEdits[emp.id] ?? "").trim();
+    if (newCode === (emp.emp_code ?? "")) return;
+    setEmpCodeSaving(emp.id);
+    try {
+      const r = await fetch(`/api/manpower/employees/${emp.id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emp_code: newCode || null, full_name: emp.full_name }),
+      });
+      const d = await r.json() as { ok: boolean; error?: string };
+      setEmpCodeMsg(prev => ({ ...prev, [emp.id]: d.ok ? "✅" : `❌ ${d.error}` }));
+      if (d.ok) {
+        setEmpCodeList(prev => prev.map(e => e.id === emp.id ? { ...e, emp_code: newCode || null } : e));
+      }
+      setTimeout(() => setEmpCodeMsg(prev => { const n = { ...prev }; delete n[emp.id]; return n; }), 2500);
+    } catch {
+      setEmpCodeMsg(prev => ({ ...prev, [emp.id]: "❌ เกิดข้อผิดพลาด" }));
+    }
+    setEmpCodeSaving(null);
+  }
 
   // Load live summary
   useEffect(() => {
@@ -210,6 +253,12 @@ export default function ManpowerDashboard() {
                 {saveMsg}
               </span>
             )}
+            <button onClick={openEmpCodeEditor}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "1.5px solid #c4cfee",
+                background: "#fff", color: "#0038c6", fontWeight: 700, fontSize: 12,
+                cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
+              🔢 รหัสพนักงาน
+            </button>
             <button onClick={saveSnapshot} disabled={saving}
               style={{ padding: "8px 16px", borderRadius: 8, border: "none",
                 background: saving ? "#c4cfee" : "#0038c6", color: "#fff",
@@ -346,6 +395,91 @@ export default function ManpowerDashboard() {
           employeeName={exitChecklistEmp.name}
           onClose={() => setExitChecklistEmp(null)}
         />
+      )}
+
+      {/* ── Emp Code Editor Modal ─────────────────────────────────────── */}
+      {showEmpCode && (
+        <div onClick={e => { if (e.target === e.currentTarget) setShowEmpCode(false); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,.5)", display: "flex",
+            alignItems: "center", justifyContent: "center", zIndex: 300, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 20, width: "100%", maxWidth: 620,
+            maxHeight: "88vh", display: "flex", flexDirection: "column",
+            boxShadow: "0 32px 80px rgba(0,0,0,.3)", overflow: "hidden" }}>
+
+            {/* Header */}
+            <div style={{ padding: "22px 28px 16px", borderBottom: "1px solid #f1f5f9",
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 17, fontWeight: 800, color: "#0a1628" }}>🔢 รหัสพนักงาน</div>
+                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
+                  แก้ไขรหัสพนักงานได้โดยตรง · {empCodeList.length} คน
+                </div>
+              </div>
+              <button onClick={() => setShowEmpCode(false)}
+                style={{ border: "none", background: "#f1f5f9", borderRadius: 10, width: 36, height: 36,
+                  cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center",
+                  justifyContent: "center", color: "#64748b" }}>×</button>
+            </div>
+
+            {/* Search */}
+            <div style={{ padding: "14px 28px 10px" }}>
+              <input value={empCodeQ} onChange={e => setEmpCodeQ(e.target.value)}
+                placeholder="🔍 ค้นหาชื่อหรือรหัส…"
+                style={{ width: "100%", padding: "9px 14px", borderRadius: 9, border: "1.5px solid #c4cfee",
+                  fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+            </div>
+
+            {/* List */}
+            <div style={{ overflowY: "auto", padding: "0 28px 24px", flex: 1 }}>
+              {empCodeList.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {empCodeList
+                    .filter(e => !empCodeQ || e.full_name.includes(empCodeQ) || (e.emp_code ?? "").includes(empCodeQ))
+                    .map(e => {
+                      const currentEdit = empCodeEdits[e.id] ?? "";
+                      const changed = currentEdit.trim() !== (e.emp_code ?? "");
+                      const msg = empCodeMsg[e.id];
+                      const isAutoCode = (e.emp_code ?? "").startsWith("EMP");
+                      return (
+                        <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10,
+                          padding: "10px 14px", borderRadius: 10,
+                          background: msg ? (msg.startsWith("✅") ? "#f0fdf4" : "#fef2f2") : "#f8fafc",
+                          border: `1px solid ${msg ? (msg.startsWith("✅") ? "#bbf7d0" : "#fecaca") : "#f1f5f9"}` }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#0a1628",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {e.full_name}
+                            </div>
+                            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>{e.position ?? "—"}</div>
+                          </div>
+                          <input
+                            value={currentEdit}
+                            onChange={ev => setEmpCodeEdits(prev => ({ ...prev, [e.id]: ev.target.value }))}
+                            onKeyDown={ev => { if (ev.key === "Enter") saveEmpCode(e); }}
+                            placeholder={isAutoCode ? `${e.emp_code} (auto)` : "ใส่รหัส…"}
+                            style={{ width: 110, padding: "7px 10px", borderRadius: 7,
+                              border: `1.5px solid ${changed ? "#0038c6" : "#e2e8f0"}`,
+                              fontSize: 12, fontFamily: "monospace", fontWeight: 700,
+                              color: "#0038c6", outline: "none", textTransform: "uppercase" }} />
+                          <button onClick={() => saveEmpCode(e)}
+                            disabled={!changed || empCodeSaving === e.id}
+                            style={{ padding: "7px 14px", borderRadius: 8, border: "none",
+                              background: changed ? "#0038c6" : "#e2e8f0",
+                              color: changed ? "#fff" : "#94a3b8",
+                              fontSize: 12, fontWeight: 700, cursor: changed ? "pointer" : "default",
+                              fontFamily: "inherit", whiteSpace: "nowrap", flexShrink: 0 }}>
+                            {empCodeSaving === e.id ? "…" : msg ?? "บันทึก"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Summary cards ───────────────────────────────────────────────── */}
