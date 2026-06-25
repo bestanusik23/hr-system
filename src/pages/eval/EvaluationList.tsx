@@ -169,7 +169,8 @@ export default function EvaluationList() {
       )}
 
       {selected !== null && (
-        <EvaluationForm evalId={selected} onClose={() => setSelected(null)} onSaved={() => { setSelected(null); load(); }} />
+        <EvaluationForm evalId={selected} onClose={() => setSelected(null)}
+          onSaved={(msg?: string) => { setSelected(null); load(); showToast(msg ?? "✅ บันทึกเรียบร้อยแล้ว"); }} />
       )}
       {showNew && (
         <NewEvalDialog onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />

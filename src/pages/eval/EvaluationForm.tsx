@@ -13,7 +13,7 @@ interface EvalDetail {
 }
 interface ScoreRow { topic_id: number; score: number; text: string; owner: string; }
 interface Approval { step: string; status: string; note: string | null; created_at: string; approver_name: string; }
-interface Props { evalId: number; onClose: () => void; onSaved: () => void; }
+interface Props { evalId: number; onClose: () => void; onSaved: (msg?: string) => void; }
 
 function gradeFromScore(s: number): string {
   if (s >= 90) return "A"; if (s >= 80) return "B"; if (s >= 70) return "C";
@@ -243,7 +243,17 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
     const d = await r.json() as { ok: boolean; error?: string };
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    onSaved();
+    const ACTION_MSG: Record<string, string> = {
+      send_to_head:    "✅ ส่งให้หัวหน้าแผนกเรียบร้อยแล้ว",
+      submit:          "✅ ส่งใบประเมินเรียบร้อยแล้ว",
+      deputy_approve:  "✅ อนุมัติโดยรองผู้อำนวยการเรียบร้อย",
+      deputy_reject:   "❌ ส่งกลับแก้ไขเรียบร้อย",
+      hr_acknowledge:  "✅ HR รับทราบเรียบร้อย",
+      final_approve:   "✅ อนุมัติขั้นสุดท้ายเรียบร้อย",
+      final_reject:    "❌ ไม่อนุมัติ — ส่งกลับแก้ไขเรียบร้อย",
+      save:            "✅ บันทึกเรียบร้อยแล้ว",
+    };
+    onSaved(ACTION_MSG[action]);
   }
 
   if (!ev) return (

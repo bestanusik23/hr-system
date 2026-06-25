@@ -68,6 +68,12 @@ export default function EmployeeList() {
   const [creatingFor, setCreatingFor] = useState<{ empId: number; round: 30 | 60 | 90 } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Employee | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
+
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3500);
+  }
   const [deleting, setDeleting] = useState(false);
 
   const canEdit   = user && ["hr", "admin"].includes(user.role);
@@ -269,7 +275,19 @@ export default function EmployeeList() {
       )}
       {openEvalId !== null && (
         <EvaluationForm evalId={openEvalId} onClose={() => setOpenEvalId(null)}
-          onSaved={() => { setOpenEvalId(null); load(); }} />
+          onSaved={(msg) => { setOpenEvalId(null); load(); showToast(msg ?? "✅ บันทึกเรียบร้อยแล้ว"); }} />
+      )}
+
+      {toast && (
+        <div style={{
+          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
+          background: toast.startsWith("❌") ? "#dc2626" : "#16a34a",
+          color: "#fff", borderRadius: 10, padding: "13px 22px",
+          fontSize: 14, fontWeight: 600, boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
+          zIndex: 999, whiteSpace: "nowrap", maxWidth: "90vw",
+        }}>
+          {toast}
+        </div>
       )}
 
       {/* Delete confirmation modal */}
