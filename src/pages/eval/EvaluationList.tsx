@@ -35,11 +35,19 @@ export default function EvaluationList() {
   const [selected, setSelected] = useState<number | null>(null);
   const [showNew, setShowNew] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-
   function showToast(msg: string, type: "success" | "error" = "success") {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    const el = document.createElement("div");
+    el.textContent = msg;
+    Object.assign(el.style, {
+      position: "fixed", bottom: "28px", left: "50%", transform: "translateX(-50%)",
+      background: type === "error" ? "#dc2626" : "#16a34a",
+      color: "#fff", borderRadius: "10px", padding: "13px 22px",
+      fontSize: "14px", fontWeight: "600", fontFamily: "inherit",
+      boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
+      zIndex: "99999", whiteSpace: "nowrap", maxWidth: "90vw",
+    });
+    document.body.appendChild(el);
+    setTimeout(() => { if (document.body.contains(el)) document.body.removeChild(el); }, 3500);
   }
 
   async function deleteEval(ev: Evaluation, e: React.MouseEvent) {
@@ -176,19 +184,6 @@ export default function EvaluationList() {
         <NewEvalDialog onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load(); }} />
       )}
 
-      {/* Toast notification */}
-      {toast && (
-        <div style={{
-          position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
-          background: toast.type === "success" ? "#16a34a" : "#dc2626",
-          color: "#fff", borderRadius: 10, padding: "13px 22px",
-          fontSize: 14, fontWeight: 600, boxShadow: "0 8px 28px rgba(0,0,0,0.22)",
-          zIndex: 999, whiteSpace: "nowrap", maxWidth: "90vw",
-          animation: "fadeInUp .2s ease",
-        }}>
-          {toast.msg}
-        </div>
-      )}
     </div>
   );
 }
