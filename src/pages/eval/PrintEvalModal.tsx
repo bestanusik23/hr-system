@@ -40,9 +40,8 @@ function generatePrintHTML(data: PrintData): string {
   const scoreMap: Record<number, number> = {};
   scores.forEach(s => { scoreMap[s.topic_id] = s.score; });
 
-  const totalScore = (ev.total_score as number) ??
-    Object.values(scoreMap).reduce((a, b) => a + b, 0);
-  const grade   = (ev.grade as string) || gradeFromScore(totalScore);
+  const totalScore = Object.values(scoreMap).reduce((a: number, b: number) => a + b, 0);
+  const grade   = gradeFromScore(totalScore);
   const passed  = totalScore >= 60;
   const round   = ev.round as number;
   const roundNo = round === 30 ? 1 : round === 60 ? 2 : round === 90 ? 3 : 4;
@@ -67,11 +66,11 @@ function generatePrintHTML(data: PrintData): string {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
 <style>
-  @page { size: A4 portrait; margin: 14mm 12mm 12mm 18mm; }
+  @page { size: A4 portrait; margin: 10mm 10mm 10mm 14mm; }
   *  { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Sarabun', Arial, sans-serif; font-size: 10.5pt; color: #000; background: #fff; line-height: 1.45; }
+  body { font-family: 'Sarabun', Arial, sans-serif; font-size: 10pt; color: #000; background: #fff; line-height: 1.4; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #333; padding: 4px 7px; vertical-align: middle; }
+  th, td { border: 1px solid #333; padding: 3px 6px; vertical-align: middle; }
   .no-border td, .no-border th { border: none; }
   .bg  { background: #d8d8d8; }
   .bg2 { background: #efefef; }
@@ -79,29 +78,30 @@ function generatePrintHTML(data: PrintData): string {
   .center { text-align: center; }
   .right  { text-align: right; }
   .page1 { page-break-after: always; }
-  .doc-no { font-family: Arial, sans-serif; font-size: 8.5pt; text-align: right; white-space: nowrap; }
-  .sec-title { background: #c0c8d8; font-weight: 700; text-align: center; padding: 5px; letter-spacing: 0.04em; font-size: 10.5pt; }
+  .doc-no { font-family: Arial, sans-serif; font-size: 8pt; text-align: right; white-space: nowrap; }
+  .sec-title { background: #c0c8d8; font-weight: 700; text-align: center; padding: 4px; letter-spacing: 0.03em; font-size: 10pt; }
   .watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%,-50%) rotate(-42deg);
     font-size: 88pt; font-weight: 900; color: rgba(180,0,0,0.07); pointer-events: none; z-index: 9999;
     letter-spacing: 0.25em; font-family: Arial, sans-serif; }
-  /* screen controls */
   @media screen {
     body { background: #d0d5dc; padding: 0; }
-    .print-bar { background: #0038C6; padding: 12px 24px; display: flex; gap: 10px; align-items: center;
+    .print-bar { background: #0038C6; padding: 10px 20px; display: flex; gap: 8px; align-items: center;
       position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
-    .print-bar span { color: rgba(255,255,255,.75); font-size: 12pt; flex: 1; }
+    .print-bar span { color: rgba(255,255,255,.8); font-size: 11pt; flex: 1; }
     .btn-print { background: #fff; color: #0038C6; border: none; border-radius: 6px;
-      padding: 9px 22px; font-size: 12pt; font-family: 'Sarabun', sans-serif; font-weight: 700;
+      padding: 8px 20px; font-size: 11pt; font-family: 'Sarabun', sans-serif; font-weight: 700;
       cursor: pointer; display: flex; align-items: center; gap: 6px; }
-    .btn-close  { background: rgba(255,255,255,.2); color: #fff; border: 1.5px solid rgba(255,255,255,.4);
-      border-radius: 6px; padding: 9px 18px; font-size: 12pt; font-family: 'Sarabun', sans-serif;
-      cursor: pointer; }
-    .page-wrap  { max-width: 230mm; margin: 24px auto; padding: 0 16px; }
-    .paper { background: #fff; width: 210mm; margin: 0 auto 24px; padding: 14mm 12mm 12mm 18mm;
+    .btn-dl { background: #16a34a; color: #fff; border: none; border-radius: 6px;
+      padding: 8px 20px; font-size: 11pt; font-family: 'Sarabun', sans-serif; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; gap: 6px; }
+    .btn-close { background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.4);
+      border-radius: 6px; padding: 8px 16px; font-size: 11pt; font-family: 'Sarabun', sans-serif; cursor: pointer; }
+    .page-wrap { max-width: 230mm; margin: 20px auto; padding: 0 16px; }
+    .paper { background: #fff; width: 210mm; margin: 0 auto 20px; padding: 10mm 10mm 10mm 14mm;
       box-shadow: 0 4px 20px rgba(0,0,0,.18); }
   }
   @media print {
-    .print-bar, .page-wrap-outer { display: none !important; }
+    .print-bar { display: none !important; }
     .paper { padding: 0; box-shadow: none; }
     body { background: #fff; }
   }
@@ -112,9 +112,10 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
 
 <div class="print-bar">
   <span>แบบประเมินผลพนักงาน — ${ev.full_name} &nbsp;|&nbsp; ${data.document_no}</span>
-  ${data.is_copy ? '<span style="color:#fde68a;font-size:11pt;background:rgba(0,0,0,.2);padding:3px 10px;border-radius:4px;">พิมพ์ซ้ำ (COPY #' + data.print_count + ')</span>' : ""}
+  ${data.is_copy ? '<span style="color:#fde68a;font-size:10pt;background:rgba(0,0,0,.2);padding:2px 8px;border-radius:4px;">COPY #' + data.print_count + '</span>' : ""}
+  <button class="btn-dl" onclick="window.print()">💾 ดาวน์โหลด PDF</button>
   <button class="btn-print" onclick="window.print()">🖨️ พิมพ์</button>
-  <button class="btn-close"  onclick="window.close()">✕ ปิด</button>
+  <button class="btn-close" onclick="window.close()">✕ ปิด</button>
 </div>
 
 <div class="page-wrap">
@@ -122,27 +123,25 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
 <!-- ════════════════ PAGE 1 ════════════════ -->
 <div class="paper page1">
 
-  <!-- Header -->
-  <table class="no-border" style="margin-bottom:6px">
+  <!-- Header Page 1 -->
+  <table class="no-border" style="margin-bottom:5px">
     <tr>
-      <td style="width:30%">
-        <div style="font-size:13pt;font-weight:700">โรงพยาบาลเชียงรายรามา</div>
-        <div style="font-size:9pt;color:#444">Chiangrai Rama Hospital</div>
+      <td style="width:28%;vertical-align:middle">
+        <img src="/logo.png" style="height:52px;object-fit:contain;display:block" alt="CRR Logo">
       </td>
-      <td style="width:40%;text-align:center">
-        <div style="font-size:14pt;font-weight:700">แบบประเมินผลการปฏิบัติงาน</div>
-        <div style="font-size:10.5pt">พนักงานในช่วงทดลองงาน</div>
+      <td style="width:44%;text-align:center;vertical-align:middle">
+        <div style="font-size:13.5pt;font-weight:700;letter-spacing:0.02em">แบบประเมินผลการปฏิบัติงาน</div>
+        <div style="font-size:9.5pt;color:#333;margin-top:2px">พนักงานในช่วงทดลองงาน | Probation Evaluation</div>
       </td>
-      <td style="width:30%" class="doc-no">
-        <strong>${data.document_no}</strong><br>
-        หน้า 1 / 2
+      <td style="width:28%" class="doc-no">
+        <strong>${data.document_no}</strong><br>หน้า 1 / 2
       </td>
     </tr>
   </table>
-  <div style="border-top:2.5px solid #000;border-bottom:1px solid #888;margin-bottom:10px"></div>
+  <div style="border-top:2.5px solid #0038C6;border-bottom:1px solid #aab;margin-bottom:8px"></div>
 
   <!-- Employee Info -->
-  <table class="no-border" style="margin-bottom:10px">
+  <table class="no-border" style="margin-bottom:6px">
     <tr>
       <td style="width:13%;font-weight:700">ชื่อ-นามสกุล</td>
       <td style="width:37%;border-bottom:1px solid #000">${ev.full_name}</td>
@@ -166,7 +165,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   </table>
 
   <!-- Round -->
-  <table style="margin-bottom:8px">
+  <table style="margin-bottom:6px">
     <tr>
       <td class="bg bold" style="width:22%">รอบการประเมิน</td>
       <td class="center" style="width:19.5%">${chkRound(1)} รอบที่ 1 (30 วัน)</td>
@@ -177,7 +176,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   </table>
 
   <!-- Attendance + Training -->
-  <table style="margin-bottom:8px">
+  <table style="margin-bottom:6px">
     <tr>
       <td colspan="2" class="sec-title" style="width:50%">สถิติการมาทำงาน</td>
       <td colspan="2" class="sec-title" style="width:50%">การฝึกอบรม</td>
@@ -208,7 +207,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   </table>
 
   <!-- Scores -->
-  <table style="margin-bottom:8px">
+  <table style="margin-bottom:6px">
     <thead>
       <tr><th colspan="5" class="sec-title">ผลการประเมิน</th></tr>
       <tr class="bg2">
@@ -240,7 +239,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   </table>
 
   <!-- Suggestion + Decision -->
-  <table style="margin-bottom:8px">
+  <table style="margin-bottom:6px">
     <tr>
       <td class="bg2 bold" style="width:20%;vertical-align:top">ข้อเสนอแนะ / Remark</td>
       <td style="min-height:36px;height:42px">${ev.suggestion ?? ""}</td>
@@ -254,8 +253,8 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   <!-- Signatories -->
   <table>
     <tr><td colspan="4" class="sec-title">ลายมือชื่อผู้เกี่ยวข้อง</td></tr>
-    <tr style="height:52px">
-      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:5px">
+    <tr style="height:44px">
+      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
         <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${ev.signer_employee ?? ""}</div>
         <div style="font-size:9pt;margin-top:2px">พนักงานผู้รับการประเมิน</div>
         <div style="font-size:8.5pt;color:#555">วันที่ ……/……/………</div>
@@ -283,24 +282,22 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
 <!-- ════════════════ PAGE 2 ════════════════ -->
 <div class="paper">
 
-  <!-- Header -->
-  <table class="no-border" style="margin-bottom:6px">
+  <!-- Header Page 2 -->
+  <table class="no-border" style="margin-bottom:5px">
     <tr>
-      <td style="width:30%">
-        <div style="font-size:13pt;font-weight:700">โรงพยาบาลเชียงรายรามา</div>
-        <div style="font-size:9pt;color:#444">Chiangrai Rama Hospital</div>
+      <td style="width:28%;vertical-align:middle">
+        <img src="/logo.png" style="height:52px;object-fit:contain;display:block" alt="CRR Logo">
       </td>
-      <td style="width:40%;text-align:center">
-        <div style="font-size:13pt;font-weight:700">คำชี้แจงและเกณฑ์การประเมิน</div>
-        <div style="font-size:10pt">Evaluation Criteria &amp; Guidelines</div>
+      <td style="width:44%;text-align:center;vertical-align:middle">
+        <div style="font-size:13pt;font-weight:700;letter-spacing:0.02em">คำชี้แจงและเกณฑ์การประเมิน</div>
+        <div style="font-size:9.5pt;color:#333;margin-top:2px">Evaluation Criteria &amp; Guidelines</div>
       </td>
-      <td style="width:30%" class="doc-no">
-        <strong>${data.document_no}</strong><br>
-        หน้า 2 / 2
+      <td style="width:28%" class="doc-no">
+        <strong>${data.document_no}</strong><br>หน้า 2 / 2
       </td>
     </tr>
   </table>
-  <div style="border-top:2.5px solid #000;border-bottom:1px solid #888;margin-bottom:10px"></div>
+  <div style="border-top:2.5px solid #0038C6;border-bottom:1px solid #aab;margin-bottom:8px"></div>
 
   <!-- Instructions -->
   <div class="sec-title" style="margin-bottom:6px">คำชี้แจงการประเมิน</div>
@@ -315,7 +312,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
 
   <!-- Score criteria -->
   <div class="sec-title" style="margin-bottom:6px">เกณฑ์การให้คะแนนรายหัวข้อ (0 – 10 คะแนน)</div>
-  <table style="margin-bottom:10px">
+  <table style="margin-bottom:6px">
     <tr class="bg2">
       <th class="center" style="width:18%">ช่วงคะแนน</th>
       <th class="center" style="width:30%">ระดับ</th>
@@ -355,7 +352,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
 
   <!-- Grade criteria -->
   <div class="sec-title" style="margin-bottom:6px">เกณฑ์ผลการประเมิน (เกรดรวม)</div>
-  <table style="margin-bottom:10px">
+  <table style="margin-bottom:6px">
     <tr class="bg2">
       <th class="center" style="width:10%">เกรด</th>
       <th class="center" style="width:22%">คะแนนรวม</th>
