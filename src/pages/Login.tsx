@@ -114,6 +114,18 @@ export default function Login() {
               ))}
             </div>
 
+            {/* Hospital photo — bottom of left panel */}
+            <div style={{ position:"absolute", bottom:0, left:0, right:0, height:200, pointerEvents:"none", overflow:"hidden" }}>
+              {/* Gradient overlay ให้ภาพค่อยๆ หายไปด้านบน */}
+              <div style={{ position:"absolute", top:0, left:0, right:0, height:80, zIndex:1,
+                background:"linear-gradient(to bottom, #EEF4FF, transparent)" }} />
+              <img src="/hospital.jpg" alt="Chiangrai Ram Hospital"
+                style={{ width:"100%", height:"100%", objectFit:"cover",
+                  objectPosition:"center 40%", opacity:0.18,
+                  filter:"grayscale(30%) saturate(60%)" }}
+                onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            </div>
+
           </div>
 
           {/* ════════════ RIGHT PANEL ════════════ */}
