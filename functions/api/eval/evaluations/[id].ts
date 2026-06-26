@@ -305,12 +305,14 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   `).bind(id).first<{ status: string; department_id: number }>();
 
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
-  if (!["draft", "pending_head"].includes(ev.status))
-    return Response.json({ ok: false, error: "ลบได้เฉพาะใบประเมินที่ยังไม่ได้ส่งหัวหน้าประเมิน" }, { status: 409 });
 
-  // head: scope check
-  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id)
-    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  // head can only delete draft/pending_head; HR/admin can delete any status
+  if (user.role === "head") {
+    if (!["draft", "pending_head"].includes(ev.status))
+      return Response.json({ ok: false, error: "ลบได้เฉพาะใบประเมินที่ยังไม่ได้ส่งให้รองฯ" }, { status: 409 });
+    if (user.scope_department_id && ev.department_id !== user.scope_department_id)
+      return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   await ctx.env.HR_DB.prepare("DELETE FROM evaluation_scores WHERE evaluation_id = ?").bind(id).run();
   await ctx.env.HR_DB.prepare("DELETE FROM evaluation_approvals WHERE evaluation_id = ?").bind(id).run();

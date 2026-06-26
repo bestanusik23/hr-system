@@ -27,6 +27,12 @@ const STATUS_COLOR: Record<string, string> = {
   rejected:       "#ef4444",
 };
 
+function gradeFromScore(s: number | null): string {
+  if (s === null) return "—";
+  if (s >= 90) return "A"; if (s >= 80) return "B"; if (s >= 70) return "C";
+  if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
+}
+
 export default function EvaluationList() {
   const { user } = useAuth();
   const [evals, setEvals] = useState<Evaluation[]>([]);
@@ -143,7 +149,7 @@ export default function EvaluationList() {
                   {ev.full_name}
                 </div>
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>รอบ {ev.round} วัน · {ev.department_name ?? "—"} · {ev.division_name ?? "—"}</div>
-                {ev.total_score !== null && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>คะแนน {ev.total_score}/100{ev.grade ? ` · เกรด ${ev.grade}` : ""}</div>}
+                {ev.total_score !== null && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>คะแนน {ev.total_score}/100 · เกรด {gradeFromScore(ev.total_score)}</div>}
               </div>
               <span style={{ background: STATUS_COLOR[ev.status] + "22", color: STATUS_COLOR[ev.status], borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
                 {STATUS_LABEL[ev.status]}
@@ -161,8 +167,8 @@ export default function EvaluationList() {
                   {deleting === ev.id ? "…" : "ส่งให้หัวหน้า →"}
                 </button>
               )}
-              {/* Delete button: draft or pending_head only */}
-              {["draft", "pending_head"].includes(ev.status) && (
+              {/* Delete button: HR/admin can delete any status */}
+              {(isHR || ["draft", "pending_head"].includes(ev.status)) && (
                 <button
                   onClick={e => deleteEval(ev, e)}
                   disabled={deleting === ev.id}
