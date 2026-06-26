@@ -26,11 +26,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   if (user.role === "head" && user.scope_department_id) {
     sql += " AND e.department_id = ? AND ev.status != 'draft'"; params.push(user.scope_department_id);
-  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+  } else if (user.role === "deputy" && user.scope_division_id) {
+    // division deputy: scoped to their assigned division(s)
     const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
     const ph = divIds.map(() => "?").join(",");
     sql += ` AND e.division_id IN (${ph})`; params.push(...divIds);
   }
+  // deputyHR: no division filter — sees all evaluations as final approver
 
   sql += " ORDER BY ev.updated_at DESC";
 
