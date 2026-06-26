@@ -11,7 +11,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const empId  = url.searchParams.get("employee_id") ?? "";
 
   let sql = `
-    SELECT ev.id, ev.round, ev.status, ev.grade, ev.total_score, ev.created_at, ev.updated_at,
+    SELECT ev.id, ev.employee_id, ev.round, ev.status, ev.grade, ev.total_score, ev.created_at, ev.updated_at,
            e.full_name, e.emp_code, e.position, e.start_date, e.emp_status,
            d.name AS department_name, dv.name AS division_name
     FROM evaluations ev
