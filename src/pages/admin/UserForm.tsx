@@ -145,6 +145,14 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     }
   }
 
+  const selectedDivNames = [divisionId, divisionId2, divisionId3]
+    .filter(Boolean)
+    .map(id => divisions.find(d => d.id === id)?.name)
+    .filter(Boolean) as string[];
+  const deputyScopeHint = selectedDivNames.length
+    ? `🏢 รองผู้อำนวยการ: จะเห็นข้อมูลใน ${selectedDivNames.length} ฝ่าย — ${selectedDivNames.map(n => `"${n}"`).join(", ")}`
+    : "🏢 รองผู้อำนวยการ: จะเห็นข้อมูลทุกฝ่าย (หากไม่เลือกฝ่าย)";
+
   return (
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
@@ -255,15 +263,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
               marginBottom: 14, fontSize: 12, color: "#475569", border: "1px solid #dce4f5" }}>
               {role === "head"
                 ? `🏥 หัวหน้าแผนก: จะเห็นเฉพาะข้อมูลใน${departmentId ? `แผนก "${filteredDepts.find(d=>d.id===departmentId)?.name ?? ""}"` : "แผนกที่เลือก (กรุณาเลือกแผนก)"}`
-                : (() => {
-                  const sel = [divisionId, divisionId2, divisionId3]
-                    .filter(Boolean)
-                    .map(id => divisions.find(d => d.id === id)?.name)
-                    .filter(Boolean);
-                  return sel.length
-                    ? `🏢 รองผู้อำนวยการ: จะเห็นข้อมูลใน ${sel.length} ฝ่าย — "${sel.join('", "')}"`
-                    : "🏢 รองผู้อำนวยการ: จะเห็นข้อมูลทุกฝ่าย (หากไม่เลือกฝ่าย)";
-                })()
+                : deputyScopeHint}
             </div>
           )}
 
