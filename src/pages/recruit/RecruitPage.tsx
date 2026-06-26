@@ -90,12 +90,17 @@ export default function RecruitPage() {
 
   async function load() {
     setLoading(true); setError("");
-    const r = await fetch("/api/recruit/applications");
-    const d = await r.json() as { ok: boolean; applications: Application[]; headers: string[]; error?: string };
-    if (!d.ok) { setError(d.error ?? "ไม่สามารถโหลดข้อมูลได้"); setLoading(false); return; }
-    setHeaders(d.headers ?? []);
-    setApplications(d.applications ?? []);
-    setLoading(false);
+    try {
+      const r = await fetch("/api/recruit/applications");
+      const d = await r.json() as { ok: boolean; applications: Application[]; headers: string[]; error?: string };
+      if (!d.ok) { setError(d.error ?? "ไม่สามารถโหลดข้อมูลได้"); return; }
+      setHeaders(d.headers ?? []);
+      setApplications(d.applications ?? []);
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อได้ กรุณาลองใหม่");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, []);

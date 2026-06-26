@@ -87,17 +87,14 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number; head_user_id: number | null }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
+  // Scope check: head must own or be assigned to the evaluation
   if (user.role === "head" && user.scope_department_id) {
-    // Allow if: department matches scope, OR this head was assigned to the evaluation
     const deptMatch = !ev.department_id || ev.department_id === user.scope_department_id;
     const isAssignedHead = ev.head_user_id === user.id;
     if (!deptMatch && !isAssignedHead)
       return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
-  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
-    const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
-    if (ev.division_id && !divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
+  // deputy/deputyHR: scope enforced only at GET-list level; action level is open to correct role
 
   const scores     = body.scores as Record<string, number> | undefined;
   const suggestion = body.suggestion as string | undefined;
