@@ -19,14 +19,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   `).bind(id).first<{ division_id: number; department_id: number; status: string; employee_id: number; [key: string]: unknown }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // Scope check: head by department, deputy by division
+  // Scope check: head by department, deputy (division-level) by division
   if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id) {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
-  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+  if (user.role === "deputy" && user.scope_division_id) {
     const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
     if (!divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
+  // deputyHR: no division restriction — final approver sees all
 
   const scores = await ctx.env.HR_DB.prepare(`
     SELECT es.topic_id, es.score, et.text, et.owner, et.sort_order
