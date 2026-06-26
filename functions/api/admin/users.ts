@@ -7,6 +7,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
+  // Auto-migrate: add role_2 / role_3 columns if they don't exist yet (idempotent)
+  for (const col of ["role_2", "role_3"]) {
+    try { await ctx.env.HR_DB.prepare(`ALTER TABLE users ADD COLUMN ${col} TEXT`).run(); } catch { /* already exists */ }
+  }
+
   const rows = await ctx.env.HR_DB.prepare(
     `SELECT u.id, u.username, u.full_name, u.role, u.role_2, u.role_3, u.role_title,
             u.scope_division_id, u.scope_division_id_2, u.scope_division_id_3,
