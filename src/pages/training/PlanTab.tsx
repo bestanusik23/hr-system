@@ -14,8 +14,21 @@ type ViewMode = "list" | "calendar";
 type CalView  = "month" | "week" | "agenda";
 type Tab = "plan" | "reg" | "summary" | "cert";
 
-const STATUS_LABEL: Record<string, string> = { planned: "วางแผน", upcoming: "ใกล้ถึง", done: "เสร็จแล้ว" };
-const STATUS_COLOR: Record<string, string> = { planned: "#94a3b8", upcoming: "#d97706", done: "#16a34a" };
+const STATUS_LABEL: Record<string, string> = {
+  planned:  "วางแผน",
+  approved: "อนุมัติแล้ว",
+  open:     "เปิดรับสมัคร",
+  upcoming: "กำลังอบรม",
+  done:     "เสร็จสิ้น",
+};
+const STATUS_COLOR: Record<string, string> = {
+  planned:  "#94a3b8",
+  approved: "#7c3aed",
+  open:     "#0891b2",
+  upcoming: "#d97706",
+  done:     "#16a34a",
+};
+const WORKFLOW_STEPS = ["planned", "approved", "open", "upcoming", "done"];
 const TYPE_LABEL: Record<string, string> = {
   Internal: "Internal", External: "External",
   Mandatory: "Mandatory Training", Continuing: "Continuing Education",
@@ -75,6 +88,17 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   async function deleteCourse(id: number) {
     await fetch(`/api/training/courses/${id}`, { method: "DELETE" });
     setConfirmDel(null);
+    load();
+  }
+
+  async function advanceCourse(c: Course) {
+    const idx  = WORKFLOW_STEPS.indexOf(c.status);
+    const next = WORKFLOW_STEPS[idx + 1];
+    if (!next) return;
+    await fetch(`/api/training/courses/${c.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "set_status", status: next }),
+    });
     load();
   }
 
@@ -147,7 +171,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {/* Status filter */}
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {!showCancelled && [["", "ทั้งหมด"], ["planned", "วางแผน"], ["upcoming", "ใกล้ถึง"], ["done", "เสร็จแล้ว"]].map(([k, v]) => (
+          {!showCancelled && [["", "ทั้งหมด"], ["planned", "วางแผน"], ["approved", "อนุมัติแล้ว"], ["open", "เปิดรับสมัคร"], ["upcoming", "กำลังอบรม"], ["done", "เสร็จสิ้น"]].map(([k, v]) => (
             <button key={k} onClick={() => setStatusFilter(k)}
               style={{ padding: "6px 14px", borderRadius: 7, border: "1.5px solid",
                 borderColor: statusFilter === k ? "#0038C6" : "#dce4f5",
@@ -254,13 +278,28 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                           border: "1px solid #fecaca", borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
                           🚫 ยกเลิกแล้ว
                         </span>
-                      ) : (
-                        <span style={{ background: STATUS_COLOR[c.status] + "20", color: STATUS_COLOR[c.status],
-                          border: `1px solid ${STATUS_COLOR[c.status]}40`,
-                          borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
-                          {STATUS_LABEL[c.status]}
-                        </span>
-                      )}
+                      ) : (() => {
+                        const stepIdx = WORKFLOW_STEPS.indexOf(c.status);
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                            <span style={{ background: STATUS_COLOR[c.status] + "20", color: STATUS_COLOR[c.status],
+                              border: `1px solid ${STATUS_COLOR[c.status]}40`,
+                              borderRadius: 6, padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>
+                              {STATUS_LABEL[c.status] ?? c.status}
+                            </span>
+                            {stepIdx >= 0 && (
+                              <div style={{ display: "flex", gap: 2, paddingLeft: 4 }}>
+                                {WORKFLOW_STEPS.map((_, i) => (
+                                  <div key={i} style={{
+                                    width: 10, height: 4, borderRadius: 2,
+                                    background: i <= stepIdx ? STATUS_COLOR[c.status] : "#e2e8f0",
+                                  }} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td style={{ padding: "10px 14px" }}>
                       <div style={{ display: "flex", gap: 4 }}>
@@ -268,6 +307,18 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                           <button onClick={() => setSelected(c)} style={actionBtn("#0038C6")}>✏️</button>
                         )}
                         {canEdit && !c.is_cancelled && <>
+                          {(() => {
+                            const idx  = WORKFLOW_STEPS.indexOf(c.status);
+                            const next = WORKFLOW_STEPS[idx + 1];
+                            return next ? (
+                              <button onClick={() => advanceCourse(c)}
+                                style={{ ...actionBtn(STATUS_COLOR[next] ?? "#64748b"),
+                                  fontSize: 11, padding: "4px 8px", whiteSpace: "nowrap" }}
+                                title={`ขยับไป: ${STATUS_LABEL[next]}`}>
+                                → {STATUS_LABEL[next]}
+                              </button>
+                            ) : null;
+                          })()}
                           <button onClick={() => duplicateCourse(c)}
                             style={actionBtn("#64748b")} title="Duplicate">⎘</button>
                           <button onClick={() => onNavigate("reg", c.id)}

@@ -1,5 +1,13 @@
 import { useState } from "react";
 
+const WORKFLOW: { key: string; label: string; icon: string; color: string; next: string }[] = [
+  { key: "planned",  label: "วางแผน",       icon: "📋", color: "#94a3b8", next: "approved" },
+  { key: "approved", label: "อนุมัติแล้ว",   icon: "✅", color: "#7c3aed", next: "open" },
+  { key: "open",     label: "เปิดรับสมัคร",  icon: "📝", color: "#0891b2", next: "upcoming" },
+  { key: "upcoming", label: "กำลังอบรม",     icon: "🎯", color: "#d97706", next: "done" },
+  { key: "done",     label: "เสร็จสิ้น",     icon: "🏆", color: "#16a34a", next: "" },
+];
+
 interface Course {
   id: number; course_code: string; course: string; course_type: string;
   organizing_dept: string | null; project_owner: string | null; trainer: string | null;
@@ -88,25 +96,95 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
             <input value={courseName} onChange={e => setCourseName(e.target.value)} style={inp} disabled={!canEdit} placeholder="ระบุชื่อหลักสูตร" />
           </div>
 
-          <div style={row2}>
-            <div>
-              <label style={lbl}>ประเภทการอบรม</label>
-              <select value={courseType} onChange={e => setCourseType(e.target.value)} style={inp} disabled={!canEdit}>
-                <option value="Internal">Internal</option>
-                <option value="External">External</option>
-                <option value="Mandatory">Mandatory Training</option>
-                <option value="Continuing">Continuing Education</option>
-              </select>
-            </div>
-            <div>
-              <label style={lbl}>สถานะ</label>
-              <select value={status} onChange={e => setStatus(e.target.value)} style={inp} disabled={!canEdit}>
-                <option value="planned">วางแผน</option>
-                <option value="upcoming">ใกล้ถึง</option>
-                <option value="done">เสร็จแล้ว</option>
-              </select>
-            </div>
+          <div style={{ marginBottom: 12 }}>
+            <label style={lbl}>ประเภทการอบรม</label>
+            <select value={courseType} onChange={e => setCourseType(e.target.value)} style={inp} disabled={!canEdit}>
+              <option value="Internal">Internal</option>
+              <option value="External">External</option>
+              <option value="Mandatory">Mandatory Training</option>
+              <option value="Continuing">Continuing Education</option>
+            </select>
           </div>
+
+          {/* 5-step workflow stepper */}
+          {!isNew && (() => {
+            const curIdx = WORKFLOW.findIndex(w => w.key === status);
+            const cur    = WORKFLOW[curIdx] ?? WORKFLOW[0];
+            const next   = cur.next ? WORKFLOW.find(w => w.key === cur.next) : null;
+            return (
+              <div style={{ marginBottom: 16 }}>
+                <label style={lbl}>สถานะ / ขั้นตอน</label>
+                {/* Stepper bar */}
+                <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 12, overflowX: "auto" }}>
+                  {WORKFLOW.map((w, i) => {
+                    const done  = i < curIdx;
+                    const active = i === curIdx;
+                    return (
+                      <div key={w.key} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 60 }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: 1 }}>
+                          <div style={{
+                            width: 36, height: 36, borderRadius: "50%", fontSize: 16,
+                            display: "flex", alignItems: "center", justifyContent: "center",
+                            background: active ? w.color : done ? w.color + "30" : "#f1f5f9",
+                            border: `2px solid ${active ? w.color : done ? w.color + "80" : "#e2e8f0"}`,
+                            color: active ? "#fff" : done ? w.color : "#94a3b8",
+                            fontWeight: 700, transition: "all .2s",
+                          }}>
+                            {done ? "✓" : w.icon}
+                          </div>
+                          <div style={{ fontSize: 10, marginTop: 4, fontWeight: active ? 700 : 400,
+                            color: active ? w.color : done ? "#64748b" : "#94a3b8", textAlign: "center",
+                            whiteSpace: "nowrap" }}>{w.label}</div>
+                        </div>
+                        {i < WORKFLOW.length - 1 && (
+                          <div style={{ height: 2, width: 24, flexShrink: 0,
+                            background: done ? cur.color + "60" : "#e2e8f0", marginBottom: 20 }} />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Advance button */}
+                {canEdit && next && (
+                  <button type="button" onClick={() => setStatus(next.key)}
+                    style={{ width: "100%", padding: "10px 0", borderRadius: 8, border: "none",
+                      background: next.color, color: "#fff", fontWeight: 700, fontSize: 13,
+                      cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                    {next.icon} ขยับสู่ขั้นตอนถัดไป: {next.label} →
+                  </button>
+                )}
+                {!next && (
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8,
+                    padding: "10px 14px", fontSize: 13, color: "#16a34a", fontWeight: 600,
+                    textAlign: "center" }}>
+                    🏆 เสร็จสิ้นทุกขั้นตอนแล้ว
+                  </div>
+                )}
+                {/* Hidden: allow manual override via small dropdown */}
+                {canEdit && (
+                  <details style={{ marginTop: 8 }}>
+                    <summary style={{ fontSize: 11, color: "#94a3b8", cursor: "pointer", userSelect: "none" }}>
+                      ⚙ เปลี่ยนสถานะด้วยตนเอง
+                    </summary>
+                    <select value={status} onChange={e => setStatus(e.target.value)}
+                      style={{ ...inp, marginTop: 6, fontSize: 12 }}>
+                      {WORKFLOW.map(w => <option key={w.key} value={w.key}>{w.icon} {w.label}</option>)}
+                    </select>
+                  </details>
+                )}
+              </div>
+            );
+          })()}
+          {isNew && (
+            <div style={{ marginBottom: 12 }}>
+              <label style={lbl}>สถานะเริ่มต้น</label>
+              <div style={{ background: "#f0f5ff", borderRadius: 8, padding: "10px 14px",
+                fontSize: 13, color: "#0038C6", fontWeight: 600, border: "1px solid #dce4f5" }}>
+                📋 วางแผน (ขั้นตอนที่ 1/5)
+              </div>
+            </div>
+          )}
 
           <div style={row2}>
             <div>

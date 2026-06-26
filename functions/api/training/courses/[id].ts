@@ -72,7 +72,23 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const id   = ctx.params.id as string;
-  const body = await ctx.request.json() as { action: "cancel" | "restore"; reason?: string };
+  const body = await ctx.request.json() as { action: "cancel" | "restore" | "set_status"; reason?: string; status?: string };
+
+  if (body.action === "set_status" && body.status) {
+    const VALID = ["planned", "approved", "open", "upcoming", "done"];
+    if (!VALID.includes(body.status)) return Response.json({ ok: false, error: "Invalid status" }, { status: 400 });
+    const regOpen = body.status === "open" ? 1 : undefined;
+    if (regOpen !== undefined) {
+      await ctx.env.HR_DB.prepare(
+        "UPDATE training_courses SET status=?, reg_open=?, updated_at=datetime('now') WHERE id=?"
+      ).bind(body.status, regOpen, id).run();
+    } else {
+      await ctx.env.HR_DB.prepare(
+        "UPDATE training_courses SET status=?, updated_at=datetime('now') WHERE id=?"
+      ).bind(body.status, id).run();
+    }
+    return Response.json({ ok: true });
+  }
 
   if (body.action === "cancel") {
     await ctx.env.HR_DB.prepare(
