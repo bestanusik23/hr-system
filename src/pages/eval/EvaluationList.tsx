@@ -70,7 +70,7 @@ export default function EvaluationList() {
 
   async function sendToHead(ev: Evaluation, e: React.MouseEvent) {
     e.stopPropagation();
-    setDeleting(ev.id); // reuse loading state
+    setDeleting(ev.id);
     const r = await fetch(`/api/eval/evaluations/${ev.id}`, {
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "send_to_head" }),
@@ -80,6 +80,21 @@ export default function EvaluationList() {
     if (!d.ok) { showToast(d.error ?? "ส่งไม่สำเร็จ", "error"); return; }
     setEvals(prev => prev.map(x => x.id === ev.id ? { ...x, status: "pending_head" } : x));
     showToast(`✅ ส่งใบประเมินของ "${ev.full_name}" ให้หัวหน้าแผนกเรียบร้อยแล้ว`);
+  }
+
+  async function sendToDeputyDirect(ev: Evaluation, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!confirm(`ส่งตรงถึงรองผู้อำนวยการ (ข้ามหัวหน้าแผนก) สำหรับ "${ev.full_name}"?`)) return;
+    setDeleting(ev.id);
+    const r = await fetch(`/api/eval/evaluations/${ev.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "send_to_deputy_direct" }),
+    });
+    const d = await r.json() as { ok: boolean; error?: string };
+    setDeleting(null);
+    if (!d.ok) { showToast(d.error ?? "ส่งไม่สำเร็จ", "error"); return; }
+    setEvals(prev => prev.map(x => x.id === ev.id ? { ...x, status: "pending_deputy" } : x));
+    showToast(`✅ ส่งตรงรองผู้อำนวยการเรียบร้อยแล้ว`);
   }
 
   const isHR = user && ["hr", "admin"].includes(user.role);
@@ -154,18 +169,30 @@ export default function EvaluationList() {
               <span style={{ background: STATUS_COLOR[ev.status] + "22", color: STATUS_COLOR[ev.status], borderRadius: 8, padding: "4px 12px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
                 {STATUS_LABEL[ev.status]}
               </span>
-              {/* HR quick-send button on draft cards */}
+              {/* HR quick-send buttons on draft cards */}
               {ev.status === "draft" && isHR && (
-                <button
-                  onClick={e => sendToHead(ev, e)}
-                  disabled={deleting === ev.id}
-                  title="ส่งให้หัวหน้าแผนกประเมิน"
-                  style={{ padding: "6px 14px", borderRadius: 8, border: "none",
-                    background: "#0038C6", color: "#fff", fontSize: 12, cursor: "pointer",
-                    fontFamily: "inherit", fontWeight: 700, flexShrink: 0,
-                    opacity: deleting === ev.id ? 0.5 : 1, transition: "all .15s" }}>
-                  {deleting === ev.id ? "…" : "ส่งให้หัวหน้า →"}
-                </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
+                  <button
+                    onClick={e => sendToHead(ev, e)}
+                    disabled={deleting === ev.id}
+                    title="ส่งให้หัวหน้าแผนกประเมิน"
+                    style={{ padding: "5px 12px", borderRadius: 7, border: "none",
+                      background: "#0038C6", color: "#fff", fontSize: 11, cursor: "pointer",
+                      fontFamily: "inherit", fontWeight: 700,
+                      opacity: deleting === ev.id ? 0.5 : 1 }}>
+                    {deleting === ev.id ? "…" : "ส่งหัวหน้า →"}
+                  </button>
+                  <button
+                    onClick={e => sendToDeputyDirect(ev, e)}
+                    disabled={deleting === ev.id}
+                    title="ส่งตรงรองผู้อำนวยการ (ข้ามหัวหน้าแผนก)"
+                    style={{ padding: "5px 12px", borderRadius: 7, border: "1.5px solid #c2410c",
+                      background: "#fff5f5", color: "#c2410c", fontSize: 11, cursor: "pointer",
+                      fontFamily: "inherit", fontWeight: 700,
+                      opacity: deleting === ev.id ? 0.5 : 1 }}>
+                    ส่งตรงรองฯ →
+                  </button>
+                </div>
               )}
               {/* Delete button: HR/admin can delete any status */}
               {(isHR || ["draft", "pending_head"].includes(ev.status)) && (

@@ -136,17 +136,39 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     return Response.json({ ok: true });
   }
 
-  // ── SAVE draft (head in pending_head / hr in pending_hr) ────────
+  // ── STEP 0b: HR sends directly to deputy (no head) → pending_deputy ──
+  if (action === "send_to_deputy_direct") {
+    if (!["hr", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "draft") return conflict("ไม่อยู่ในสถานะร่าง");
+
+    await ctx.env.HR_DB.prepare(
+      "UPDATE evaluations SET status='pending_deputy', updated_at=datetime('now') WHERE id=?"
+    ).bind(id).run();
+    // Mark head step as bypassed so frontend knows deputy must evaluate
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "head", user.id, "bypassed", "ข้ามขั้นตอนหัวหน้าแผนก (แผนกไม่มีหัวหน้า)").run();
+    try {
+      await ctx.env.HR_DB.prepare(
+        "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','send_to_deputy_direct','evaluation',?)"
+      ).bind(user.id, user.full_name, id).run();
+    } catch { /* non-critical */ }
+    return Response.json({ ok: true });
+  }
+
+  // ── SAVE draft (head in pending_head / deputy evaluating / hr in pending_hr) ──
   if (action === "save") {
+    const deputyInPending = ["deputy", "admin"].includes(user.role) && ev.status === "pending_deputy";
     const canSave =
       (["head", "admin"].includes(user.role) && ev.status === "pending_head") ||
-      (["hr",   "admin"].includes(user.role) && ev.status === "pending_hr");
+      (["hr",   "admin"].includes(user.role) && ev.status === "pending_hr") ||
+      deputyInPending;
     if (!canSave) return forbidden;
 
     await saveScores();
     const total = scores ? Object.values(scores).reduce((a, b) => a + b, 0) : null;
 
-    if (ev.status === "pending_head") {
+    if (ev.status === "pending_head" || deputyInPending) {
       await ctx.env.HR_DB.prepare(`
         UPDATE evaluations SET suggestion=?, decision=?, grade=?,
           total_score=COALESCE(?,total_score),
@@ -188,6 +210,36 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
       "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','submit_eval','evaluation',?)"
     ).bind(user.id, user.full_name, id).run();
 
+    return Response.json({ ok: true });
+  }
+
+  // ── STEP 1b: Deputy evaluates (as head) + approves → pending_hr ─
+  if (action === "deputy_evaluate_and_approve") {
+    if (!["deputy", "admin"].includes(user.role)) return forbidden;
+    if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
+
+    await saveScores();
+    const total = await totalFromDB();
+
+    await ctx.env.HR_DB.prepare(`
+      UPDATE evaluations SET status='pending_hr', suggestion=?, decision=?, grade=?,
+        total_score=?, head_user_id=?,
+        signer_employee=COALESCE(?,signer_employee),
+        signer_head=COALESCE(?,signer_head),
+        updated_at=datetime('now') WHERE id=?
+    `).bind(suggestion ?? null, decision ?? null, grade ?? null, total, user.id,
+             signerEmp ?? null, signerHead ?? null, id).run();
+
+    await ctx.env.HR_DB.prepare(
+      "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
+    ).bind(id, "deputy", user.id, "approved",
+      note ? `ประเมินและอนุมัติโดยรองฯ: ${note}` : "ประเมินและอนุมัติโดยรองผู้อำนวยการฝ่าย (แผนกไม่มีหัวหน้า)").run();
+
+    try {
+      await ctx.env.HR_DB.prepare(
+        "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','deputy_evaluate_and_approve','evaluation',?)"
+      ).bind(user.id, user.full_name, id).run();
+    } catch { /* non-critical */ }
     return Response.json({ ok: true });
   }
 

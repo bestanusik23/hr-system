@@ -212,6 +212,10 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
             setSignerHR(user.full_name ?? "");
           if (evaluation.status === "pending_final" && user.role === "deputyHR" && !evaluation.signer_director)
             setSignerDir(user.full_name ?? "");
+          // Deputy evaluating directly (no head): auto-fill head signer field with deputy's name
+          const isBypassed = (evd.approvals ?? []).some((a: Approval) => a.step === "head" && a.status === "bypassed");
+          if (isBypassed && evaluation.status === "pending_deputy" && ["deputy","admin"].includes(user.role) && !evaluation.signer_head)
+            setSignerHead(user.full_name ?? "");
         }
         if (evd.templateTopics) setTopics(evd.templateTopics);
         else fetch("/api/eval/topics").then(r => r.json())
@@ -221,8 +225,10 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
+  const headBypassed  = approvals.some(a => a.step === "head" && a.status === "bypassed");
   const canSendToHead = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "draft");
-  const canEditHead   = !!(user && ["head","admin"].includes(user.role)   && ev?.status === "pending_head");
+  const canDeputyEval = !!(user && ["deputy","admin"].includes(user.role)  && ev?.status === "pending_deputy" && headBypassed);
+  const canEditHead   = !!(user && ["head","admin"].includes(user.role)   && ev?.status === "pending_head") || canDeputyEval;
   const canEditHR     = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
   const canDeputyAct  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy");
   const canHRAct      = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
@@ -252,14 +258,16 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     const ACTION_MSG: Record<string, string> = {
-      send_to_head:    "✅ ส่งให้หัวหน้าแผนกเรียบร้อยแล้ว",
-      submit:          "✅ ส่งใบประเมินเรียบร้อยแล้ว",
-      deputy_approve:  "✅ อนุมัติโดยรองผู้อำนวยการเรียบร้อย",
-      deputy_reject:   "❌ ส่งกลับแก้ไขเรียบร้อย",
-      hr_acknowledge:  "✅ HR รับทราบเรียบร้อย",
-      final_approve:   "✅ อนุมัติขั้นสุดท้ายเรียบร้อย",
-      final_reject:    "❌ ไม่อนุมัติ — ส่งกลับแก้ไขเรียบร้อย",
-      save:            "✅ บันทึกเรียบร้อยแล้ว",
+      send_to_head:                 "✅ ส่งให้หัวหน้าแผนกเรียบร้อยแล้ว",
+      send_to_deputy_direct:        "✅ ส่งตรงรองผู้อำนวยการเรียบร้อยแล้ว",
+      submit:                       "✅ ส่งใบประเมินเรียบร้อยแล้ว",
+      deputy_approve:               "✅ อนุมัติโดยรองผู้อำนวยการเรียบร้อย",
+      deputy_evaluate_and_approve:  "✅ ประเมินและอนุมัติโดยรองผู้อำนวยการเรียบร้อยแล้ว",
+      deputy_reject:                "❌ ส่งกลับแก้ไขเรียบร้อย",
+      hr_acknowledge:               "✅ HR รับทราบเรียบร้อย",
+      final_approve:                "✅ อนุมัติขั้นสุดท้ายเรียบร้อย",
+      final_reject:                 "❌ ไม่อนุมัติ — ส่งกลับแก้ไขเรียบร้อย",
+      save:                         "✅ บันทึกเรียบร้อยแล้ว",
     };
     onSaved(ACTION_MSG[action]);
   }
@@ -551,6 +559,23 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
             </div>
           )}
 
+          {/* Banner: deputy evaluating directly */}
+          {canDeputyEval && (
+            <div style={{ background: "#fff8ed", border: "1px solid #fde68a",
+              borderLeft: "4px solid #d97706", borderRadius: 6, padding: "12px 16px",
+              display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ fontSize: 18 }}>⚠️</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#b45309" }}>
+                  แผนกนี้ไม่มีหัวหน้าแผนก
+                </div>
+                <div style={{ fontSize: 12, color: "#92400e", marginTop: 2 }}>
+                  รองผู้อำนวยการฝ่ายสามารถประเมินผลและอนุมัติได้โดยตรง — กรอกคะแนน ข้อเสนอแนะ และผลการพิจารณาให้ครบก่อนกดอนุมัติ
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── Action buttons ── */}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" as const }}>
             <button onClick={onClose} style={btnClose}>ปิด</button>
@@ -584,7 +609,23 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
                 </button>
               </>
             )}
-            {canDeputyAct && (
+            {canDeputyEval && (
+              <>
+                <button onClick={() => save("save")} disabled={saving} style={btnOutline("#c2410c")}>
+                  💾 บันทึกร่าง
+                </button>
+                <button onClick={() => save("deputy_reject")} disabled={saving} style={btnRed}>
+                  ✗ ไม่อนุมัติ
+                </button>
+                <button onClick={() => save("deputy_evaluate_and_approve")} disabled={saving || !decision}
+                  style={{ ...btnPrimary(decision ? "#c2410c" : "#94a3b8"),
+                    cursor: decision ? "pointer" : "not-allowed" }}
+                  title={!decision ? "กรุณาเลือกผลการพิจารณาก่อน" : ""}>
+                  {saving ? "กำลังบันทึก…" : "✓ ประเมินและอนุมัติ →"}
+                </button>
+              </>
+            )}
+            {canDeputyAct && !canDeputyEval && (
               <>
                 <button onClick={() => save("deputy_reject")} disabled={saving} style={btnRed}>
                   ✗ ไม่อนุมัติ
