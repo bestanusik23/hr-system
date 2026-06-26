@@ -1,8 +1,109 @@
 import { useEffect, useState } from "react";
 import { daysUntil, formatThaiDate } from "../../utils/date";
-import { useAuth } from "../../context/AuthContext";
-import OnboardingChecklist from "./OnboardingChecklist";
+import { useAuth, hasRole } from "../../context/AuthContext";
 import ExitChecklistModal from "./ExitChecklistModal";
+
+/* ── Inline Onboarding Checklist (renders inside the modal, no overlay) ── */
+interface CheckItem { key: string; label: string; completed: boolean; completed_at: string | null; note: string | null; }
+
+function InlineChecklist({ empId, empName, onBack }: { empId: number; empName: string; onBack: () => void }) {
+  const { user } = useAuth();
+  const isHR = user && hasRole(user, "hr", "admin");
+  const [items, setItems] = useState<CheckItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/manpower/checklist?employee_id=${empId}`)
+      .then(r => r.json())
+      .then((d: { ok: boolean; items: CheckItem[] }) => { if (d.ok) setItems(d.items); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [empId]);
+
+  async function toggle(key: string, cur: boolean) {
+    if (!isHR) return;
+    setSaving(key);
+    const res = await fetch("/api/manpower/checklist", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ employee_id: empId, key, completed: !cur }),
+    });
+    const d = await res.json() as { ok: boolean };
+    if (d.ok) setItems(prev => prev.map(i => i.key === key ? { ...i, completed: !cur, completed_at: !cur ? new Date().toISOString() : null } : i));
+    setSaving(null);
+  }
+
+  const done = items.filter(i => i.completed).length;
+  const total = items.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  return (
+    <div>
+      {/* Back + header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <button onClick={onBack} style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid #c4cfee",
+          background: "#fff", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 600, color: "#475569" }}>
+          ← กลับรายชื่อ
+        </button>
+        <div style={{ fontWeight: 800, fontSize: 15, color: "#0a1628" }}>Onboarding Checklist — {empName}</div>
+      </div>
+
+      {/* Progress */}
+      <div style={{ background: "linear-gradient(135deg,#0038C6,#0891b2)", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+          <span style={{ fontSize: 12, color: "rgba(255,255,255,.85)", fontWeight: 600 }}>{done}/{total} รายการ</span>
+          <span style={{ fontSize: 13, fontWeight: 800, color: pct === 100 ? "#86efac" : "#fff" }}>
+            {pct === 100 ? "✅ เสร็จสมบูรณ์" : `${pct}%`}
+          </span>
+        </div>
+        <div style={{ background: "rgba(255,255,255,.2)", borderRadius: 6, height: 7, overflow: "hidden" }}>
+          <div style={{ background: pct === 100 ? "#4ade80" : "#fff", width: `${pct}%`, height: "100%", borderRadius: 6, transition: "width .4s" }} />
+        </div>
+      </div>
+
+      {/* Items */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 32, color: "#94a3b8" }}>กำลังโหลด…</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {items.map((item, idx) => (
+            <div key={item.key} onClick={() => toggle(item.key, item.completed)}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px",
+                borderRadius: 10, border: `2px solid ${item.completed ? "#bbf7d0" : "#e2e8f0"}`,
+                background: item.completed ? "#f0fdf4" : "#f8fafc",
+                cursor: isHR ? "pointer" : "default", transition: "all .2s", opacity: saving === item.key ? 0.6 : 1 }}>
+              <div style={{ width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                background: item.completed ? "#16a34a" : "#fff",
+                border: `2px solid ${item.completed ? "#16a34a" : "#c4cfee"}`,
+                display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, transition: "all .2s" }}>
+                {item.completed ? "✓" : <span style={{ fontSize: 10, color: "#94a3b8", fontWeight: 700 }}>{idx + 1}</span>}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: item.completed ? "#15803d" : "#334155", fontSize: 13,
+                  textDecoration: item.completed ? "line-through" : "none", opacity: item.completed ? 0.8 : 1 }}>
+                  {item.label}
+                </div>
+                {item.completed && item.completed_at && (
+                  <div style={{ fontSize: 11, color: "#16a34a", marginTop: 2 }}>
+                    เสร็จ {new Date(item.completed_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                  </div>
+                )}
+              </div>
+              {saving === item.key && <div style={{ width: 18, height: 18, border: "2px solid #0038C6",
+                borderTopColor: "transparent", borderRadius: "50%", animation: "spin .7s linear infinite" }} />}
+            </div>
+          ))}
+          {!isHR && (
+            <div style={{ marginTop: 8, padding: "10px 14px", background: "#f1f5f9", borderRadius: 8,
+              fontSize: 12, color: "#64748b", textAlign: "center" }}>
+              เฉพาะ HR เท่านั้นที่สามารถอัปเดตรายการนี้ได้
+            </div>
+          )}
+        </div>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
 
 interface NewHireRow  { id: number; full_name: string; position: string; start_date: string; emp_type: string; division_name: string }
 interface ResignRow   { id: number; full_name: string; position: string; resign_date: string; resign_reason: string; division_name: string }
@@ -101,7 +202,7 @@ export default function ManpowerDashboard() {
   const [histLoad, setHL]       = useState(false);
   const [saving, setSaving]     = useState(false);
   const [saveMsg, setSaveMsg]   = useState("");
-  const [checklistEmp, setChecklistEmp]         = useState<{ id: number; name: string } | null>(null);
+  const [inModalChecklist, setInModalChecklist] = useState<{ id: number; name: string } | null>(null);
   const [exitChecklistEmp, setExitChecklistEmp] = useState<{ id: number; name: string } | null>(null);
   const [showEmpCode, setShowEmpCode]           = useState(false);
   const [empCodeList, setEmpCodeList]           = useState<{ id: number; full_name: string; emp_code: string | null; position: string | null }[]>([]);
@@ -291,7 +392,7 @@ export default function ManpowerDashboard() {
 
       {/* ── Employee Detail Modal ─────────────────────────────────────── */}
       {modal && !isHist && (
-        <div onClick={() => setModal(null)} style={{
+        <div onClick={() => { setModal(null); setInModalChecklist(null); }} style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 999,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
           <div onClick={e => e.stopPropagation()} style={{
@@ -306,12 +407,14 @@ export default function ManpowerDashboard() {
                 </div>
                 <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>รอบ {data.period_label}</div>
               </div>
-              <button onClick={() => setModal(null)} style={{ background: "none", border: "none",
+              <button onClick={() => { setModal(null); setInModalChecklist(null); }} style={{ background: "none", border: "none",
                 fontSize: 20, cursor: "pointer", color: "#94a3b8", lineHeight: 1, padding: 4 }}>✕</button>
             </div>
             <div style={{ overflowY: "auto", padding: "16px 24px 24px" }}>
               {modal === "newhire" && (
-                data.new_hire_list.length === 0
+                inModalChecklist
+                  ? <InlineChecklist empId={inModalChecklist.id} empName={inModalChecklist.name} onBack={() => setInModalChecklist(null)} />
+                  : data.new_hire_list.length === 0
                   ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานเข้าใหม่ในรอบนี้</div>
                   : <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead><tr style={{ background: "#f8fafc" }}>
@@ -330,7 +433,7 @@ export default function ManpowerDashboard() {
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.emp_type || "—"}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#0891b2", fontWeight: 600 }}>{formatThaiDate(e.start_date)}</td>
                             <td style={{ padding: "9px 12px" }}>
-                              <button onClick={() => setChecklistEmp({ id: e.id, name: e.full_name })}
+                              <button onClick={() => setInModalChecklist({ id: e.id, name: e.full_name })}
                                 style={{ padding: "5px 12px", borderRadius: 8, border: "1.5px solid #c4cfee",
                                   background: "#f4f7ff", fontSize: 11, cursor: "pointer",
                                   color: "#0038C6", fontWeight: 700, fontFamily: "inherit",
@@ -381,14 +484,7 @@ export default function ManpowerDashboard() {
         </div>
       )}
 
-      {/* ── Onboarding Checklist Modal ───────────────────────────────── */}
-      {checklistEmp && (
-        <OnboardingChecklist
-          employeeId={checklistEmp.id}
-          employeeName={checklistEmp.name}
-          onClose={() => setChecklistEmp(null)}
-        />
-      )}
+      {/* ── Exit Checklist Modal ─────────────────────────────────────── */}
       {exitChecklistEmp && (
         <ExitChecklistModal
           employeeId={exitChecklistEmp.id}
