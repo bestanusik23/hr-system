@@ -269,7 +269,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   <!-- Signatories -->
   <table>
     <tr><td colspan="4" class="sec-title">ลายมือชื่อผู้เกี่ยวข้อง</td></tr>
-    <tr style="height:48px">
+    <tr style="height:80px">
       <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
         <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${ev.signer_employee ?? ""}</div>
         <div style="font-size:9pt;margin-top:2px">พนักงานผู้รับการประเมิน</div>
