@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth, hasRole } from "../../context/AuthContext";
 import EvaluationForm from "./EvaluationForm";
 
 interface Evaluation {
@@ -97,7 +97,7 @@ export default function EvaluationList() {
     showToast(`✅ ส่งตรงรองผู้อำนวยการเรียบร้อยแล้ว`);
   }
 
-  const isHR = user && ["hr", "admin"].includes(user.role);
+  const isHR = user && hasRole(user, "hr", "admin");
 
   async function load() {
     setLoading(true);
@@ -109,7 +109,7 @@ export default function EvaluationList() {
 
   useEffect(() => { load(); }, [statusFilter]);
 
-  const canCreate = user && ["hr", "head", "admin"].includes(user.role);
+  const canCreate = user && hasRole(user, "hr", "head", "admin");
 
   // Filter tabs scoped to what each role cares about
   const filters: [string, string][] =

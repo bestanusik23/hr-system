@@ -5,11 +5,18 @@ export interface User {
   username: string;
   full_name: string;
   role: "hr" | "head" | "deputy" | "deputyHR" | "admin";
+  role_2: string | null;
+  role_3: string | null;
   role_title: string | null;
   scope_division_id: number | null;
   scope_department_id: number | null;
   color: string | null;
   initial: string | null;
+}
+
+export function hasRole(user: User | null, ...roles: string[]): boolean {
+  if (!user) return false;
+  return roles.some(r => r === user.role || r === user.role_2 || r === user.role_3);
 }
 
 interface AuthState {

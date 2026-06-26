@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth, hasRole } from "../../context/AuthContext";
 import PrintEvalModal from "./PrintEvalModal";
 
 interface Topic { id: number; owner: string; text: string; sort_order: number; }
@@ -206,15 +206,15 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
         setScores(sc);
         // Auto-fill signature
         if (user) {
-          if (evaluation.status === "pending_head" && ["head","admin"].includes(user.role) && !evaluation.signer_head)
+          if (evaluation.status === "pending_head" && hasRole(user, "head", "admin") && !evaluation.signer_head)
             setSignerHead(user.full_name ?? "");
-          if (evaluation.status === "pending_hr" && ["hr","admin"].includes(user.role) && !evaluation.signer_hr)
+          if (evaluation.status === "pending_hr" && hasRole(user, "hr", "admin") && !evaluation.signer_hr)
             setSignerHR(user.full_name ?? "");
-          if (evaluation.status === "pending_final" && user.role === "deputyHR" && !evaluation.signer_director)
+          if (evaluation.status === "pending_final" && hasRole(user, "deputyHR") && !evaluation.signer_director)
             setSignerDir(user.full_name ?? "");
           // Deputy evaluating directly (no head): auto-fill head signer field with deputy's name
           const isBypassed = (evd.approvals ?? []).some((a: Approval) => a.step === "head" && a.status === "bypassed");
-          if (isBypassed && evaluation.status === "pending_deputy" && ["deputy","admin"].includes(user.role) && !evaluation.signer_head)
+          if (isBypassed && evaluation.status === "pending_deputy" && hasRole(user, "deputy", "admin") && !evaluation.signer_head)
             setSignerHead(user.full_name ?? "");
         }
         if (evd.templateTopics) setTopics(evd.templateTopics);
@@ -226,14 +226,14 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
   const headBypassed   = approvals.some(a => a.step === "head" && a.status === "bypassed");
-  const canSendToHead  = !!(user && ["hr","admin"].includes(user.role)        && ev?.status === "draft");
-  const canDeputyEval  = !!(user && ["deputy","deputyHR","admin"].includes(user.role) && ev?.status === "pending_deputy");
-  const canEditHead    = !!(user && ["head","admin"].includes(user.role)     && ev?.status === "pending_head") || canDeputyEval;
-  const canEditHR     = !!(user && ["hr","admin"].includes(user.role)         && ev?.status === "pending_hr");
-  const canDeputyAct  = !!(user && ["deputy","deputyHR","admin"].includes(user.role) && ev?.status === "pending_deputy");
-  const canHRAct      = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
-  const canFinalAct   = !!(user && ["deputyHR","admin"].includes(user.role)&& ev?.status === "pending_final");
-  const canPrint      = !!(user && ["hr","admin","deputyHR"].includes(user.role) && ev?.status === "approved");
+  const canSendToHead  = !!(user && hasRole(user, "hr","admin")                      && ev?.status === "draft");
+  const canDeputyEval  = !!(user && hasRole(user, "deputy","deputyHR","admin")       && ev?.status === "pending_deputy");
+  const canEditHead    = !!(user && hasRole(user, "head","admin")                    && ev?.status === "pending_head") || canDeputyEval;
+  const canEditHR      = !!(user && hasRole(user, "hr","admin")                      && ev?.status === "pending_hr");
+  const canDeputyAct   = !!(user && hasRole(user, "deputy","deputyHR","admin")       && ev?.status === "pending_deputy");
+  const canHRAct       = !!(user && hasRole(user, "hr","admin")                      && ev?.status === "pending_hr");
+  const canFinalAct    = !!(user && hasRole(user, "deputyHR","admin")                && ev?.status === "pending_final");
+  const canPrint       = !!(user && hasRole(user, "hr","admin","deputyHR")           && ev?.status === "approved");
 
   async function save(action: string) {
     setSaving(true); setError("");
