@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import CourseForm from "./CourseForm";
+import CourseDetailModal from "./CourseDetailModal";
 
 interface Course {
   id: number; course_code: string; course: string; course_type: string;
@@ -47,6 +48,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   const [calYear, setCalYear]     = useState(new Date().getFullYear());
   const [calMonth, setCalMonth]   = useState(new Date().getMonth());
   const [selected, setSelected]   = useState<Course | null>(null);
+  const [viewDetail, setViewDetail] = useState<Course | null>(null);
   const [showNew, setShowNew]     = useState(false);
   const [confirmDel, setConfirmDel]       = useState<Course | null>(null);
   const [confirmCancel, setConfirmCancel] = useState<Course | null>(null);
@@ -407,7 +409,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                             marginBottom: 4,
                           }}>{day}</div>
                           {dayItems.slice(0, 2).map(c => (
-                            <div key={c.id} onClick={() => setSelected(c)}
+                            <div key={c.id} onClick={() => setViewDetail(c)}
                               style={{ fontSize: 10, background: STATUS_COLOR[c.status] + "20",
                                 color: STATUS_COLOR[c.status], border: `1px solid ${STATUS_COLOR[c.status]}40`,
                                 borderRadius: 3, padding: "2px 5px", marginBottom: 2,
@@ -434,7 +436,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
               {agendaCourses.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีหลักสูตร</div>
               ) : agendaCourses.map(c => (
-                <div key={c.id} onClick={() => setSelected(c)}
+                <div key={c.id} onClick={() => setViewDetail(c)}
                   style={{ display: "flex", gap: 16, padding: "12px 16px", marginBottom: 8,
                     background: "#fff", borderRadius: 8, border: "1px solid #dce4f5",
                     borderLeft: "4px solid #0038C6", cursor: "pointer" }}>
@@ -465,7 +467,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
           )}
 
           {/* Week View */}
-          {calView === "week" && <WeekView courses={courses} calYear={calYear} calMonth={calMonth} onSelect={setSelected} />}
+          {calView === "week" && <WeekView courses={courses} calYear={calYear} calMonth={calMonth} onSelect={setViewDetail} />}
         </div>
       )}
 
@@ -535,6 +537,15 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
         </div>
       )}
 
+      {viewDetail && (
+        <CourseDetailModal
+          course={viewDetail}
+          onClose={() => setViewDetail(null)}
+          onEdit={() => { setSelected(viewDetail); setViewDetail(null); }}
+          onAdvanced={() => { setViewDetail(null); load(); }}
+          onNavigateReg={() => { setViewDetail(null); onNavigate("reg", viewDetail.id); }}
+        />
+      )}
       {selected && (
         <CourseForm course={selected} onClose={() => setSelected(null)}
           onSaved={() => { setSelected(null); load(); }} canEdit={canEdit} />
