@@ -225,10 +225,13 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
 
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
-  const headBypassed  = approvals.some(a => a.step === "head" && a.status === "bypassed");
-  const canSendToHead = !!(user && ["hr","admin"].includes(user.role)      && ev?.status === "draft");
-  const canDeputyEval = !!(user && ["deputy","admin"].includes(user.role)  && ev?.status === "pending_deputy" && headBypassed);
-  const canEditHead   = !!(user && ["head","admin"].includes(user.role)   && ev?.status === "pending_head") || canDeputyEval;
+  const headBypassed   = approvals.some(a => a.step === "head" && a.status === "bypassed");
+  const headNoScores   = !!(ev && (ev.total_score === null || ev.total_score === 0));
+  const canSendToHead  = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "draft");
+  // Deputy can evaluate when: head was bypassed (no head dept) OR head submitted without scores
+  const canDeputyEval  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy"
+                           && (headBypassed || headNoScores));
+  const canEditHead    = !!(user && ["head","admin"].includes(user.role)  && ev?.status === "pending_head") || canDeputyEval;
   const canEditHR     = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
   const canDeputyAct  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy");
   const canHRAct      = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
@@ -567,7 +570,9 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
               <span style={{ fontSize: 18 }}>⚠️</span>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#b45309" }}>
-                  แผนกนี้ไม่มีหัวหน้าแผนก
+                  {headBypassed
+                    ? "แผนกนี้ไม่มีหัวหน้าแผนก"
+                    : "หัวหน้าแผนกยังไม่ได้กรอกผลการประเมิน"}
                 </div>
                 <div style={{ fontSize: 12, color: "#92400e", marginTop: 2 }}>
                   รองผู้อำนวยการฝ่ายสามารถประเมินผลและอนุมัติได้โดยตรง — กรอกคะแนน ข้อเสนอแนะ และผลการพิจารณาให้ครบก่อนกดอนุมัติ
