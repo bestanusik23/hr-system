@@ -146,6 +146,12 @@ export default function RecruitPage() {
     NOTICE_KEYS.some(kw => h.toLowerCase().includes(kw.toLowerCase()))
   );
 
+  // คอลัมน์วันเกิด (ซ่อนในตาราง แต่ใช้คำนวณอายุใน modal)
+  const birthKey = headers.find(h =>
+    h.includes("วันเดือนปีเกิด") || h.includes("วันเกิด") ||
+    h.toLowerCase().includes("birthdate") || h.toLowerCase().includes("birthday")
+  );
+
   const interviewQueue = statusKey
     ? applications.filter(a => a[statusKey] === "รอนัดสัมภาษณ์")
     : [];
@@ -396,6 +402,15 @@ export default function RecruitPage() {
                 <div style={{ display: "flex", gap: 14, fontSize: 13, color: "#64748b", marginBottom: 10, flexWrap: "wrap" }}>
                   {resolvedTableCols[1].key && <span>แผนก: <b style={{ color: "#334155" }}>{detail[resolvedTableCols[1].key] || "—"}</b></span>}
                   {resolvedTableCols[0].key && <span>วันที่สมัคร: <b style={{ color: "#334155" }}>{detail[resolvedTableCols[0].key] || "—"}</b></span>}
+                  {birthKey && detail[birthKey] && (() => {
+                    const age = calcAge(detail[birthKey]);
+                    return age !== null ? (
+                      <span style={{ background: "#eff6ff", color: "#1d4ed8", borderRadius: 8,
+                        padding: "2px 10px", fontWeight: 700, fontSize: 13 }}>
+                        อายุ {age} ปี
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 {statusKey && <StatusBadge val={detail[statusKey] ?? ""} />}
               </div>
@@ -510,6 +525,16 @@ export default function RecruitPage() {
       </>
     </PageLayout>
   );
+}
+
+function calcAge(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const match = dateStr.match(/(\d{4})/);
+  if (!match) return null;
+  let year = parseInt(match[1]);
+  if (year > 2400) year -= 543; // แปลง พ.ศ. → ค.ศ.
+  const age = new Date().getFullYear() - year;
+  return age >= 0 && age <= 100 ? age : null;
 }
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
