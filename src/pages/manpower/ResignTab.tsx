@@ -92,7 +92,6 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
   async function save() {
     if (!empId) { setError("กรุณาเลือกพนักงาน"); return; }
     if (!resignDate) { setError("กรุณาระบุวันที่ลาออก"); return; }
-    if (!allClear) { setError("กรุณาทำ Exit Checklist ให้ครบก่อนปิดเคส"); return; }
     setSaving(true); setError("");
     const r = await fetch("/api/manpower/resign", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -181,9 +180,9 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
             ))}
           </div>
           {!allClear && (
-            <div style={{ marginTop: 10, padding: "8px 12px", background: "#fef2f2",
-              border: "1px solid #fecaca", borderRadius: 8, fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
-              ⚠️ ต้องทำ Checklist ให้ครบก่อนจึงจะปิดเคสได้
+            <div style={{ marginTop: 10, padding: "8px 12px", background: "#fffbeb",
+              border: "1px solid #fde68a", borderRadius: 8, fontSize: 12, color: "#92400e" }}>
+              📋 Checklist ยังไม่ครบ — สามารถปิดเคสได้เลย และอัปเดต Checklist ทีหลังได้
             </div>
           )}
         </div>
@@ -213,13 +212,12 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
         <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 7,
           padding: "10px 14px", fontSize: 13, color: "#dc2626", marginBottom: 14 }}>{error}</div>
       )}
-      <button onClick={save} disabled={saving || (!allClear && exitItems.length > 0)}
+      <button onClick={save} disabled={saving}
         style={{ width: "100%", padding: "13px 0", borderRadius: 8, border: "none",
-          background: (!allClear && exitItems.length > 0) ? "#9ca3af" : "#dc2626",
-          color: "#fff", fontWeight: 700, fontSize: 14,
-          cursor: (saving || (!allClear && exitItems.length > 0)) ? "not-allowed" : "pointer",
+          background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 14,
+          cursor: saving ? "not-allowed" : "pointer",
           fontFamily: "inherit", opacity: saving ? 0.7 : 1 }}>
-        {saving ? "กำลังบันทึก…" : (!allClear && exitItems.length > 0) ? "⚠️ ทำ Checklist ให้ครบก่อน" : "บันทึกการลาออก"}
+        {saving ? "กำลังบันทึก…" : "บันทึกการลาออก"}
       </button>
     </div>
   );
