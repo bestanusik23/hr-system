@@ -158,7 +158,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── SAVE draft (head in pending_head / deputy evaluating / hr in pending_hr) ──
   if (action === "save") {
-    const deputyInPending = ["deputy", "admin"].includes(user.role) && ev.status === "pending_deputy";
+    const deputyInPending = ["deputy", "deputyHR", "admin"].includes(user.role) && ev.status === "pending_deputy";
     const canSave =
       (["head", "admin"].includes(user.role) && ev.status === "pending_head") ||
       (["hr",   "admin"].includes(user.role) && ev.status === "pending_hr") ||
@@ -215,7 +215,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 1b: Deputy evaluates (as head) + approves → pending_hr ─
   if (action === "deputy_evaluate_and_approve") {
-    if (!["deputy", "admin"].includes(user.role)) return forbidden;
+    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return forbidden;
     if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
 
     await saveScores();
@@ -245,7 +245,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 2a: Deputy approves → pending_hr ──────────────────────
   if (action === "deputy_approve") {
-    if (!["deputy", "admin"].includes(user.role)) return forbidden;
+    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return forbidden;
     if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
 
     await ctx.env.HR_DB.prepare(
@@ -263,7 +263,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 2b: Deputy rejects → rejected ─────────────────────────
   if (action === "deputy_reject") {
-    if (!["deputy", "admin"].includes(user.role)) return forbidden;
+    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return forbidden;
     if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
 
     await ctx.env.HR_DB.prepare(
