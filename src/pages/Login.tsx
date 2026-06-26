@@ -74,14 +74,14 @@ export default function Login() {
       <div className={`login-wrap${mounted ? " mounted" : ""}`}
         style={{ display:"flex", flexDirection:"column", minHeight:"100vh",
           fontFamily:"'IBM Plex Sans Thai','Noto Sans Thai',sans-serif",
-          background:"#F7F9FC" }}>
+          background:"#EEF4FF" }}>
 
         {/* ── Main ── */}
         <div style={{ flex:1, display:"flex", maxWidth:1600, margin:"0 auto", width:"100%", padding:"0 0" }}>
 
           {/* ════════════ LEFT PANEL ════════════ */}
           <div style={{ flex:"0 0 45%", position:"relative", overflow:"hidden",
-            background:"#F7F9FC", display:"flex", flexDirection:"column",
+            background:"#EEF4FF", display:"flex", flexDirection:"column",
             padding:"52px 56px 40px" }}>
 
             {/* Decorative blurred circles */}
@@ -95,8 +95,8 @@ export default function Login() {
             </div>
 
             {/* Logo */}
-            <div style={{ marginBottom:44 }}>
-              <img src="/logo.png" alt="Chiangrai RAM Hospital" style={{ height:56 }} />
+            <div style={{ marginBottom:40 }}>
+              <img src="/logo.png" alt="Chiangrai RAM Hospital" style={{ height:96 }} />
             </div>
 
             {/* Heading */}
@@ -104,12 +104,12 @@ export default function Login() {
               ระบบบริหารทรัพยากรบุคคล
             </h1>
             <div style={{ fontSize:15, color:"#52607A", marginBottom:18, fontWeight:400 }}>
-              Human Resource Management Platform
+              Human Resource Management System
             </div>
             <div style={{ width:52, height:3, background:"#0038C6", borderRadius:2, marginBottom:22 }} />
             <p style={{ fontSize:14, color:"#52607A", lineHeight:1.8, marginBottom:40, maxWidth:380 }}>
-              แพลตฟอร์มสำหรับบริหารจัดการข้อมูลบุคลากรอย่างครบวงจร<br />
-              ปลอดภัย ใช้งานง่าย เพื่อประสิทธิภาพขององค์กร
+              ระบบบริหารข้อมูลบุคลากรที่ทันสมัย ใช้งานง่าย ปลอดภัย และมีประสิทธิภาพ<br />
+              เพื่อสนับสนุนการทำงานขององค์กร
             </p>
 
             {/* Feature Cards */}
