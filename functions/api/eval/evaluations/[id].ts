@@ -84,14 +84,19 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     SELECT ev.*, e.division_id, e.department_id FROM evaluations ev
     JOIN employees e ON e.id = ev.employee_id
     WHERE ev.id = ?
-  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number }>();
+  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number; head_user_id: number | null }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id)
-    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (user.role === "head" && user.scope_department_id) {
+    // Allow if: department matches scope, OR this head was assigned to the evaluation
+    const deptMatch = !ev.department_id || ev.department_id === user.scope_department_id;
+    const isAssignedHead = ev.head_user_id === user.id;
+    if (!deptMatch && !isAssignedHead)
+      return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
   if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
     const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
-    if (!divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    if (ev.division_id && !divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   const scores     = body.scores as Record<string, number> | undefined;
