@@ -87,6 +87,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   const [moto1, setMoto1]       = useState("");
   const [moto2, setMoto2]       = useState("");
 
+  const [empCode, setEmpCode]   = useState("");
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState("");
   const [done, setDone]         = useState<{ probation_end_date: string | null; emp_code?: string | null } | null>(null);
@@ -126,7 +127,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   }, [licenseExp]);
 
   function reset() {
-    setName(""); setNameEn(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
+    setName(""); setNameEn(""); setEmpCode(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
     setType(""); setProbDays(119);
     setLicNo(""); setLicExp("");
     setCar1(""); setCar2(""); setMoto1(""); setMoto2("");
@@ -140,7 +141,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       const r = await fetch("/api/manpower/new-hire", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: fullName, name_en: nameEn || null, start_date: startDate,
+          full_name: fullName, name_en: nameEn || null, emp_code: empCode.trim() || null, start_date: startDate,
           department_id: deptId || null, division_id: divId || null,
           position: position || null, emp_type: empType || null, probation_days: probDays,
           license_number: licenseNo || null, license_expiry: licenseExp || null,
@@ -215,6 +216,9 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       </Field>
       <Field label="ชื่อ-นามสกุล (English)" hint="ใช้สำหรับบัตรพนักงาน Canva">
         <input value={nameEn} onChange={e => setNameEn(e.target.value)} style={inp} placeholder="Firstname Lastname" />
+      </Field>
+      <Field label="รหัสพนักงาน" hint="ถ้าไม่กรอก ระบบจะสร้างให้อัตโนมัติ (EMP0001)">
+        <input value={empCode} onChange={e => setEmpCode(e.target.value)} style={inp} placeholder="เช่น EMP0042, H001" />
       </Field>
       <Field label="วันที่เริ่มงาน *">
         <input type="date" value={startDate} onChange={e => setStart(e.target.value)} style={inp} />

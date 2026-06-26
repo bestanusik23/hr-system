@@ -10,7 +10,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const b = await ctx.request.json() as Record<string, unknown>;
   const {
-    full_name, name_en, start_date, department_id, division_id, position,
+    full_name, name_en, emp_code: empCodeInput, start_date, department_id, division_id, position,
     emp_type, probation_days,
     license_number, license_expiry,
     car_plate_1, car_plate_2, moto_plate_1, moto_plate_2,
@@ -46,10 +46,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const newId = result.meta.last_row_id as number;
 
-  // Auto-generate emp_code (graceful — column may not exist on older DBs)
+  // Save emp_code: use manually provided value, or auto-generate EMP0001 style
   let empCode: string | null = null;
   try {
-    empCode = `EMP${String(newId).padStart(4, "0")}`;
+    empCode = (empCodeInput && String(empCodeInput).trim()) || `EMP${String(newId).padStart(4, "0")}`;
     await ctx.env.HR_DB.prepare("UPDATE employees SET emp_code = ? WHERE id = ?")
       .bind(empCode, newId).run();
   } catch { /* emp_code column not yet in schema */ }
