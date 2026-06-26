@@ -97,21 +97,23 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       ORDER BY et.sort_order
     `).bind(id).all<{ topic_id: number; score: number; text: string; owner: string; sort_order: number }>();
 
-    // ── Training summary for this employee ────────────────────────────
-    let training = { course_count: 0, passed_courses: 0 };
+    // ── Training records for this employee ────────────────────────────
+    let trainingRecords: { course: string; course_date: string | null; result: string | null }[] = [];
     try {
       const tr = await db.prepare(`
-        SELECT COUNT(*) AS course_count,
-               SUM(CASE WHEN ta.result='ผ่าน' THEN 1 ELSE 0 END) AS passed_courses
+        SELECT tc.course, tc.course_date, ta.result
         FROM training_attendees ta
+        JOIN training_courses tc ON tc.id = ta.course_id
         WHERE ta.employee_id = ?
-      `).bind(ev.employee_id_num).first<{ course_count: number; passed_courses: number }>();
-      if (tr) training = { course_count: tr.course_count ?? 0, passed_courses: tr.passed_courses ?? 0 };
+        ORDER BY tc.course_date DESC
+      `).bind(ev.employee_id_num).all();
+      trainingRecords = (tr.results ?? []) as typeof trainingRecords;
     } catch { /* ignore */ }
 
-    // ── Approvals ─────────────────────────────────────────────────────
+    // ── Approvals (with approver role_title for signatories) ──────────
     const approvals = await db.prepare(`
-      SELECT ea.step, ea.status, ea.note, ea.created_at, u.full_name AS approver_name
+      SELECT ea.step, ea.status, ea.note, ea.created_at,
+             u.full_name AS approver_name, u.role_title AS approver_title
       FROM evaluation_approvals ea
       LEFT JOIN users u ON u.id = ea.approver_user_id
       WHERE ea.evaluation_id = ?
@@ -129,7 +131,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       evaluation: ev,
       scores: scores.results,
       approvals: approvals.results,
-      training,
+      trainingRecords,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "เกิดข้อผิดพลาด";

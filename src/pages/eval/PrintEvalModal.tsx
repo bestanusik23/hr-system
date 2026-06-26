@@ -1,13 +1,16 @@
 import { useState } from "react";
 
 interface ScoreRow { topic_id: number; score: number; text: string; owner: string; sort_order: number; }
+interface TrainingRecord { course: string; course_date: string | null; result: string | null; }
+interface ApprovalRecord { step: string; status: string; approver_name: string; approver_title: string | null; }
 interface PrintData {
   ok: boolean; error?: string;
   document_no: string; running_no: string; document_code: string;
   print_count: number; is_copy: boolean; printed_by_name: string;
   evaluation: Record<string, unknown>;
   scores: ScoreRow[];
-  training: { course_count: number; passed_courses: number };
+  trainingRecords: TrainingRecord[];
+  approvals: ApprovalRecord[];
 }
 interface Props { evalId: number; onClose: () => void; }
 
@@ -35,8 +38,9 @@ function thaiDate(d: string | null | unknown): string {
 }
 
 function generatePrintHTML(data: PrintData): string {
-  const ev = data.evaluation;
-  const scores = [...data.scores].sort((a, b) => a.sort_order - b.sort_order);
+  const ev      = data.evaluation;
+  const scores  = [...data.scores].sort((a, b) => a.sort_order - b.sort_order);
+  const approvals = data.approvals ?? [];
   const scoreMap: Record<number, number> = {};
   scores.forEach(s => { scoreMap[s.topic_id] = s.score; });
 
@@ -46,6 +50,35 @@ function generatePrintHTML(data: PrintData): string {
   const round   = ev.round as number;
   const roundNo = round === 30 ? 1 : round === 60 ? 2 : round === 90 ? 3 : 4;
   const todayTH = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+
+  // ── Signatory logic ────────────────────────────────────────────────
+  const headBypassed   = approvals.some(a => a.step === "head"   && a.status === "bypassed");
+  const deputyApproval = approvals.find(a => a.step === "deputy" && a.status === "approved");
+  const finalApproval  = approvals.find(a => a.step === "final"  && a.status === "approved");
+
+  const box2Name  = headBypassed
+    ? (deputyApproval?.approver_name ?? String(ev.signer_head ?? ""))
+    : String(ev.signer_head ?? "");
+  const box2Sub   = headBypassed ? `<div style="font-size:8pt;color:#b45309">(รองฯ ประเมินแทนหัวหน้าแผนก)</div>` : "";
+
+  const box3Name  = deputyApproval?.approver_name ?? "";
+  const box3Title = deputyApproval?.approver_title
+    ?? `รองผู้อำนวยการฝ่าย${ev.division_name ? " " + String(ev.division_name) : ""}`;
+
+  const box4Name  = finalApproval?.approver_name ?? String(ev.signer_director ?? "");
+  const box4Title = finalApproval?.approver_title ?? "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนฯ";
+
+  // ── Training records ───────────────────────────────────────────────
+  const trainingRecords = data.trainingRecords ?? [];
+  const trainingRowsHTML = trainingRecords.length
+    ? trainingRecords.map((t, i) => `
+      <tr>
+        <td class="center" style="width:5%">${i + 1}</td>
+        <td>${t.course ?? ""}</td>
+        <td class="center" style="width:22%">${t.course_date ? thaiDate(t.course_date) : "—"}</td>
+        <td class="center" style="width:14%;color:${t.result === "ผ่าน" ? "#15803d" : t.result ? "#dc2626" : "#000"}">${t.result ?? "—"}</td>
+      </tr>`).join("")
+    : `<tr><td colspan="4" class="center" style="padding:8px;color:#888">ไม่มีข้อมูลการอบรม</td></tr>`;
 
   const rowsHTML = scores.map((t, i) => `
     <tr>
@@ -175,35 +208,18 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
     </tr>
   </table>
 
-  <!-- Attendance + Training -->
+  <!-- Training records -->
   <table style="margin-bottom:6px">
-    <tr>
-      <td colspan="2" class="sec-title" style="width:50%">สถิติการมาทำงาน</td>
-      <td colspan="2" class="sec-title" style="width:50%">การฝึกอบรม</td>
-    </tr>
-    <tr>
-      <td class="bg2 bold" style="width:25%">ลาป่วย</td>
-      <td style="width:25%">……………… วัน</td>
-      <td class="bg2 bold" style="width:25%">จำนวนหลักสูตรที่เข้า</td>
-      <td style="width:25%">${data.training.course_count} หลักสูตร</td>
-    </tr>
-    <tr>
-      <td class="bg2 bold">ลากิจ</td>
-      <td>……………… วัน</td>
-      <td class="bg2 bold">ผ่านการอบรม</td>
-      <td>${data.training.passed_courses} หลักสูตร</td>
-    </tr>
-    <tr>
-      <td class="bg2 bold">ขาดงาน</td>
-      <td>……………… วัน</td>
-      <td class="bg2 bold">ชั่วโมงการอบรม</td>
-      <td>……………… ชม.</td>
-    </tr>
-    <tr>
-      <td class="bg2 bold">มาสาย</td>
-      <td>……………… ครั้ง</td>
-      <td colspan="2"></td>
-    </tr>
+    <thead>
+      <tr><th colspan="4" class="sec-title">ประวัติการฝึกอบรม</th></tr>
+      <tr class="bg2">
+        <th class="center" style="width:5%">ที่</th>
+        <th style="text-align:left">ชื่อหลักสูตร</th>
+        <th class="center" style="width:22%">วันที่อบรม</th>
+        <th class="center" style="width:14%">ผล</th>
+      </tr>
+    </thead>
+    <tbody>${trainingRowsHTML}</tbody>
   </table>
 
   <!-- Scores -->
@@ -253,25 +269,26 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   <!-- Signatories -->
   <table>
     <tr><td colspan="4" class="sec-title">ลายมือชื่อผู้เกี่ยวข้อง</td></tr>
-    <tr style="height:44px">
+    <tr style="height:48px">
       <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
         <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${ev.signer_employee ?? ""}</div>
         <div style="font-size:9pt;margin-top:2px">พนักงานผู้รับการประเมิน</div>
         <div style="font-size:8.5pt;color:#555">วันที่ ……/……/………</div>
       </td>
-      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:5px">
-        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${ev.signer_head ?? ""}</div>
+      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
+        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${box2Name}</div>
+        ${box2Sub}
         <div style="font-size:9pt;margin-top:2px">หัวหน้าแผนก</div>
         <div style="font-size:8.5pt;color:#555">วันที่ ……/……/………</div>
       </td>
-      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:5px">
-        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${ev.signer_hr ?? ""}</div>
-        <div style="font-size:9pt;margin-top:2px">ฝ่ายทรัพยากรบุคคล</div>
+      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
+        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${box3Name}</div>
+        <div style="font-size:9pt;margin-top:2px">${box3Title}</div>
         <div style="font-size:8.5pt;color:#555">วันที่ ……/……/………</div>
       </td>
-      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:5px">
-        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${ev.signer_director ?? ""}</div>
-        <div style="font-size:9pt;margin-top:2px">รองผู้อำนวยการ</div>
+      <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
+        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${box4Name}</div>
+        <div style="font-size:9pt;margin-top:2px">${box4Title}</div>
         <div style="font-size:8.5pt;color:#555">วันที่ ……/……/………</div>
       </td>
     </tr>
