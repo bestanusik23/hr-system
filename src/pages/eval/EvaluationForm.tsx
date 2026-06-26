@@ -599,7 +599,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
               </button>
             )}
 
-            {canEditHead && (
+            {canEditHead && !canDeputyEval && (
               <>
                 <button onClick={() => save("save")} disabled={saving} style={btnOutline("#0038C6")}>
                   💾 บันทึกร่าง
