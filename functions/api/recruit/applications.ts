@@ -62,64 +62,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       return obj;
     });
 
-    // Nursing position keywords — head nurses can see all applicants for these positions
-    const NURSING_KEYWORDS = ["ผู้ช่วยเหลือคนไข้", "ผู้ช่วยพยาบาล", "PN", "NA"];
-    function matchNursing(val: string): boolean {
-      const v = val.trim();
-      return NURSING_KEYWORDS.some(kw => {
-        if (kw.length >= 5) return v.includes(kw);
-        // Short keyword (PN, NA) — whole-word check to avoid false positives
-        return v === kw || new RegExp(`(?:^|[\\s,/()-])${kw}(?:[\\s,/()-]|$)`).test(v);
-      });
-    }
-
-    // head: scope to their department + nursing position keywords
-    let scopedDepartment: string | null = null;
-    if (user.role === "head") {
-      if (user.scope_department_id) {
-        const dept = await ctx.env.HR_DB.prepare("SELECT name FROM departments WHERE id = ?")
-          .bind(user.scope_department_id).first<{ name: string }>();
-        scopedDepartment = dept?.name ?? null;
-      }
-
-      // Find position/department column in the sheet
-      const posColIdx = headers.findIndex(h =>
-        h.includes("แผนก") || h.includes("ตำแหน่ง") || h.toLowerCase().includes("department")
-      );
-      if (posColIdx >= 0) {
-        const posKey = headers[posColIdx];
-        applications = applications.filter(a => {
-          const val = (a[posKey] ?? "").trim();
-          if (scopedDepartment && val === scopedDepartment) return true;
-          return matchNursing(val);
-        });
-      } else {
-        // No position column — fall back to searching all fields for nursing keywords
-        applications = applications.filter(a =>
-          Object.values(a).some(v => matchNursing(v))
-        );
-      }
-    }
-
-    // deputy/deputyHR: filter by division column if scoped
-    let scopedDivision: string | null = null;
-    if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
-      const div = await ctx.env.HR_DB.prepare("SELECT name FROM divisions WHERE id = ?")
-        .bind(user.scope_division_id).first<{ name: string }>();
-      scopedDivision = div?.name ?? null;
-
-      if (scopedDivision) {
-        const divColIdx = headers.findIndex(h =>
-          h.includes("ฝ่าย") || h.toLowerCase().includes("division")
-        );
-        if (divColIdx >= 0) {
-          const divKey = headers[divColIdx];
-          applications = applications.filter(a => a[divKey] === scopedDivision);
-        }
-      }
-    }
-
-    return Response.json({ ok: true, applications, headers, scopedDepartment, scopedDivision });
+    // head, deputy, deputyHR — can see ALL applicants (no filtering)
+    return Response.json({ ok: true, applications, headers });
   } catch (e) {
     return Response.json({ ok: false, error: "ไม่สามารถดึงข้อมูลจาก Google Sheets ได้: " + String(e) }, { status: 500 });
   }

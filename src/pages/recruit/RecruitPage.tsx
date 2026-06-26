@@ -128,6 +128,9 @@ export default function RecruitPage() {
       key: findColKey(allDataCols, def.keys as unknown as string[]),
     }));
 
+  // Name column — always the last TABLE_COL_DEF; safe regardless of salary filter
+  const nameCol = resolvedTableCols.find(c => c.label === "ชื่อ-นามสกุล");
+
   // Detect phone/contact column dynamically
   const phoneKey = allDataCols.find(h =>
     h.includes("โทร") || h.toLowerCase().includes("phone") || h.toLowerCase().includes("tel") || h.includes("ติดต่อ")
@@ -250,7 +253,7 @@ export default function RecruitPage() {
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 200 }}>
                   <div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>
-                    {resolvedTableCols[3].key ? app[resolvedTableCols[3].key] || "—" : "—"}
+                    {nameCol?.key ? app[nameCol?.key] || "—" : "—"}
                   </div>
                   {resolvedTableCols[1].key && (
                     <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
@@ -383,7 +386,7 @@ export default function RecruitPage() {
               display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
               <div>
                 <div style={{ fontSize: 19, fontWeight: 800, color: "#0f172a", marginBottom: 6 }}>
-                  {resolvedTableCols[3].key ? detail[resolvedTableCols[3].key] || "—" : "—"}
+                  {nameCol?.key ? detail[nameCol?.key] || "—" : "—"}
                 </div>
                 <div style={{ display: "flex", gap: 14, fontSize: 13, color: "#64748b", marginBottom: 10, flexWrap: "wrap" }}>
                   {resolvedTableCols[1].key && <span>แผนก: <b style={{ color: "#334155" }}>{detail[resolvedTableCols[1].key] || "—"}</b></span>}
