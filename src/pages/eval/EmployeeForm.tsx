@@ -62,28 +62,33 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
   async function save() {
     if (!fullName.trim()) { setError("กรุณากรอกชื่อ"); return; }
     setSaving(true); setError("");
-    const body = {
-      emp_code: empCode.trim() || null,
-      full_name: fullName,
-      position: position || null,
-      department_id: deptId || null,
-      division_id: divId || null,
-      start_date: startDate || null,
-      emp_status: empStatus,
-      eval_rounds: evalRounds,
-      license_number: licenseNumber.trim() || null,
-      license_expiry: licenseExpiry || null,
-      vehicle_plate: vehiclePlate.trim() || null,
-      profession_type: professionType.trim() || null,
-      emp_remark: empRemark.trim() || null,
-    };
-    const url    = employee ? `/api/eval/employees/${employee.id}` : "/api/eval/employees";
-    const method = employee ? "PUT" : "POST";
-    const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const d = await r.json() as { ok: boolean; error?: string };
-    setSaving(false);
-    if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    onSaved();
+    try {
+      const body = {
+        emp_code: empCode.trim() || null,
+        full_name: fullName,
+        position: position || null,
+        department_id: deptId || null,
+        division_id: divId || null,
+        start_date: startDate || null,
+        emp_status: empStatus,
+        eval_rounds: evalRounds,
+        license_number: licenseNumber.trim() || null,
+        license_expiry: licenseExpiry || null,
+        vehicle_plate: vehiclePlate.trim() || null,
+        profession_type: professionType.trim() || null,
+        emp_remark: empRemark.trim() || null,
+      };
+      const url    = employee ? `/api/eval/employees/${employee.id}` : "/api/eval/employees";
+      const method = employee ? "PUT" : "POST";
+      const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const d = await r.json() as { ok: boolean; error?: string };
+      if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      onSaved();
+    } catch {
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (

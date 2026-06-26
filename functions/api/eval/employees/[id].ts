@@ -20,31 +20,55 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
 // PUT /api/eval/employees/:id
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
-  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
-  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  try {
+    const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+    if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
-  const id = ctx.params.id as string;
-  const body = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, emp_code, position, department_id, division_id, start_date, emp_status, eval_rounds,
-          license_number, license_expiry, vehicle_plate, profession_type, emp_remark } = body;
+    const id = ctx.params.id as string;
+    const body = await ctx.request.json() as Record<string, unknown>;
+    const { full_name, emp_code, position, department_id, division_id, start_date, emp_status, eval_rounds,
+            license_number, license_expiry, vehicle_plate, profession_type, emp_remark } = body;
 
-  const rounds = Number(eval_rounds) > 0 ? Number(eval_rounds) : 3;
-  await ctx.env.HR_DB.prepare(`
-    UPDATE employees SET emp_code=?, full_name=?, position=?, department_id=?, division_id=?,
-      start_date=?, emp_status=?, eval_rounds=?,
-      license_number=?, license_expiry=?, vehicle_plate=?, profession_type=?, emp_remark=?,
-      updated_at=datetime('now')
-    WHERE id=?
-  `).bind(
-    emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null,
-    start_date ?? null, emp_status ?? "probation", rounds,
-    license_number ?? null, license_expiry ?? null, vehicle_plate ?? null,
-    profession_type ?? null, emp_remark ?? null,
-    id,
-  ).run();
+    const rounds = Number(eval_rounds) > 0 ? Number(eval_rounds) : 3;
 
-  return Response.json({ ok: true });
+    // Try with eval_rounds first, fall back if column missing
+    try {
+      await ctx.env.HR_DB.prepare(`
+        UPDATE employees SET emp_code=?, full_name=?, position=?, department_id=?, division_id=?,
+          start_date=?, emp_status=?, eval_rounds=?,
+          license_number=?, license_expiry=?, vehicle_plate=?, profession_type=?, emp_remark=?,
+          updated_at=datetime('now')
+        WHERE id=?
+      `).bind(
+        emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null,
+        start_date ?? null, emp_status ?? "probation", rounds,
+        license_number ?? null, license_expiry ?? null, vehicle_plate ?? null,
+        profession_type ?? null, emp_remark ?? null,
+        id,
+      ).run();
+    } catch (inner) {
+      const msg = inner instanceof Error ? inner.message : "";
+      if (msg.includes("UNIQUE") || msg.includes("unique")) {
+        return Response.json({ ok: false, error: "รหัสพนักงานนี้มีอยู่แล้วในระบบ กรุณาใช้รหัสอื่น" }, { status: 409 });
+      }
+      // Retry without optional columns that may not exist yet
+      await ctx.env.HR_DB.prepare(`
+        UPDATE employees SET emp_code=?, full_name=?, position=?, department_id=?, division_id=?,
+          start_date=?, emp_status=?, updated_at=datetime('now')
+        WHERE id=?
+      `).bind(
+        emp_code ?? null, full_name, position ?? null, department_id ?? null, division_id ?? null,
+        start_date ?? null, emp_status ?? "probation",
+        id,
+      ).run();
+    }
+
+    return Response.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "เกิดข้อผิดพลาด";
+    return Response.json({ ok: false, error: msg }, { status: 500 });
+  }
 };
 
 // DELETE /api/eval/employees/:id  — admin/hr only; blocks if approved evaluations exist

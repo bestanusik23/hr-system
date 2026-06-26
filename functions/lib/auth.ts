@@ -51,15 +51,32 @@ export async function createSession(db: D1Database, userId: number, userAgent: s
 
 export async function getSessionUser(db: D1Database, token: string): Promise<SessionUser | null> {
   if (!token) return null;
-  const row = await db.prepare(`
-    SELECT u.id, u.username, u.full_name, u.role, u.role_title,
-           u.scope_division_id, u.scope_division_id_2, u.scope_division_id_3,
-           u.scope_department_id, u.color, u.initial
-    FROM sessions s
-    JOIN users u ON u.id = s.user_id
-    WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1
-  `).bind(token).first<SessionUser>();
-  return row ?? null;
+  try {
+    const row = await db.prepare(`
+      SELECT u.id, u.username, u.full_name, u.role, u.role_title,
+             u.scope_division_id, u.scope_division_id_2, u.scope_division_id_3,
+             u.scope_department_id, u.color, u.initial
+      FROM sessions s
+      JOIN users u ON u.id = s.user_id
+      WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1
+    `).bind(token).first<SessionUser>();
+    return row ?? null;
+  } catch {
+    // Fallback: columns scope_division_id_2/3 may not exist yet in D1
+    try {
+      const row = await db.prepare(`
+        SELECT u.id, u.username, u.full_name, u.role, u.role_title,
+               u.scope_division_id, NULL AS scope_division_id_2, NULL AS scope_division_id_3,
+               u.scope_department_id, u.color, u.initial
+        FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1
+      `).bind(token).first<SessionUser>();
+      return row ?? null;
+    } catch {
+      return null;
+    }
+  }
 }
 
 export async function deleteSession(db: D1Database, token: string): Promise<void> {
