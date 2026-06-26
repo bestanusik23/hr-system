@@ -141,10 +141,6 @@ export default function Login() {
               ))}
             </div>
 
-            {/* Bottom architectural decoration (no image — CSS shape) */}
-            <div style={{ position:"absolute", bottom:0, left:0, right:0, height:180, pointerEvents:"none", overflow:"hidden" }}>
-              <ArchDecoration />
-            </div>
           </div>
 
           {/* ════════════ RIGHT PANEL ════════════ */}
