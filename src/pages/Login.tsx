@@ -74,14 +74,14 @@ export default function Login() {
       <div className={`login-wrap${mounted ? " mounted" : ""}`}
         style={{ display:"flex", flexDirection:"column", minHeight:"100vh",
           fontFamily:"'IBM Plex Sans Thai','Noto Sans Thai',sans-serif",
-          background:"#EEF4FF" }}>
+          background:"#F5F8FF" }}>
 
         {/* ── Main ── */}
         <div style={{ flex:1, display:"flex", maxWidth:1600, margin:"0 auto", width:"100%", padding:"0 0" }}>
 
           {/* ════════════ LEFT PANEL ════════════ */}
           <div style={{ flex:"0 0 45%", position:"relative", overflow:"hidden",
-            background:"#EEF4FF", display:"flex", flexDirection:"column",
+            background:"#F5F8FF", display:"flex", flexDirection:"column",
             padding:"52px 56px 40px" }}>
 
             {/* Decorative blurred circles */}
