@@ -1,23 +1,45 @@
-import { useState, type FormEvent } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
+/* ─────────────── Feature Cards ─────────────── */
 const FEATURES = [
-  { icon: <ShieldIcon />, title: "ปลอดภัย",       desc: "มาตรฐานความปลอดภัยระดับสากล" },
-  { icon: <PeopleIcon />, title: "ครบถ้วน",        desc: "จัดการข้อมูลบุคลากรได้อย่างครอบคลุม" },
-  { icon: <ClockIcon  />, title: "รวดเร็ว",         desc: "ใช้งานง่าย สะดวกและรวดเร็ว" },
-  { icon: <ChartIcon  />, title: "มีประสิทธิภาพ", desc: "รายงานและวิเคราะห์ข้อมูลได้อย่างแม่นยำ" },
+  {
+    icon: <PersonnelIcon />,
+    title: "Personnel Management",
+    desc:  "บริหารจัดการข้อมูลบุคลากรได้อย่างเป็นระบบ",
+  },
+  {
+    icon: <AttendanceIcon />,
+    title: "Attendance & Leave",
+    desc:  "จัดการเวลา การเข้าออกงานและการลาอย่างสะดวก",
+  },
+  {
+    icon: <PayrollIcon />,
+    title: "Payroll & Benefits",
+    desc:  "ระบบเงินเดือน สวัสดิการและสิทธิประโยชน์พนักงาน",
+  },
+  {
+    icon: <AnalyticsIcon />,
+    title: "Analytics Dashboard",
+    desc:  "รายงานและวิเคราะห์ข้อมูลเพื่อการตัดสินใจที่แม่นยำ",
+  },
 ];
 
+/* ─────────────── Component ─────────────── */
 export default function Login() {
-  const { login }  = useAuth();
-  const navigate   = useNavigate();
+  const { login } = useAuth();
+  const navigate  = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error,    setError]    = useState("");
   const [loading,  setLoading]  = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(false);
+  const [mounted,  setMounted]  = useState(false);
+  const [hovered,  setHovered]  = useState<number | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -29,278 +51,389 @@ export default function Login() {
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", minHeight: "100vh", fontFamily: "inherit" }}>
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'IBM Plex Sans Thai', 'Noto Sans Thai', sans-serif; }
+        .login-wrap { opacity: 0; transform: translateY(12px); transition: opacity .6s ease, transform .6s ease; }
+        .login-wrap.mounted { opacity: 1; transform: translateY(0); }
+        .feat-card { transition: transform .2s ease, box-shadow .2s ease; cursor: default; }
+        .feat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,56,198,.12) !important; }
+        .login-btn { transition: all .2s ease; }
+        .login-btn:hover:not(:disabled) { background: #0031ad !important; box-shadow: 0 8px 28px rgba(0,56,198,.45) !important; transform: translateY(-1px); }
+        .login-btn:active:not(:disabled) { transform: translateY(0); }
+        .inp-field { transition: border-color .2s ease, box-shadow .2s ease; }
+        .inp-field:focus { border-color: #0038C6 !important; box-shadow: 0 0 0 4px rgba(0,56,198,.12) !important; outline: none; }
+        .eye-btn { transition: color .15s; }
+        .eye-btn:hover { color: #0038C6 !important; }
+        .forgot-link { transition: color .15s; }
+        .forgot-link:hover { color: #0031ad !important; }
+      `}</style>
 
-      {/* ── Main content ── */}
-      <div style={{ flex: 1, display: "flex" }}>
+      <div className={`login-wrap${mounted ? " mounted" : ""}`}
+        style={{ display:"flex", flexDirection:"column", minHeight:"100vh",
+          fontFamily:"'IBM Plex Sans Thai','Noto Sans Thai',sans-serif",
+          background:"#F7F9FC" }}>
 
-        {/* ── Left panel ── */}
-        <div style={{
-          flex: "0 0 55%", position: "relative", overflow: "hidden",
-          background: "linear-gradient(145deg,#001244 0%,#0038C6 65%,#005CE6 100%)",
-          display: "flex", flexDirection: "column", padding: "44px 52px 40px",
-        }}>
-          {/* Decorative circles */}
-          <div style={{ position:"absolute", right:-100, top:-100, width:340, height:340,
-            borderRadius:"50%", background:"rgba(255,255,255,0.05)", pointerEvents:"none" }} />
-          <div style={{ position:"absolute", left:-60, bottom:80, width:240, height:240,
-            borderRadius:"50%", background:"rgba(255,255,255,0.04)", pointerEvents:"none" }} />
-          <div style={{ position:"absolute", right:60, bottom:-50, width:180, height:180,
-            borderRadius:"50%", background:"rgba(255,255,255,0.06)", pointerEvents:"none" }} />
+        {/* ── Main ── */}
+        <div style={{ flex:1, display:"flex", maxWidth:1600, margin:"0 auto", width:"100%", padding:"0 0" }}>
 
-          {/* Logo */}
-          <div style={{ marginBottom: 44 }}>
-            <div style={{ display:"inline-block", background:"#fff", borderRadius:10, padding:"10px 18px",
-              boxShadow:"0 4px 16px rgba(0,0,0,0.2)" }}>
-              <img src="/logo.png" alt="Chiangrai RAM" style={{ height:48, display:"block" }} />
+          {/* ════════════ LEFT PANEL ════════════ */}
+          <div style={{ flex:"0 0 45%", position:"relative", overflow:"hidden",
+            background:"#F7F9FC", display:"flex", flexDirection:"column",
+            padding:"52px 56px 40px" }}>
+
+            {/* Decorative blurred circles */}
+            <div style={{ position:"absolute", top:-120, left:-80, width:380, height:380,
+              borderRadius:"50%", background:"rgba(0,56,198,0.055)", filter:"blur(60px)", pointerEvents:"none" }} />
+            <div style={{ position:"absolute", bottom:60, right:-60, width:300, height:300,
+              borderRadius:"50%", background:"rgba(38,169,224,0.07)", filter:"blur(50px)", pointerEvents:"none" }} />
+            {/* Dot grid */}
+            <div style={{ position:"absolute", top:40, right:30, opacity:0.18, pointerEvents:"none" }}>
+              <DotGrid />
+            </div>
+
+            {/* Logo */}
+            <div style={{ marginBottom:44 }}>
+              <img src="/logo.png" alt="Chiangrai RAM Hospital" style={{ height:56 }} />
+            </div>
+
+            {/* Heading */}
+            <h1 style={{ fontSize:36, fontWeight:700, color:"#12284C", lineHeight:1.18, marginBottom:10 }}>
+              ระบบบริหารทรัพยากรบุคคล
+            </h1>
+            <div style={{ fontSize:15, color:"#52607A", marginBottom:18, fontWeight:400 }}>
+              Human Resource Management Platform
+            </div>
+            <div style={{ width:52, height:3, background:"#0038C6", borderRadius:2, marginBottom:22 }} />
+            <p style={{ fontSize:14, color:"#52607A", lineHeight:1.8, marginBottom:40, maxWidth:380 }}>
+              แพลตฟอร์มสำหรับบริหารจัดการข้อมูลบุคลากรอย่างครบวงจร<br />
+              ปลอดภัย ใช้งานง่าย เพื่อประสิทธิภาพขององค์กร
+            </p>
+
+            {/* Feature Cards */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, maxWidth:480 }}>
+              {FEATURES.map((f, i) => (
+                <div key={i} className="feat-card"
+                  style={{ background:"#fff", borderRadius:20, padding:"22px 20px",
+                    border:"1px solid #E7EBF3",
+                    boxShadow: hovered === i
+                      ? "0 12px 32px rgba(0,56,198,.12)"
+                      : "0 2px 12px rgba(15,23,42,.06)",
+                    display:"flex", flexDirection:"column", gap:10 }}
+                  onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
+                  <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
+                    <div style={{ width:44, height:44, borderRadius:12,
+                      background:"#EFF4FF", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      {f.icon}
+                    </div>
+                    <div style={{ width:28, height:28, borderRadius:"50%",
+                      background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A95A6" strokeWidth="2.5">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:700, color:"#12284C", lineHeight:1.3 }}>{f.title}</div>
+                  <div style={{ fontSize:12, color:"#8A95A6", lineHeight:1.6 }}>{f.desc}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom architectural decoration (no image — CSS shape) */}
+            <div style={{ position:"absolute", bottom:0, left:0, right:0, height:180, pointerEvents:"none", overflow:"hidden" }}>
+              <ArchDecoration />
             </div>
           </div>
 
-          {/* Heading */}
-          <h1 style={{ fontSize:34, fontWeight:900, color:"#fff", margin:"0 0 10px 0", lineHeight:1.2 }}>
-            ระบบบริหารทรัพยากรบุคคล
-          </h1>
-          <div style={{ fontSize:16, color:"rgba(255,255,255,0.75)", marginBottom:18 }}>
-            โรงพยาบาลเชียงราย ราม
-          </div>
-          <div style={{ width:52, height:3, background:"#60a5fa", borderRadius:2, marginBottom:22 }} />
-          <p style={{ fontSize:14, color:"rgba(255,255,255,0.7)", lineHeight:1.75, marginBottom:36, maxWidth:380 }}>
-            ระบบที่ช่วยบริหารจัดการข้อมูลบุคลากร<br />
-            อย่างมีประสิทธิภาพ ครบถ้วน และปลอดภัย<br />
-            เพื่อการทำงานที่ง่ายขึ้นสำหรับทุกคน
-          </p>
+          {/* ════════════ RIGHT PANEL ════════════ */}
+          <div style={{ flex:1, position:"relative", overflow:"hidden",
+            background:"linear-gradient(145deg,#EDF2FF 0%,#F0F7FF 50%,#E8F4FF 100%)",
+            display:"flex", alignItems:"center", justifyContent:"center", padding:"40px 32px" }}>
 
-          {/* Feature boxes */}
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, maxWidth:480, marginBottom:"auto" }}>
-            {FEATURES.map(f => (
-              <div key={f.title} style={{
-                background:"rgba(255,255,255,0.10)", borderRadius:14, padding:"18px 16px",
-                border:"1px solid rgba(255,255,255,0.15)", backdropFilter:"blur(4px)",
-              }}>
-                <div style={{ width:38, height:38, borderRadius:10,
-                  background:"rgba(255,255,255,0.15)", display:"flex", alignItems:"center",
-                  justifyContent:"center", marginBottom:10 }}>
-                  {f.icon}
+            {/* Decorative circles right side */}
+            <div style={{ position:"absolute", top:-80, right:-80, width:320, height:320,
+              borderRadius:"50%", background:"rgba(0,56,198,0.07)", filter:"blur(50px)", pointerEvents:"none" }} />
+            <div style={{ position:"absolute", bottom:-60, left:0, width:260, height:260,
+              borderRadius:"50%", background:"rgba(38,169,224,0.08)", filter:"blur(40px)", pointerEvents:"none" }} />
+
+            {/* Login Card */}
+            <div style={{ width:"100%", maxWidth:480, position:"relative", zIndex:1,
+              background:"rgba(255,255,255,0.82)", backdropFilter:"blur(30px)",
+              WebkitBackdropFilter:"blur(30px)",
+              borderRadius:32, padding:"48px 44px 40px",
+              border:"1px solid rgba(255,255,255,0.6)",
+              boxShadow:"0 40px 120px rgba(15,23,42,.09), 0 2px 4px rgba(15,23,42,.04)" }}>
+
+              {/* Lock icon */}
+              <div style={{ display:"flex", justifyContent:"center", marginBottom:26 }}>
+                <div style={{ width:72, height:72, borderRadius:"50%",
+                  background:"#EFF4FF", border:"3px solid #DBEAFE",
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  boxShadow:"0 0 0 8px rgba(0,56,198,0.06)" }}>
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    <circle cx="12" cy="16" r="1.5" fill="#0038C6" stroke="none"/>
+                  </svg>
                 </div>
-                <div style={{ fontWeight:700, color:"#fff", fontSize:14, marginBottom:4 }}>{f.title}</div>
-                <div style={{ fontSize:12, color:"rgba(255,255,255,0.65)", lineHeight:1.5 }}>{f.desc}</div>
               </div>
-            ))}
-          </div>
 
-          {/* Hospital building photo (hidden gracefully if not found) */}
-          <div style={{ position:"absolute", bottom:0, left:0, right:0, height:220,
-            background:"linear-gradient(to top, rgba(0,18,68,0.65), transparent)", pointerEvents:"none" }} />
-          <img src="/hospital.jpg" alt="" style={{
-            position:"absolute", bottom:0, left:0, right:0, width:"100%", height:220,
-            objectFit:"cover", objectPosition:"center top", opacity:0.35, pointerEvents:"none",
-          }} onError={e => { (e.target as HTMLImageElement).style.display = "none"; }} />
+              <div style={{ textAlign:"center", marginBottom:32 }}>
+                <h2 style={{ fontSize:26, fontWeight:700, color:"#12284C", marginBottom:10, letterSpacing:"-0.01em" }}>
+                  เข้าสู่ระบบ
+                </h2>
+                <p style={{ fontSize:14, color:"#52607A", lineHeight:1.6 }}>
+                  กรุณาเข้าสู่ระบบเพื่อเข้าใช้งานระบบบุคลากร
+                </p>
+              </div>
+
+              <form onSubmit={handleSubmit}>
+                {/* Username */}
+                <div style={{ marginBottom:20 }}>
+                  <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#12284C", marginBottom:8 }}>
+                    ชื่อผู้ใช้
+                  </label>
+                  <div style={{ position:"relative" }}>
+                    <span style={{ position:"absolute", left:16, top:"50%", transform:"translateY(-50%)", color:"#8A95A6", display:"flex" }}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                      </svg>
+                    </span>
+                    <input type="text" value={username} onChange={e => setUsername(e.target.value)}
+                      autoComplete="username" required autoFocus
+                      placeholder="กรุณากรอกชื่อผู้ใช้"
+                      className="inp-field"
+                      style={{ ...INP, paddingLeft:46 }} />
+                  </div>
+                </div>
+
+                {/* Password */}
+                <div style={{ marginBottom:18 }}>
+                  <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#12284C", marginBottom:8 }}>
+                    รหัสผ่าน
+                  </label>
+                  <div style={{ position:"relative" }}>
+                    <span style={{ position:"absolute", left:16, top:"50%", transform:"translateY(-50%)", color:"#8A95A6", display:"flex" }}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <rect x="3" y="11" width="18" height="11" rx="2.5"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                    </span>
+                    <input type={showPass ? "text" : "password"} value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      autoComplete="current-password" required
+                      placeholder="กรุณากรอกรหัสผ่าน"
+                      className="inp-field"
+                      style={{ ...INP, paddingLeft:46, paddingRight:50 }} />
+                    <button type="button" className="eye-btn" onClick={() => setShowPass(p => !p)}
+                      style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)",
+                        background:"none", border:"none", cursor:"pointer", color:"#8A95A6",
+                        padding:4, display:"flex", alignItems:"center" }}>
+                      {showPass
+                        ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                        : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                      }
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember + Forgot */}
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:26 }}>
+                  <label style={{ display:"flex", alignItems:"center", gap:9, cursor:"pointer",
+                    fontSize:13, color:"#52607A", userSelect:"none" }}>
+                    <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
+                      style={{ width:17, height:17, cursor:"pointer", accentColor:"#0038C6", borderRadius:4 }} />
+                    จดจำการเข้าสู่ระบบ
+                  </label>
+                  <span className="forgot-link"
+                    style={{ fontSize:13, color:"#0038C6", fontWeight:600, cursor:"pointer" }}>
+                    ลืมรหัสผ่าน?
+                  </span>
+                </div>
+
+                {error && (
+                  <div style={{ background:"#FEF2F2", border:"1px solid #FECACA", borderRadius:12,
+                    padding:"12px 16px", fontSize:13, color:"#DC2626", marginBottom:18,
+                    display:"flex", alignItems:"center", gap:8 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#DC2626" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+                    {error}
+                  </div>
+                )}
+
+                {/* Submit button */}
+                <button type="submit" disabled={loading} className="login-btn"
+                  style={{ width:"100%", height:56, borderRadius:16, border:"none",
+                    background: loading ? "#94a3b8" : "#0038C6", color:"#fff",
+                    fontSize:15, fontWeight:600, cursor: loading ? "not-allowed" : "pointer",
+                    letterSpacing:"0.02em",
+                    display:"flex", alignItems:"center", justifyContent:"center", gap:10,
+                    boxShadow: loading ? "none" : "0 4px 20px rgba(0,56,198,.38)",
+                  }}>
+                  {loading
+                    ? <><Spinner /><span>กำลังเข้าสู่ระบบ…</span></>
+                    : <><span>เข้าสู่ระบบ</span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                          <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                      </>
+                  }
+                </button>
+              </form>
+
+              {/* SSL */}
+              <div style={{ marginTop:26, display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}>
+                <div style={{ width:36, height:36, borderRadius:10, background:"#EFF4FF",
+                  display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="2">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:600, color:"#12284C" }}>Protected by 256-bit SSL Encryption</div>
+                  <div style={{ fontSize:11, color:"#8A95A6", marginTop:1 }}>ระบบของเราปลอดภัยด้วยการเข้ารหัสมาตรฐานระดับสากล</div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* ── Right panel ── */}
-        <div style={{
-          flex:1, display:"flex", alignItems:"center", justifyContent:"center",
-          background:"#f0f4ff", padding:"40px 24px",
-        }}>
-          <div style={{
-            width:"100%", maxWidth:420, background:"#fff", borderRadius:22,
-            boxShadow:"0 20px 60px rgba(0,56,198,0.13)", padding:"42px 40px 34px",
-          }}>
-            {/* Lock icon */}
-            <div style={{ textAlign:"center", marginBottom:22 }}>
-              <div style={{ display:"inline-flex", width:68, height:68, borderRadius:"50%",
-                background:"#eff6ff", alignItems:"center", justifyContent:"center",
-                border:"3px solid #dbeafe", boxShadow:"0 4px 14px rgba(0,56,198,0.15)" }}>
-                <LockIcon />
-              </div>
-            </div>
-
-            <div style={{ textAlign:"center", marginBottom:30 }}>
-              <div style={{ fontSize:23, fontWeight:800, color:"#0a1628", marginBottom:8 }}>เข้าสู่ระบบ</div>
-              <div style={{ fontSize:13, color:"#64748b" }}>กรุณากรอกชื่อผู้ใช้และรหัสผ่านเพื่อเข้าสู่ระบบ</div>
-            </div>
-
-            <form onSubmit={handleSubmit}>
-              {/* Username */}
-              <div style={{ marginBottom:18 }}>
-                <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#334155", marginBottom:8 }}>
-                  ชื่อผู้ใช้
-                </label>
-                <div style={{ position:"relative" }}>
-                  <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>
-                    <UserIcon />
-                  </span>
-                  <input type="text" value={username} onChange={e => setUsername(e.target.value)}
-                    autoComplete="username" required placeholder="ชื่อผู้ใช้"
-                    style={{ ...INP, paddingLeft:42 }} />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div style={{ marginBottom:16 }}>
-                <label style={{ display:"block", fontSize:13, fontWeight:600, color:"#334155", marginBottom:8 }}>
-                  รหัสผ่าน
-                </label>
-                <div style={{ position:"relative" }}>
-                  <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:"#94a3b8" }}>
-                    <LockSmallIcon />
-                  </span>
-                  <input type={showPass ? "text" : "password"} value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    autoComplete="current-password" required placeholder="••••••••"
-                    style={{ ...INP, paddingLeft:42, paddingRight:46 }} />
-                  <button type="button" onClick={() => setShowPass(p => !p)}
-                    style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
-                      background:"none", border:"none", cursor:"pointer", color:"#94a3b8", padding:4,
-                      display:"flex", alignItems:"center" }}>
-                    {showPass ? <EyeOffIcon /> : <EyeIcon />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Remember + Forgot */}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
-                <label style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer",
-                  fontSize:13, color:"#475569", userSelect:"none" }}>
-                  <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)}
-                    style={{ width:16, height:16, cursor:"pointer", accentColor:"#0038C6" }} />
-                  จดจำการเข้าสู่ระบบ
-                </label>
-                <span style={{ fontSize:13, color:"#0038C6", fontWeight:600, cursor:"pointer" }}>
-                  ลืมรหัสผ่าน?
-                </span>
-              </div>
-
-              {error && (
-                <div style={{ background:"#fee2e2", border:"1px solid #fecaca", borderRadius:8,
-                  padding:"10px 14px", fontSize:13, color:"#dc2626", marginBottom:18 }}>
-                  {error}
-                </div>
-              )}
-
-              <button type="submit" disabled={loading} style={{
-                width:"100%", padding:"14px 0", borderRadius:11, border:"none",
-                background: loading ? "#94a3b8" : "#0038C6", color:"#fff",
-                fontSize:15, fontWeight:700, cursor: loading ? "not-allowed" : "pointer",
-                letterSpacing:"0.03em", transition:"all .2s",
-                display:"flex", alignItems:"center", justifyContent:"center", gap:10,
-                boxShadow: loading ? "none" : "0 4px 18px rgba(0,56,198,0.4)",
-              }}>
-                {loading ? "กำลังเข้าสู่ระบบ…" : (<><span>เข้าสู่ระบบ</span><span style={{ fontSize:18 }}>→</span></>)}
-              </button>
-            </form>
-
-            {/* SSL badge */}
-            <div style={{ textAlign:"center", marginTop:22, fontSize:12, color:"#94a3b8",
-              display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="2">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        {/* ════════════ FOOTER ════════════ */}
+        <div style={{ background:"#fff", borderTop:"1px solid #E7EBF3",
+          padding:"14px 56px", display:"flex", alignItems:"center",
+          justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+          <div style={{ display:"flex", gap:28, color:"#52607A", fontSize:13, alignItems:"center" }}>
+            <span style={{ display:"flex", alignItems:"center", gap:7 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A95A6" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
               </svg>
-              ระบบปลอดภัย ด้วยการเข้ารหัสข้อมูลแบบ 256-bit SSL
-            </div>
+              www.ram-hospital.co.th
+            </span>
+            <span style={{ display:"flex", alignItems:"center", gap:7 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8A95A6" strokeWidth="2">
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.77 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.68 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 15.92z"/>
+              </svg>
+              092-2749555
+            </span>
+          </div>
+          <span style={{ fontSize:12, color:"#8A95A6" }}>
+            © 2026 Chiangrai RAM Hospital. All rights reserved.
+          </span>
+          <div style={{ display:"flex", alignItems:"center", gap:7, fontSize:12, color:"#52607A", fontWeight:500 }}>
+            HR System v3.0
+            <span style={{ width:7, height:7, borderRadius:"50%", background:"#16A34A", display:"inline-block" }} />
           </div>
         </div>
       </div>
-
-      {/* ── Footer ── */}
-      <div style={{
-        background:"#00112e", padding:"14px 48px",
-        display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10,
-      }}>
-        <div style={{ display:"flex", gap:32, color:"rgba(255,255,255,0.7)", fontSize:13 }}>
-          <span style={{ display:"flex", alignItems:"center", gap:7 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.77 12a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.68 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.64a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 15.92z"/>
-            </svg>
-            092-2749555
-          </span>
-          <span style={{ display:"flex", alignItems:"center", gap:7 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/>
-            </svg>
-            hr@chiangrairam.com
-          </span>
-        </div>
-        <span style={{ color:"rgba(255,255,255,0.4)", fontSize:12 }}>
-          © 2026 Chiangrai Ram Hospital. All rights reserved.
-        </span>
-      </div>
-    </div>
+    </>
   );
 }
 
-/* ── Icons ── */
-function LockIcon() {
+/* ─────────────── Sub-components ─────────────── */
+
+function Spinner() {
   return (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  );
-}
-function LockSmallIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-    </svg>
-  );
-}
-function UserIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
-    </svg>
-  );
-}
-function EyeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-    </svg>
-  );
-}
-function EyeOffIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
-      <line x1="1" y1="1" x2="23" y2="23"/>
-    </svg>
-  );
-}
-function ShieldIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </svg>
-  );
-}
-function PeopleIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-  );
-}
-function ClockIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    </svg>
-  );
-}
-function ChartIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
-      <line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+      style={{ animation:"spin 0.8s linear infinite" }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" strokeLinecap="round"/>
     </svg>
   );
 }
 
+function DotGrid() {
+  const dots = [];
+  for (let r = 0; r < 6; r++) {
+    for (let c = 0; c < 8; c++) {
+      dots.push(<circle key={`${r}-${c}`} cx={c * 18} cy={r * 18} r="1.6" fill="#0038C6" />);
+    }
+  }
+  return <svg width="144" height="108" viewBox="0 0 144 108">{dots}</svg>;
+}
+
+function ArchDecoration() {
+  return (
+    <svg width="100%" height="180" viewBox="0 0 560 180" preserveAspectRatio="xMidYMax slice"
+      xmlns="http://www.w3.org/2000/svg" style={{ opacity:0.1 }}>
+      {/* Stylized hospital building silhouette using rectangles */}
+      <rect x="60"  y="80"  width="80"  height="100" rx="2" fill="#0038C6"/>
+      <rect x="75"  y="60"  width="50"  height="22"  rx="1" fill="#0038C6"/>
+      <rect x="90"  y="40"  width="20"  height="22"  rx="1" fill="#0038C6"/>
+      <rect x="160" y="100" width="60"  height="80"  rx="2" fill="#0038C6"/>
+      <rect x="170" y="82"  width="40"  height="20"  rx="1" fill="#0038C6"/>
+      <rect x="240" y="50"  width="120" height="130" rx="3" fill="#0038C6"/>
+      <rect x="260" y="28"  width="80"  height="24"  rx="1" fill="#0038C6"/>
+      <rect x="285" y="10"  width="30"  height="20"  rx="1" fill="#0038C6"/>
+      <rect x="378" y="70"  width="80"  height="110" rx="2" fill="#0038C6"/>
+      <rect x="390" y="52"  width="56"  height="20"  rx="1" fill="#0038C6"/>
+      <rect x="470" y="110" width="60"  height="70"  rx="2" fill="#0038C6"/>
+      {/* Windows */}
+      {[80,100,120].map(y => [68,88,108].map(x =>
+        <rect key={`${x}-${y}`} x={x} y={y} width="12" height="10" rx="1" fill="#EFF4FF" opacity="0.6"/>
+      ))}
+      {[110,130,150].map(y => [248,274,300,326].map(x =>
+        <rect key={`${x}-${y}`} x={x} y={y} width="14" height="12" rx="1" fill="#EFF4FF" opacity="0.6"/>
+      ))}
+      {/* Ground line */}
+      <rect x="0" y="178" width="560" height="2" rx="1" fill="#0038C6"/>
+      {/* Trees */}
+      <ellipse cx="35"  cy="155" rx="18" ry="22" fill="#26A9E0" opacity="0.5"/>
+      <rect    x="32"   cy="165" width="6"  height="15" rx="2" fill="#26A9E0" opacity="0.4"/>
+      <ellipse cx="530" cy="158" rx="16" ry="20" fill="#26A9E0" opacity="0.5"/>
+      <rect    x="527"  cy="168" width="6"  height="12" rx="2" fill="#26A9E0" opacity="0.4"/>
+    </svg>
+  );
+}
+
+/* ─────────────── Feature Icons ─────────────── */
+function PersonnelIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+  );
+}
+function AttendanceIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="4" width="18" height="18" rx="2"/>
+      <line x1="16" y1="2" x2="16" y2="6"/>
+      <line x1="8"  y1="2" x2="8"  y2="6"/>
+      <line x1="3"  y1="10" x2="21" y2="10"/>
+      <polyline points="9 16 11 18 15 14"/>
+    </svg>
+  );
+}
+function PayrollIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="5" width="20" height="14" rx="2"/>
+      <line x1="2" y1="10" x2="22" y2="10"/>
+      <circle cx="12" cy="15" r="2"/>
+      <path d="M6 15h.01M18 15h.01"/>
+    </svg>
+  );
+}
+function AnalyticsIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0038C6" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="20" x2="18" y2="10"/>
+      <line x1="12" y1="20" x2="12" y2="4"/>
+      <line x1="6"  y1="20" x2="6"  y2="14"/>
+      <line x1="2"  y1="20" x2="22" y2="20"/>
+    </svg>
+  );
+}
+
+/* ─────────────── Shared Styles ─────────────── */
 const INP: React.CSSProperties = {
-  width:"100%", padding:"11px 14px", borderRadius:10,
-  border:"1.5px solid #e2e8f0", fontSize:14, outline:"none",
-  fontFamily:"inherit", boxSizing:"border-box",
-  transition:"border-color .2s", color:"#0a1628", background:"#fff",
+  width:"100%", height:52, padding:"0 14px", borderRadius:14,
+  border:"1.5px solid #E7EBF3", fontSize:14, outline:"none",
+  fontFamily:"'IBM Plex Sans Thai','Noto Sans Thai',sans-serif",
+  boxSizing:"border-box", color:"#12284C", background:"rgba(255,255,255,0.9)",
 };
