@@ -2,28 +2,12 @@ import { useState, useEffect, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-/* ─────────────── Feature Cards ─────────────── */
+/* ─────────────── Features ─────────────── */
 const FEATURES = [
-  {
-    icon: <PersonnelIcon />,
-    title: "Personnel Management",
-    desc:  "บริหารจัดการข้อมูลบุคลากรได้อย่างเป็นระบบ",
-  },
-  {
-    icon: <AttendanceIcon />,
-    title: "Attendance & Leave",
-    desc:  "จัดการเวลา การเข้าออกงานและการลาอย่างสะดวก",
-  },
-  {
-    icon: <PayrollIcon />,
-    title: "Payroll & Benefits",
-    desc:  "ระบบเงินเดือน สวัสดิการและสิทธิประโยชน์พนักงาน",
-  },
-  {
-    icon: <AnalyticsIcon />,
-    title: "Analytics Dashboard",
-    desc:  "รายงานและวิเคราะห์ข้อมูลเพื่อการตัดสินใจที่แม่นยำ",
-  },
+  { icon: <ShieldIcon  />, title: "ปลอดภัย",       desc: "มาตรฐานความปลอดภัยระดับสากล" },
+  { icon: <PeopleIcon  />, title: "ครบถ้วน",        desc: "จัดการข้อมูลบุคลากรได้อย่างครอบคลุม" },
+  { icon: <ClockIcon   />, title: "รวดเร็ว",         desc: "ใช้งานง่าย สะดวกและรวดเร็ว" },
+  { icon: <ChartIcon   />, title: "มีประสิทธิภาพ", desc: "รายงานและวิเคราะห์ข้อมูลได้อย่างแม่นยำ" },
 ];
 
 /* ─────────────── Component ─────────────── */
@@ -37,7 +21,6 @@ export default function Login() {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(false);
   const [mounted,  setMounted]  = useState(false);
-  const [hovered,  setHovered]  = useState<number | null>(null);
 
   useEffect(() => { setMounted(true); }, []);
 
@@ -94,49 +77,39 @@ export default function Login() {
               <DotGrid />
             </div>
 
-            {/* Logo */}
-            <div style={{ marginBottom:40 }}>
-              <img src="/logo.png" alt="Chiangrai RAM Hospital" style={{ height:96 }} />
+            {/* Logo — blend กับพื้นหลัง */}
+            <div style={{ marginBottom:36 }}>
+              <img src="/logo.png" alt="Chiangrai RAM Hospital"
+                style={{ height:96, mixBlendMode:"multiply" }} />
             </div>
 
             {/* Heading */}
-            <h1 style={{ fontSize:36, fontWeight:700, color:"#12284C", lineHeight:1.18, marginBottom:10 }}>
+            <h1 style={{ fontSize:36, fontWeight:700, color:"#12284C", lineHeight:1.18, marginBottom:8 }}>
               ระบบบริหารทรัพยากรบุคคล
             </h1>
-            <div style={{ fontSize:15, color:"#52607A", marginBottom:18, fontWeight:400 }}>
-              Human Resource Management System
+            <div style={{ fontSize:15, color:"#52607A", marginBottom:16, fontWeight:400 }}>
+              โรงพยาบาลเชียงราย ราม
             </div>
-            <div style={{ width:52, height:3, background:"#0038C6", borderRadius:2, marginBottom:22 }} />
-            <p style={{ fontSize:14, color:"#52607A", lineHeight:1.8, marginBottom:40, maxWidth:380 }}>
-              ระบบบริหารข้อมูลบุคลากรที่ทันสมัย ใช้งานง่าย ปลอดภัย และมีประสิทธิภาพ<br />
-              เพื่อสนับสนุนการทำงานขององค์กร
+            <div style={{ width:44, height:3, background:"#0038C6", borderRadius:2, marginBottom:20 }} />
+            <p style={{ fontSize:14, color:"#52607A", lineHeight:1.8, marginBottom:36, maxWidth:380 }}>
+              ระบบที่ช่วยบริหารจัดการข้อมูลบุคลากร<br />
+              อย่างมีประสิทธิภาพ ครบถ้วน และปลอดภัย<br />
+              เพื่อการทำงานที่ง่ายขึ้นสำหรับทุกคน
             </p>
 
-            {/* Feature Cards */}
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16, maxWidth:480 }}>
+            {/* Features — icon + text แบบไม่มีกล่อง */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"20px 24px", maxWidth:460 }}>
               {FEATURES.map((f, i) => (
-                <div key={i} className="feat-card"
-                  style={{ background:"#fff", borderRadius:20, padding:"22px 20px",
-                    border:"1px solid #E7EBF3",
-                    boxShadow: hovered === i
-                      ? "0 12px 32px rgba(0,56,198,.12)"
-                      : "0 2px 12px rgba(15,23,42,.06)",
-                    display:"flex", flexDirection:"column", gap:10 }}
-                  onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)}>
-                  <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between" }}>
-                    <div style={{ width:44, height:44, borderRadius:12,
-                      background:"#EFF4FF", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      {f.icon}
-                    </div>
-                    <div style={{ width:28, height:28, borderRadius:"50%",
-                      background:"#F1F5F9", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8A95A6" strokeWidth="2.5">
-                        <path d="M5 12h14M12 5l7 7-7 7"/>
-                      </svg>
-                    </div>
+                <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:12 }}>
+                  <div style={{ width:40, height:40, borderRadius:12, flexShrink:0,
+                    background:"rgba(0,56,198,0.10)",
+                    display:"flex", alignItems:"center", justifyContent:"center" }}>
+                    {f.icon}
                   </div>
-                  <div style={{ fontSize:13, fontWeight:700, color:"#12284C", lineHeight:1.3 }}>{f.title}</div>
-                  <div style={{ fontSize:12, color:"#8A95A6", lineHeight:1.6 }}>{f.desc}</div>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#12284C", marginBottom:3 }}>{f.title}</div>
+                    <div style={{ fontSize:12, color:"#52607A", lineHeight:1.55 }}>{f.desc}</div>
+                  </div>
                 </div>
               ))}
             </div>
