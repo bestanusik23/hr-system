@@ -18,11 +18,9 @@ interface Props {
 }
 
 const WORKFLOW: { key: string; label: string; icon: string; color: string; next: string }[] = [
-  { key: "planned",  label: "วางแผน",      icon: "📋", color: "#94a3b8", next: "approved" },
-  { key: "approved", label: "อนุมัติแล้ว",  icon: "✅", color: "#7c3aed", next: "open" },
-  { key: "open",     label: "เปิดรับสมัคร", icon: "📝", color: "#0891b2", next: "upcoming" },
-  { key: "upcoming", label: "กำลังอบรม",    icon: "🎯", color: "#d97706", next: "done" },
-  { key: "done",     label: "เสร็จสิ้น",    icon: "🏆", color: "#16a34a", next: "" },
+  { key: "planned",  label: "วางแผนอบรม",   icon: "📋", color: "#64748b", next: "upcoming" },
+  { key: "upcoming", label: "อบรมจริง",      icon: "🎯", color: "#d97706", next: "done" },
+  { key: "done",     label: "อบรมเสร็จสิ้น", icon: "🏆", color: "#16a34a", next: "" },
 ];
 
 const TYPE_COLOR: Record<string, string> = {
@@ -30,6 +28,12 @@ const TYPE_COLOR: Record<string, string> = {
 };
 
 const MONTHS_TH = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+
+function fmtTime(t: string | null): string {
+  if (!t) return "—";
+  const parts = t.split(":");
+  return `${parts[0]}.${parts[1]} น.`;
+}
 
 export default function CourseDetailModal({ course, onClose, onEdit, onAdvanced, onNavigateReg }: Props) {
   const { user } = useAuth();
@@ -148,7 +152,9 @@ export default function CourseDetailModal({ course, onClose, onEdit, onAdvanced,
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <InfoCard icon="📅" label="วันที่อบรม" value={formatDate(course.course_date)} />
             <InfoCard icon="🕐" label="เวลา"
-              value={course.start_time ? `${course.start_time} – ${course.end_time ?? "—"}` : "—"} />
+              value={course.start_time
+                ? `${fmtTime(course.start_time)} – ${fmtTime(course.end_time)}`
+                : "—"} />
           </div>
           <InfoCard icon="📍" label="สถานที่" value={course.location ?? "—"} />
           {course.trainer && <InfoCard icon="👤" label="วิทยากร" value={course.trainer} />}

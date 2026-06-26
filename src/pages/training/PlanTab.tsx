@@ -16,20 +16,22 @@ type CalView  = "month" | "week" | "agenda";
 type Tab = "plan" | "reg" | "summary" | "cert";
 
 const STATUS_LABEL: Record<string, string> = {
-  planned:  "วางแผน",
-  approved: "อนุมัติแล้ว",
-  open:     "เปิดรับสมัคร",
-  upcoming: "กำลังอบรม",
-  done:     "เสร็จสิ้น",
+  planned:  "วางแผนอบรม",
+  upcoming: "อบรมจริง",
+  done:     "อบรมเสร็จสิ้น",
 };
 const STATUS_COLOR: Record<string, string> = {
-  planned:  "#94a3b8",
-  approved: "#7c3aed",
-  open:     "#0891b2",
+  planned:  "#64748b",
   upcoming: "#d97706",
   done:     "#16a34a",
 };
-const WORKFLOW_STEPS = ["planned", "approved", "open", "upcoming", "done"];
+const WORKFLOW_STEPS = ["planned", "upcoming", "done"];
+
+function fmtTime(t: string | null): string {
+  if (!t) return "";
+  const parts = t.split(":");
+  return `${parts[0]}.${parts[1]} น.`;
+}
 const TYPE_LABEL: Record<string, string> = {
   Internal: "Internal", External: "External",
   Mandatory: "Mandatory Training", Continuing: "Continuing Education",
@@ -173,7 +175,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
       <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {/* Status filter */}
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {!showCancelled && [["", "ทั้งหมด"], ["planned", "วางแผน"], ["approved", "อนุมัติแล้ว"], ["open", "เปิดรับสมัคร"], ["upcoming", "กำลังอบรม"], ["done", "เสร็จสิ้น"]].map(([k, v]) => (
+          {!showCancelled && [["", "ทั้งหมด"], ["planned", "วางแผนอบรม"], ["upcoming", "อบรมจริง"], ["done", "อบรมเสร็จสิ้น"]].map(([k, v]) => (
             <button key={k} onClick={() => setStatusFilter(k)}
               style={{ padding: "6px 14px", borderRadius: 7, border: "1.5px solid",
                 borderColor: statusFilter === k ? "#0038C6" : "#dce4f5",
@@ -264,7 +266,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                     </td>
                     <td style={{ padding: "10px 14px", color: "#475569", whiteSpace: "nowrap" }}>
                       {c.course_date ?? "—"}
-                      {c.start_time && <div style={{ fontSize: 11, color: "#94a3b8" }}>{c.start_time}–{c.end_time}</div>}
+                      {c.start_time && <div style={{ fontSize: 11, color: "#94a3b8" }}>{fmtTime(c.start_time)}–{fmtTime(c.end_time)}</div>}
                     </td>
                     <td style={{ padding: "10px 14px", color: "#475569", maxWidth: 140,
                       overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -410,16 +412,27 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                           }}>{day}</div>
                           {dayItems.slice(0, 2).map(c => (
                             <div key={c.id} onClick={() => setViewDetail(c)}
-                              style={{ fontSize: 10, background: STATUS_COLOR[c.status] + "20",
-                                color: STATUS_COLOR[c.status], border: `1px solid ${STATUS_COLOR[c.status]}40`,
-                                borderRadius: 3, padding: "2px 5px", marginBottom: 2,
-                                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                                cursor: "pointer" }}>
-                              {c.start_time && `${c.start_time} `}{c.course}
+                              style={{ fontSize: 10, background: STATUS_COLOR[c.status] + "15",
+                                color: STATUS_COLOR[c.status],
+                                border: `1px solid ${STATUS_COLOR[c.status]}50`,
+                                borderLeft: `3px solid ${STATUS_COLOR[c.status]}`,
+                                borderRadius: "0 4px 4px 0", padding: "3px 5px", marginBottom: 3,
+                                cursor: "pointer", lineHeight: 1.4 }}>
+                              <div style={{ fontWeight: 700, overflow: "hidden",
+                                textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.course}</div>
+                              {(c.start_time || c.location) && (
+                                <div style={{ color: STATUS_COLOR[c.status] + "cc", marginTop: 1 }}>
+                                  {c.start_time && `🕐 ${fmtTime(c.start_time)}`}
+                                  {c.start_time && c.location && " · "}
+                                  {c.location && `📍 ${c.location}`}
+                                </div>
+                              )}
                             </div>
                           ))}
                           {dayItems.length > 2 && (
-                            <div style={{ fontSize: 10, color: "#94a3b8" }}>+{dayItems.length - 2} เพิ่มเติม</div>
+                            <div style={{ fontSize: 10, color: "#94a3b8", paddingLeft: 4 }}>
+                              +{dayItems.length - 2} หลักสูตร
+                            </div>
                           )}
                         </>
                       )}
@@ -451,7 +464,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 700, color: "#0a1628" }}>{c.course}</div>
                     <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-                      {c.start_time && `🕐 ${c.start_time}–${c.end_time}  `}
+                      {c.start_time && `🕐 ${fmtTime(c.start_time)}–${fmtTime(c.end_time)}  `}
                       {c.location && `📍 ${c.location}  `}
                       {c.trainer && `👤 ${c.trainer}`}
                     </div>

@@ -1,11 +1,9 @@
 import { useState } from "react";
 
 const WORKFLOW: { key: string; label: string; icon: string; color: string; next: string }[] = [
-  { key: "planned",  label: "วางแผน",       icon: "📋", color: "#94a3b8", next: "approved" },
-  { key: "approved", label: "อนุมัติแล้ว",   icon: "✅", color: "#7c3aed", next: "open" },
-  { key: "open",     label: "เปิดรับสมัคร",  icon: "📝", color: "#0891b2", next: "upcoming" },
-  { key: "upcoming", label: "กำลังอบรม",     icon: "🎯", color: "#d97706", next: "done" },
-  { key: "done",     label: "เสร็จสิ้น",     icon: "🏆", color: "#16a34a", next: "" },
+  { key: "planned",  label: "วางแผนอบรม",   icon: "📋", color: "#64748b", next: "upcoming" },
+  { key: "upcoming", label: "อบรมจริง",      icon: "🎯", color: "#d97706", next: "done" },
+  { key: "done",     label: "อบรมเสร็จสิ้น", icon: "🏆", color: "#16a34a", next: "" },
 ];
 
 interface Course {
@@ -223,12 +221,14 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
 
           <div style={row2}>
             <div>
-              <label style={lbl}>เวลาเริ่ม</label>
-              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} style={inp} disabled={!canEdit} />
+              <label style={lbl}>เวลาเริ่ม (24 ชม.)</label>
+              <input type="text" value={startTime} onChange={e => setStartTime(e.target.value)}
+                style={inp} disabled={!canEdit} placeholder="09:00" maxLength={5} />
             </div>
             <div>
-              <label style={lbl}>เวลาสิ้นสุด</label>
-              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} style={inp} disabled={!canEdit} />
+              <label style={lbl}>เวลาสิ้นสุด (24 ชม.)</label>
+              <input type="text" value={endTime} onChange={e => setEndTime(e.target.value)}
+                style={inp} disabled={!canEdit} placeholder="16:00" maxLength={5} />
             </div>
           </div>
 
