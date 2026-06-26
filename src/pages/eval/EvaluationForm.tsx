@@ -226,11 +226,9 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
 
   const headBypassed   = approvals.some(a => a.step === "head" && a.status === "bypassed");
-  const headNoScores   = !!(ev && (ev.total_score === null || ev.total_score === 0));
   const canSendToHead  = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "draft");
-  // Deputy can evaluate when: head was bypassed (no head dept) OR head submitted without scores
-  const canDeputyEval  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy"
-                           && (headBypassed || headNoScores));
+  // Deputy can always evaluate + approve in pending_deputy (as superior of dept head)
+  const canDeputyEval  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy");
   const canEditHead    = !!(user && ["head","admin"].includes(user.role)  && ev?.status === "pending_head") || canDeputyEval;
   const canEditHR     = !!(user && ["hr","admin"].includes(user.role)     && ev?.status === "pending_hr");
   const canDeputyAct  = !!(user && ["deputy","admin"].includes(user.role) && ev?.status === "pending_deputy");
