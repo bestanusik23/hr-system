@@ -4,7 +4,8 @@ interface Division   { id: number; name: string; }
 interface Department { id: number; name: string; division_id: number; }
 interface Position   { position: string; division_id: number; department_id: number | null; }
 interface UserRow {
-  id: number; username: string; full_name: string; role: string; role_title: string | null;
+  id: number; username: string; full_name: string; role: string; role_2: string | null; role_3: string | null;
+  role_title: string | null;
   scope_division_id: number | null; scope_division_id_2: number | null; scope_division_id_3: number | null;
   scope_department_id: number | null; is_active: number;
 }
@@ -42,6 +43,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
   const [fullName,     setFullName]     = useState(user?.full_name ?? "");
   const [username,     setUsername]     = useState(user?.username ?? "");
   const [role,         setRole]         = useState(user?.role ?? "hr");
+  const [role2,        setRole2]        = useState(user?.role_2 ?? "");
+  const [role3,        setRole3]        = useState(user?.role_3 ?? "");
   const [roleTitle,    setRoleTitle]    = useState(user?.role_title ?? "");
   const [customTitle,  setCustomTitle]  = useState("");
   const [useCustom,    setUseCustom]    = useState(false);
@@ -115,6 +118,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username, password, full_name: fullName, role,
+            role_2: role2 || null, role_3: role3 || null,
             role_title: finalTitle || null,
             scope_division_id: scopeDivId, scope_division_id_2: scopeDivId2,
             scope_division_id_3: scopeDivId3, scope_department_id: scopeDeptId,
@@ -125,6 +129,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
       } else {
         const body: Record<string, unknown> = {
           full_name: fullName, role,
+          role_2: role2 || null, role_3: role3 || null,
           role_title: finalTitle || null,
           scope_division_id: scopeDivId, scope_division_id_2: scopeDivId2,
           scope_division_id_3: scopeDivId3, scope_department_id: scopeDeptId,
@@ -256,6 +261,31 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
               {ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
             </select>
           </Field>
+
+          {/* Secondary roles */}
+          <Field label="สิทธิ์เพิ่มเติม 1">
+            <select value={role2} onChange={e => setRole2(e.target.value)} style={inp}>
+              <option value="">-- ไม่มี --</option>
+              {ROLES.filter(r => r.value !== role && r.value !== role3).map(r => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label="สิทธิ์เพิ่มเติม 2">
+            <select value={role3} onChange={e => setRole3(e.target.value)} style={inp}>
+              <option value="">-- ไม่มี --</option>
+              {ROLES.filter(r => r.value !== role && r.value !== role2).map(r => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
+          </Field>
+          {(role2 || role3) && (
+            <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 7,
+              padding: "10px 14px", fontSize: 12, color: "#0369a1", marginBottom: 14 }}>
+              ℹ️ สิทธิ์เพิ่มเติมช่วยให้ผู้ใช้ทำงานได้หลายบทบาท เช่น หัวหน้าแผนก + รองผู้อำนวยการ
+              — ขอบเขตข้อมูล (ฝ่าย/แผนก) ใช้ค่าจากสิทธิ์หลัก
+            </div>
+          )}
 
           {/* Scope hint */}
           {(role === "head" || ["deputy","deputyHR"].includes(role)) && (

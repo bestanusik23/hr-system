@@ -6,6 +6,8 @@ export interface SessionUser {
   username: string;
   full_name: string;
   role: "hr" | "head" | "deputy" | "deputyHR" | "admin";
+  role_2: string | null;
+  role_3: string | null;
   role_title: string | null;
   scope_division_id: number | null;
   scope_division_id_2: number | null;
@@ -13,6 +15,10 @@ export interface SessionUser {
   scope_department_id: number | null;
   color: string | null;
   initial: string | null;
+}
+
+export function hasRole(user: SessionUser, ...roles: string[]): boolean {
+  return roles.some(r => r === user.role || r === user.role_2 || r === user.role_3);
 }
 
 // ---------- password hashing (PBKDF2-SHA256 via Web Crypto) ----------
@@ -53,7 +59,7 @@ export async function getSessionUser(db: D1Database, token: string): Promise<Ses
   if (!token) return null;
   try {
     const row = await db.prepare(`
-      SELECT u.id, u.username, u.full_name, u.role, u.role_title,
+      SELECT u.id, u.username, u.full_name, u.role, u.role_2, u.role_3, u.role_title,
              u.scope_division_id, u.scope_division_id_2, u.scope_division_id_3,
              u.scope_department_id, u.color, u.initial
       FROM sessions s
@@ -62,10 +68,11 @@ export async function getSessionUser(db: D1Database, token: string): Promise<Ses
     `).bind(token).first<SessionUser>();
     return row ?? null;
   } catch {
-    // Fallback: columns scope_division_id_2/3 may not exist yet in D1
+    // Fallback: new columns may not exist yet in D1
     try {
       const row = await db.prepare(`
-        SELECT u.id, u.username, u.full_name, u.role, u.role_title,
+        SELECT u.id, u.username, u.full_name, u.role,
+               NULL AS role_2, NULL AS role_3, u.role_title,
                u.scope_division_id, NULL AS scope_division_id_2, NULL AS scope_division_id_3,
                u.scope_department_id, u.color, u.initial
         FROM sessions s

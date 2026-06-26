@@ -1,5 +1,5 @@
 import type { Env } from "../../../lib/types";
-import { getTokenFromCookie, getSessionUser } from "../../../lib/auth";
+import { getTokenFromCookie, getSessionUser, hasRole } from "../../../lib/auth";
 
 // GET /api/eval/evaluations/:id
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
@@ -88,7 +88,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number; head_user_id: number | null }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // Scope check: head must own or be assigned to the evaluation
+  // Scope check: primary-role head must own or be assigned to the evaluation
   if (user.role === "head" && user.scope_department_id) {
     const deptMatch = !ev.department_id || ev.department_id === user.scope_department_id;
     const isAssignedHead = ev.head_user_id === user.id;
@@ -128,7 +128,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 0: HR sends to head → pending_head ────────────────────
   if (action === "send_to_head") {
-    if (!["hr", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "hr", "admin")) return forbidden;
     if (ev.status !== "draft") return conflict("ไม่อยู่ในสถานะร่าง");
 
     await ctx.env.HR_DB.prepare(
@@ -144,7 +144,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 0b: HR sends directly to deputy (no head) → pending_deputy ──
   if (action === "send_to_deputy_direct") {
-    if (!["hr", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "hr", "admin")) return forbidden;
     if (ev.status !== "draft") return conflict("ไม่อยู่ในสถานะร่าง");
 
     await ctx.env.HR_DB.prepare(
@@ -164,10 +164,10 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── SAVE draft (head in pending_head / deputy evaluating / hr in pending_hr) ──
   if (action === "save") {
-    const deputyInPending = ["deputy", "deputyHR", "admin"].includes(user.role) && ev.status === "pending_deputy";
+    const deputyInPending = hasRole(user, "deputy", "deputyHR", "admin") && ev.status === "pending_deputy";
     const canSave =
-      (["head", "admin"].includes(user.role) && ev.status === "pending_head") ||
-      (["hr",   "admin"].includes(user.role) && ev.status === "pending_hr") ||
+      (hasRole(user, "head", "admin") && ev.status === "pending_head") ||
+      (hasRole(user, "hr",   "admin") && ev.status === "pending_hr") ||
       deputyInPending;
     if (!canSave) return forbidden;
 
@@ -194,7 +194,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 1: Head submits → pending_deputy ───────────────────────
   if (action === "submit") {
-    if (!["head", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "head", "admin")) return forbidden;
     if (ev.status !== "pending_head") return conflict("ไม่อยู่ในสถานะรอหัวหน้าแผนก");
 
     await saveScores();
@@ -221,7 +221,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 1b: Deputy evaluates (as head) + approves → pending_hr ─
   if (action === "deputy_evaluate_and_approve") {
-    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "deputy", "deputyHR", "admin")) return forbidden;
     if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
 
     await saveScores();
@@ -251,7 +251,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 2a: Deputy approves → pending_hr ──────────────────────
   if (action === "deputy_approve") {
-    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "deputy", "deputyHR", "admin")) return forbidden;
     if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
 
     await ctx.env.HR_DB.prepare(
@@ -269,7 +269,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 2b: Deputy rejects → rejected ─────────────────────────
   if (action === "deputy_reject") {
-    if (!["deputy", "deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "deputy", "deputyHR", "admin")) return forbidden;
     if (ev.status !== "pending_deputy") return conflict("ไม่อยู่ในสถานะรอรองผู้อำนวยการ");
 
     await ctx.env.HR_DB.prepare(
@@ -287,7 +287,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 3: HR acknowledges → pending_final ─────────────────────
   if (action === "hr_acknowledge") {
-    if (!["hr", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "hr", "admin")) return forbidden;
     if (ev.status !== "pending_hr") return conflict("ไม่อยู่ในสถานะรอ HR");
 
     await saveScores();
@@ -307,7 +307,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 4a: Final deputy approves → approved ───────────────────
   if (action === "final_approve") {
-    if (!["deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "deputyHR", "admin")) return forbidden;
     if (ev.status !== "pending_final") return conflict("ไม่อยู่ในสถานะรออนุมัติขั้นสุดท้าย");
 
     await ctx.env.HR_DB.prepare(`
@@ -327,7 +327,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 4b: Final deputy rejects → rejected ────────────────────
   if (action === "final_reject") {
-    if (!["deputyHR", "admin"].includes(user.role)) return forbidden;
+    if (!hasRole(user, "deputyHR", "admin")) return forbidden;
     if (ev.status !== "pending_final") return conflict("ไม่อยู่ในสถานะรออนุมัติขั้นสุดท้าย");
 
     await ctx.env.HR_DB.prepare(
@@ -353,7 +353,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "admin", "head"].includes(user.role))
+  if (!hasRole(user, "hr", "admin", "head"))
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const id = ctx.params.id as string;
