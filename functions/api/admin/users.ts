@@ -8,7 +8,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const rows = await ctx.env.HR_DB.prepare(
-    `SELECT u.id, u.username, u.full_name, u.role, u.role_title, u.scope_division_id, u.scope_department_id, u.is_active, u.created_at,
+    `SELECT u.id, u.username, u.full_name, u.role, u.role_title,
+            u.scope_division_id, u.scope_division_id_2, u.scope_division_id_3,
+            u.scope_department_id, u.is_active, u.created_at,
             dv.name AS division_name, dp.name AS department_name
      FROM users u
      LEFT JOIN divisions   dv ON dv.id = u.scope_division_id
@@ -26,7 +28,8 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     if (!["admin","deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
     const body = await ctx.request.json() as Record<string, unknown>;
-    const { username, password, full_name, role, role_title, scope_division_id, scope_department_id } = body;
+    const { username, password, full_name, role, role_title,
+            scope_division_id, scope_division_id_2, scope_division_id_3, scope_department_id } = body;
 
     if (!username || !password || !full_name || !role) {
       return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบ" }, { status: 400 });
@@ -37,8 +40,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
     const { hash, salt } = await hashPassword(password as string);
     const result = await ctx.env.HR_DB.prepare(
-      "INSERT INTO users (username, password_hash, password_salt, full_name, role, role_title, scope_division_id, scope_department_id, is_active) VALUES (?,?,?,?,?,?,?,?,1)"
-    ).bind(username, hash, salt, full_name, role, role_title ?? null, scope_division_id ?? null, scope_department_id ?? null).run();
+      "INSERT INTO users (username, password_hash, password_salt, full_name, role, role_title, scope_division_id, scope_division_id_2, scope_division_id_3, scope_department_id, is_active) VALUES (?,?,?,?,?,?,?,?,?,?,1)"
+    ).bind(username, hash, salt, full_name, role, role_title ?? null,
+           scope_division_id ?? null, scope_division_id_2 ?? null, scope_division_id_3 ?? null,
+           scope_department_id ?? null).run();
 
     try {
       await ctx.env.HR_DB.prepare(

@@ -23,8 +23,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id) {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
-  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id && ev.division_id !== user.scope_division_id) {
-    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+    const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
+    if (!divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
 
   const scores = await ctx.env.HR_DB.prepare(`
@@ -88,8 +89,10 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id)
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id && ev.division_id !== user.scope_division_id)
-    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+    const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
+    if (!divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  }
 
   const scores     = body.scores as Record<string, number> | undefined;
   const suggestion = body.suggestion as string | undefined;

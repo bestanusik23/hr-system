@@ -8,6 +8,8 @@ export interface SessionUser {
   role: "hr" | "head" | "deputy" | "deputyHR" | "admin";
   role_title: string | null;
   scope_division_id: number | null;
+  scope_division_id_2: number | null;
+  scope_division_id_3: number | null;
   scope_department_id: number | null;
   color: string | null;
   initial: string | null;
@@ -51,7 +53,8 @@ export async function getSessionUser(db: D1Database, token: string): Promise<Ses
   if (!token) return null;
   const row = await db.prepare(`
     SELECT u.id, u.username, u.full_name, u.role, u.role_title,
-           u.scope_division_id, u.scope_department_id, u.color, u.initial
+           u.scope_division_id, u.scope_division_id_2, u.scope_division_id_3,
+           u.scope_department_id, u.color, u.initial
     FROM sessions s
     JOIN users u ON u.id = s.user_id
     WHERE s.token = ? AND s.expires_at > datetime('now') AND u.is_active = 1

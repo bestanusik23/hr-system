@@ -5,7 +5,8 @@ interface Department { id: number; name: string; division_id: number; }
 interface Position   { position: string; division_id: number; department_id: number | null; }
 interface UserRow {
   id: number; username: string; full_name: string; role: string; role_title: string | null;
-  scope_division_id: number | null; scope_department_id: number | null; is_active: number;
+  scope_division_id: number | null; scope_division_id_2: number | null; scope_division_id_3: number | null;
+  scope_department_id: number | null; is_active: number;
 }
 interface Props { user: UserRow | null; onClose: () => void; onSaved: () => void; }
 
@@ -44,7 +45,9 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
   const [roleTitle,    setRoleTitle]    = useState(user?.role_title ?? "");
   const [customTitle,  setCustomTitle]  = useState("");
   const [useCustom,    setUseCustom]    = useState(false);
-  const [divisionId,   setDivisionId]   = useState<number | "">(user?.scope_division_id ?? "");
+  const [divisionId,   setDivisionId]   = useState<number | "">(user?.scope_division_id   ?? "");
+  const [divisionId2,  setDivisionId2]  = useState<number | "">(user?.scope_division_id_2 ?? "");
+  const [divisionId3,  setDivisionId3]  = useState<number | "">(user?.scope_division_id_3 ?? "");
   const [departmentId, setDepartmentId] = useState<number | "">(user?.scope_department_id ?? "");
   const [isActive,     setIsActive]     = useState(user?.is_active !== 0);
   const [password,     setPassword]     = useState("");
@@ -100,8 +103,11 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     setSaving(true); setError("");
 
     const finalTitle = useCustom ? customTitle : roleTitle;
-    const scopeDivId  = ["deputy","deputyHR","hr"].includes(role) ? (divisionId  || null) : null;
-    const scopeDeptId = role === "head"                          ? (departmentId || null) : null;
+    const isDeputy = ["deputy","deputyHR","hr"].includes(role);
+    const scopeDivId  = isDeputy ? (divisionId  || null) : null;
+    const scopeDivId2 = isDeputy ? (divisionId2 || null) : null;
+    const scopeDivId3 = isDeputy ? (divisionId3 || null) : null;
+    const scopeDeptId = role === "head" ? (departmentId || null) : null;
 
     try {
       if (isNew) {
@@ -110,7 +116,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
           body: JSON.stringify({
             username, password, full_name: fullName, role,
             role_title: finalTitle || null,
-            scope_division_id: scopeDivId, scope_department_id: scopeDeptId,
+            scope_division_id: scopeDivId, scope_division_id_2: scopeDivId2,
+            scope_division_id_3: scopeDivId3, scope_department_id: scopeDeptId,
           }),
         });
         const d = await r.json() as { ok: boolean; error?: string };
@@ -119,7 +126,8 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
         const body: Record<string, unknown> = {
           full_name: fullName, role,
           role_title: finalTitle || null,
-          scope_division_id: scopeDivId, scope_department_id: scopeDeptId,
+          scope_division_id: scopeDivId, scope_division_id_2: scopeDivId2,
+          scope_division_id_3: scopeDivId3, scope_department_id: scopeDeptId,
           is_active: isActive,
         };
         if (password.length >= 6) body.new_password = password;
@@ -160,13 +168,35 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
               style={inp} placeholder="ชื่อ นามสกุล" autoComplete="off" />
           </Field>
 
-          {/* ฝ่าย */}
-          <Field label="ฝ่าย">
+          {/* ฝ่าย 1 */}
+          <Field label="ฝ่าย (หลัก)">
             <select value={divisionId} onChange={e => handleDivisionChange(e.target.value ? Number(e.target.value) : "")} style={inp}>
               <option value="">-- เลือกฝ่าย --</option>
               {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
             </select>
           </Field>
+
+          {/* ฝ่าย 2 + 3 (เฉพาะ deputy / deputyHR) */}
+          {["deputy","deputyHR"].includes(role) && (
+            <>
+              <Field label="ฝ่าย (เพิ่มเติม 1)">
+                <select value={divisionId2} onChange={e => setDivisionId2(e.target.value ? Number(e.target.value) : "")} style={inp}>
+                  <option value="">-- ไม่มี --</option>
+                  {divisions.filter(d => d.id !== divisionId && d.id !== divisionId3).map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="ฝ่าย (เพิ่มเติม 2)">
+                <select value={divisionId3} onChange={e => setDivisionId3(e.target.value ? Number(e.target.value) : "")} style={inp}>
+                  <option value="">-- ไม่มี --</option>
+                  {divisions.filter(d => d.id !== divisionId && d.id !== divisionId2).map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+              </Field>
+            </>
+          )}
 
           {/* แผนก (กรองตามฝ่าย) */}
           <Field label="แผนก">
@@ -225,7 +255,15 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
               marginBottom: 14, fontSize: 12, color: "#475569", border: "1px solid #dce4f5" }}>
               {role === "head"
                 ? `🏥 หัวหน้าแผนก: จะเห็นเฉพาะข้อมูลใน${departmentId ? `แผนก "${filteredDepts.find(d=>d.id===departmentId)?.name ?? ""}"` : "แผนกที่เลือก (กรุณาเลือกแผนก)"}`
-                : `🏢 รองผู้อำนวยการ: จะเห็นข้อมูลใน${divisionId ? `ฝ่าย "${divisions.find(d=>d.id===divisionId)?.name ?? ""}"` : "ทุกฝ่าย (หากไม่เลือกฝ่าย)"}`}
+                : (() => {
+                  const sel = [divisionId, divisionId2, divisionId3]
+                    .filter(Boolean)
+                    .map(id => divisions.find(d => d.id === id)?.name)
+                    .filter(Boolean);
+                  return sel.length
+                    ? `🏢 รองผู้อำนวยการ: จะเห็นข้อมูลใน ${sel.length} ฝ่าย — "${sel.join('", "')}"`
+                    : "🏢 รองผู้อำนวยการ: จะเห็นข้อมูลทุกฝ่าย (หากไม่เลือกฝ่าย)";
+                })()
             </div>
           )}
 
