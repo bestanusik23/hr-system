@@ -128,6 +128,21 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
     loadRegs(selId as number);
   }
 
+  const [editCodeId,  setEditCodeId]  = useState<number | null>(null);
+  const [editCodeVal, setEditCodeVal] = useState("");
+  const [editCodeSaving, setEditCodeSaving] = useState(false);
+
+  async function saveEmpCode(id: number) {
+    setEditCodeSaving(true);
+    await fetch(`/api/training/registrations/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emp_code: editCodeVal.trim() || null }),
+    });
+    setEditCodeSaving(false);
+    setEditCodeId(null);
+    loadRegs(selId as number);
+  }
+
   const checkedIn = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
 
   const inp: React.CSSProperties = {
@@ -209,7 +224,41 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
               ) : regs.map((reg, i) => (
                 <tr key={reg.id} style={{ borderBottom: "1px solid #f0f5ff", background: i % 2 === 0 ? "#fff" : "#fafcff" }}>
                   <td style={{ padding: "10px 14px", color: "#94a3b8", width: 36 }}>{i + 1}</td>
-                  <td style={{ padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: "#64748b" }}>{reg.emp_code ?? "—"}</td>
+                  <td style={{ padding: "6px 14px", fontSize: 12 }}>
+                    {canEdit && editCodeId === reg.id ? (
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input
+                          value={editCodeVal}
+                          onChange={e => setEditCodeVal(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") saveEmpCode(reg.id); if (e.key === "Escape") setEditCodeId(null); }}
+                          autoFocus
+                          placeholder="รหัสพนักงาน"
+                          style={{ width: 100, padding: "4px 7px", borderRadius: 5, border: "1.5px solid #0038C6",
+                            fontSize: 12, fontFamily: "monospace", outline: "none" }} />
+                        <button onClick={() => saveEmpCode(reg.id)} disabled={editCodeSaving}
+                          style={{ padding: "3px 8px", borderRadius: 5, border: "none", background: "#0038C6",
+                            color: "#fff", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                          {editCodeSaving ? "…" : "✓"}
+                        </button>
+                        <button onClick={() => setEditCodeId(null)}
+                          style={{ padding: "3px 7px", borderRadius: 5, border: "1px solid #e2e8f0",
+                            background: "#fff", fontSize: 11, cursor: "pointer" }}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{ fontFamily: "monospace", color: reg.emp_code ? "#334155" : "#cbd5e1" }}>
+                          {reg.emp_code ?? "—"}
+                        </span>
+                        {canEdit && (
+                          <button onClick={() => { setEditCodeId(reg.id); setEditCodeVal(reg.emp_code ?? ""); }}
+                            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11,
+                              color: reg.emp_code ? "#94a3b8" : "#0038C6", padding: "1px 3px",
+                              opacity: 0.7, lineHeight: 1 }}
+                            title="แก้ไขรหัสพนักงาน">✏️</button>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td style={{ padding: "10px 14px", fontWeight: 600, color: "#0a1628" }}>{reg.name}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.department ?? "—"}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.position ?? "—"}</td>

@@ -34,6 +34,22 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true });
 };
 
+// PATCH /api/training/registrations/:id — update emp_code only
+export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
+  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!["hr", "admin", "deputyHR"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+  const id   = ctx.params.id as string;
+  const body = await ctx.request.json() as { emp_code?: string };
+  const emp_code = (body.emp_code ?? "").trim() || null;
+
+  await ctx.env.HR_DB.prepare("UPDATE training_attendees SET emp_code = ? WHERE id = ?")
+    .bind(emp_code, id).run();
+
+  return Response.json({ ok: true });
+};
+
 // DELETE /api/training/registrations/:id
 export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));

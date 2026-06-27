@@ -11,10 +11,19 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (!course_id) return Response.json({ ok: false, error: "Missing course_id" }, { status: 400 });
 
   const rows = await ctx.env.HR_DB.prepare(
-    `SELECT * FROM training_attendees WHERE course_id = ? ORDER BY
-      CASE attendance_status WHEN 'checked_in' THEN 0 WHEN 'completed' THEN 1
-        WHEN 'late' THEN 2 WHEN 'registered' THEN 3 WHEN 'absent' THEN 4 ELSE 5 END,
-      id`
+    `SELECT ta.*,
+       COALESCE(ta.emp_code,
+         (SELECT e.emp_code FROM employees e
+          WHERE TRIM(e.full_name) = TRIM(ta.name)
+            AND e.emp_status NOT IN ('resigned','terminated')
+          LIMIT 1)
+       ) AS emp_code
+     FROM training_attendees ta
+     WHERE ta.course_id = ?
+     ORDER BY
+       CASE ta.attendance_status WHEN 'checked_in' THEN 0 WHEN 'completed' THEN 1
+         WHEN 'late' THEN 2 WHEN 'registered' THEN 3 WHEN 'absent' THEN 4 ELSE 5 END,
+       ta.id`
   ).bind(course_id).all();
 
   return Response.json({ ok: true, registrations: rows.results });
