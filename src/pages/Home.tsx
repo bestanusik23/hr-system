@@ -225,13 +225,13 @@ export default function Home() {
           position: "relative", zIndex: 2, textAlign: "center",
           padding: "52px 24px 68px", animation: "fadeUp .55s ease both",
         }}>
-          {/* Logo — blend กับพื้นหลัง ไม่มีกล่องขาว */}
-          <div style={{
-            display: "inline-block", marginBottom: 28,
-          }}>
+          {/* Logo — ไม่มีกล่อง ใช้ mix-blend-mode ให้สีขาวใน PNG หายไป */}
+          <div style={{ display: "inline-block", marginBottom: 28, lineHeight: 0 }}>
             <img src="/logo.png" alt="Chiangrai Ram Hospital"
-              style={{ height: 120, width: "auto", display: "block",
-                objectFit: "contain", mixBlendMode: "multiply" }} />
+              style={{
+                height: 130, width: "auto", display: "block", objectFit: "contain",
+                mixBlendMode: "multiply", filter: "contrast(1.05)",
+              }} />
           </div>
 
           {/* Hospital English name */}
