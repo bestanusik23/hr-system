@@ -1,4 +1,4 @@
-// ใบประกาศนียบัตร — ออกแบบตาม template โรงพยาบาลเชียงราย ราม
+// ใบประกาศนียบัตร — ตาม Canva template โรงพยาบาลเชียงราย ราม
 
 interface CertData {
   cert_id: string; full_name: string; position: string | null;
@@ -18,77 +18,96 @@ function thDate(iso: string | null): string {
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear() + 543}`;
 }
 
+// SVG data-uri สำหรับ print background circles
+const CIRC_ENC = encodeURIComponent(
+  `<svg xmlns='http://www.w3.org/2000/svg' width='560' height='794'>`+
+  `<g fill='none' stroke='%237BAFD4' stroke-width='2.5' opacity='0.40'>`+
+  [110,205,310,420,540].map(r=>`<circle cx='0' cy='490' r='${r}'/>`).join("")+
+  `</g></svg>`
+);
+
 const PRINT_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,400;0,600;0,700;0,800;0,900&display=swap');
 @page { size: A4 landscape; margin: 0; }
 * { box-sizing: border-box; }
-body { margin: 0; padding: 0; font-family: 'Sarabun', 'TH Sarabun New', sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.cert-wrap { width: 297mm; height: 210mm; position: relative; background: #fff; overflow: hidden; display: flex; flex-direction: column; }
-.bar-l { position: absolute; left: 0; top: 0; bottom: 0; width: 12mm; background: #0038C6; }
-.bar-l2 { position: absolute; left: 14mm; top: 0; bottom: 0; width: 2.5mm; background: #0038C6; opacity: 0.28; }
-.bar-r { position: absolute; right: 0; top: 0; bottom: 0; width: 12mm; background: #0038C6; }
-.bar-r2 { position: absolute; right: 14mm; top: 0; bottom: 0; width: 2.5mm; background: #0038C6; opacity: 0.28; }
-.inner { margin: 0 20mm; height: 100%; display: flex; flex-direction: column; }
-.hdr { display: flex; justify-content: space-between; align-items: center; padding: 5mm 0 3mm; border-bottom: 0.5px solid #dce4f5; }
-.logo-box { display: flex; align-items: center; gap: 3mm; }
-.logo-sq { width: 12mm; height: 12mm; background: #0038C6; border-radius: 2.5mm; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 8pt; font-weight: 900; line-height: 1.1; text-align: center; }
-.logo-txt-top { font-size: 7.5pt; font-weight: 700; color: #0038C6; letter-spacing: 0.05em; }
-.logo-txt-bot { font-size: 10pt; font-weight: 900; color: #0038C6; }
-.acc-logos { display: flex; gap: 2.5mm; align-items: center; }
-.acc-badge { border: 1px solid #c4cfee; border-radius: 1.5mm; padding: 1mm 2.5mm; font-size: 7.5pt; font-weight: 800; color: #0038C6; background: #f8faff; }
-.year-badge { background: #0038C6; color: #fff; border-radius: 3mm; padding: 2mm 5mm; font-size: 10pt; font-weight: 800; }
-.body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 2mm 0 1mm; gap: 1mm; }
-.company { font-size: 18pt; font-weight: 900; color: #0038C6; }
-.sub { font-size: 13pt; color: #334155; }
-.name { font-size: 38pt; font-weight: 900; color: #0038C6; line-height: 1.15; letter-spacing: 0.01em; }
-.detail { font-size: 13pt; color: #334155; line-height: 1.75; }
-.detail b { color: #0a1628; font-weight: 800; }
-.wish { font-size: 11.5pt; color: #475569; margin-top: 1mm; }
-.given { font-size: 11pt; color: #64748b; }
-.sigs { display: flex; justify-content: space-around; width: 100%; margin-top: 4mm; }
-.sig { text-align: center; width: 80mm; }
-.sig-line { border-top: 1.5px solid #475569; margin: 0 12mm 2.5mm; }
-.sig-name { font-size: 12.5pt; font-weight: 800; color: #0a1628; }
-.sig-pos { font-size: 9.5pt; color: #64748b; line-height: 1.4; }
-.footer { background: #0038C6; color: #fff; text-align: center; padding: 2.5mm 0; font-size: 10pt; font-weight: 700; letter-spacing: 0.18em; margin: 0 12mm; }
-.qr { position: absolute; bottom: 12mm; right: 19mm; width: 18mm; height: 18mm; border-radius: 1.5mm; border: 1px solid #c4cfee; }
-.cert-id { position: absolute; bottom: 13mm; left: 19mm; font-size: 7pt; color: #94a3b8; font-family: monospace; }
-.aaci-wm { position: absolute; right: 32mm; bottom: 14mm; width: 28mm; height: 28mm; opacity: 0.18; pointer-events: none; }
-img { max-width: 100%; }
+body { margin: 0; padding: 0; font-family: 'Sarabun','TH Sarabun New',sans-serif;
+  -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.cert-wrap {
+  width: 297mm; height: 210mm; position: relative;
+  background: #fff url("data:image/svg+xml,${CIRC_ENC}") no-repeat left center;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+.bar-r { position: absolute; right: 0; top: 0; bottom: 0; width: 10mm; background: #1d4ed8; z-index: 2; }
+.main  { flex: 1; margin: 0 16mm 0 6mm; display: flex; flex-direction: column; position: relative; z-index: 1; }
+.hdr   { display: flex; justify-content: space-between; align-items: center; padding: 4.5mm 0 3.5mm; }
+.acc-row { display: flex; gap: 2mm; align-items: center; }
+.acc-txt { border: 1.5px solid #c4cfee; border-radius: 1.5mm; padding: 0.8mm 2.5mm;
+           font-size: 7pt; font-weight: 800; color: #1d4ed8; background: #f8faff; }
+.acc-img { height: 11mm; object-fit: contain; }
+.year    { background: #1d4ed8; color: #fff; border-radius: 3.5mm; padding: 1.5mm 5mm; font-size: 9.5pt; font-weight: 800; }
+.body    { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.h-hosp  { font-size: 26pt; font-weight: 900; color: #0a1d6b; }
+.h-sub   { font-size: 13.5pt; color: #1e293b; margin-top: 2mm; }
+.h-recip { font-size: 42pt; font-weight: 900; color: #0a1d6b; line-height: 1.1; margin: 3.5mm 0 4.5mm; }
+.h-detail { font-size: 13pt; color: #1e293b; line-height: 1.85; }
+.h-loc   { font-size: 13pt; color: #1d4ed8; margin-top: 2mm; line-height: 1.85; }
+.h-give  { font-size: 13pt; font-weight: 800; color: #1e293b; margin-top: 2.5mm; }
+.sigs    { display: flex; justify-content: space-around; width: 100%; margin-top: 5mm; }
+.sig-name { font-size: 13pt; font-weight: 800; color: #1d4ed8; }
+.sig-pos  { font-size: 10pt; color: #475569; margin-top: 0.8mm; }
+.footer  { background: #1d4ed8; color: #fff; padding: 2.5mm 14mm 2.5mm 0;
+           font-size: 10pt; font-weight: 700; letter-spacing: 0.16em; text-align: right;
+           position: relative; z-index: 1; }
+.qr-img  { position: absolute; bottom: 12mm; right: 13mm; width: 14mm; height: 14mm; border-radius: 1.5mm; z-index: 3; }
+.cid     { position: absolute; bottom: 13mm; left: 6mm; font-size: 6.5pt; color: #94a3b8; font-family: monospace; z-index: 3; }
+img      { max-width: 100%; }
 `;
 
 export default function CertificateView({ cert, onClose }: Props) {
   const qrUrl = `${window.location.origin}/cert/verify?token=${cert.qr_token}`;
+  const year = new Date().getFullYear() + 543;
 
   function print() {
     const el = document.getElementById("cert-print-area");
     if (!el) return;
     const win = window.open("", "_blank");
     if (!win) return;
-    win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-      <title>ใบประกาศนียบัตร - ${cert.full_name}</title>
-      <style>${PRINT_CSS}</style></head><body>${el.innerHTML}</body></html>`);
+    win.document.write(
+      `<!DOCTYPE html><html><head><meta charset="UTF-8">` +
+      `<title>ใบประกาศนียบัตร - ${cert.full_name}</title>` +
+      `<style>${PRINT_CSS}</style></head><body>${el.innerHTML}</body></html>`
+    );
     win.document.close();
-    setTimeout(() => { win.print(); win.close(); }, 800);
+    setTimeout(() => { win.print(); win.close(); }, 900);
   }
 
-  const year = new Date().getFullYear() + 543;
+  const W = 1122, H = 794;
+  const C_CX = 0, C_CY = Math.round(H * 0.62); // circle center (left-edge, lower-mid)
 
-  // Scale preview to fit screen (297mm → ~1060px)
-  const scale = 1060 / (297 * 3.7795);
+  // shared inline style shortcuts
+  const S = {
+    navy:  "#0a1d6b" as const,
+    blue:  "#1d4ed8" as const,
+    dark:  "#1e293b" as const,
+    slate: "#475569" as const,
+  };
 
   return (
     <div>
+      {/* Controls */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        <button onClick={print}
-          style={{ padding: "9px 20px", borderRadius: 7, border: "none",
-            background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+        <button onClick={print} style={{
+          padding: "9px 20px", borderRadius: 7, border: "none",
+          background: S.blue, color: "#fff", fontWeight: 700, fontSize: 13,
+          cursor: "pointer", fontFamily: "inherit",
+        }}>
           🖨️ พิมพ์ / บันทึก PDF
         </button>
         {onClose && (
-          <button onClick={onClose}
-            style={{ padding: "9px 18px", borderRadius: 7, border: "1.5px solid #c4cfee",
-              background: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+          <button onClick={onClose} style={{
+            padding: "9px 18px", borderRadius: 7, border: "1.5px solid #c4cfee",
+            background: "#fff", fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+          }}>
             ← กลับ
           </button>
         )}
@@ -96,122 +115,159 @@ export default function CertificateView({ cert, onClose }: Props) {
 
       <div style={{ overflowX: "auto" }}>
         <div id="cert-print-area">
-          {/* ─── cert-wrap ─── */}
-          <div className="cert-wrap" style={{
-            width: 1122, height: 794, position: "relative", background: "#fff", overflow: "hidden",
-            display: "flex", flexDirection: "column",
+
+          {/* ══════════════════════════════════════════════════════ */}
+          {/* Certificate canvas                                     */}
+          {/* ══════════════════════════════════════════════════════ */}
+          <div style={{
+            width: W, height: H, position: "relative", background: "#fff",
+            overflow: "hidden", display: "flex", flexDirection: "column",
             fontFamily: "'Sarabun','TH Sarabun New',sans-serif",
-            boxShadow: "0 8px 40px rgba(0,56,198,0.18)", border: "1px solid #dce4f5",
+            boxShadow: "0 8px 48px rgba(29,78,216,0.20)",
           }}>
-            {/* Side bars */}
-            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 45, background: "#0038C6" }} />
-            <div style={{ position: "absolute", left: 54, top: 0, bottom: 0, width: 9, background: "#0038C6", opacity: 0.25 }} />
-            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 45, background: "#0038C6" }} />
-            <div style={{ position: "absolute", right: 54, top: 0, bottom: 0, width: 9, background: "#0038C6", opacity: 0.25 }} />
 
-            {/* Inner container */}
-            <div style={{ margin: "0 75px", height: "100%", display: "flex", flexDirection: "column" }}>
+            {/* Decorative concentric circle arcs — left background */}
+            <svg
+              style={{ position: "absolute", left: 0, top: 0, width: 560, height: H,
+                pointerEvents: "none", zIndex: 0 }}
+              viewBox={`0 0 560 ${H}`}
+            >
+              <g fill="none" stroke="#7BAFD4" strokeWidth="2.5" opacity={0.40}>
+                {[110, 205, 310, 420, 540].map(r => (
+                  <circle key={r} cx={C_CX} cy={C_CY} r={r} />
+                ))}
+              </g>
+            </svg>
 
-              {/* Header */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "18px 0 12px", borderBottom: "1px solid #e8eeff" }}>
-                {/* Logo */}
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <img src="/logo-nobg.png" alt="RAM+" onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                    style={{ height: 48, objectFit: "contain" }} />
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: "#0038C6", letterSpacing: "0.06em" }}>CHIANGRAI</div>
-                    <div style={{ fontSize: 14, fontWeight: 900, color: "#0038C6" }}>RAM+ HOSPITAL</div>
+            {/* Right blue bar */}
+            <div style={{ position: "absolute", right: 0, top: 0, bottom: 0,
+              width: 38, background: S.blue, zIndex: 2 }} />
+
+            {/* ── Main content (flex column, fills height) ── */}
+            <div style={{ position: "relative", zIndex: 1,
+              margin: "0 58px 0 28px", flex: 1,
+              display: "flex", flexDirection: "column" }}>
+
+              {/* Header row */}
+              <div style={{ display: "flex", justifyContent: "space-between",
+                alignItems: "center", padding: "15px 0 12px" }}>
+
+                {/* RAM+ logo */}
+                <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
+                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                  style={{ height: 54, objectFit: "contain" }} />
+
+                {/* Accreditation logos */}
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  {(["URS","UKAS"] as string[]).map(a => (
+                    <div key={a} style={{
+                      border: "1.5px solid #c4cfee", borderRadius: 5,
+                      padding: "5px 9px", fontSize: 11, fontWeight: 800,
+                      color: S.blue, background: "#f8faff",
+                    }}>{a}</div>
+                  ))}
+                  <img src="/aaci-gold.png" alt="AACI"
+                    style={{ height: 52, objectFit: "contain" }} />
+                  <img src="/aaci-iso.jpg" alt="AACI ISO"
+                    style={{ height: 46, objectFit: "contain" }} />
+                  <div style={{
+                    border: "1.5px solid #c4cfee", borderRadius: 5,
+                    padding: "4px 9px", textAlign: "center",
+                    color: S.blue, background: "#f8faff", lineHeight: 1.25,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 900 }}>GLP</div>
+                    <div style={{ fontSize: 8, fontWeight: 700 }}>Good Labour<br />Practices</div>
                   </div>
                 </div>
-                {/* Accreditation badges */}
-                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                  {["URS","UKAS","GLP"].map(a => (
-                    <div key={a} style={{ border: "1.5px solid #c4cfee", borderRadius: 5, padding: "5px 10px",
-                      fontSize: 11, fontWeight: 800, color: "#0038C6", background: "#f8faff" }}>{a}</div>
-                  ))}
-                  <img src="/aaci-iso.jpg" alt="AACI ISO" style={{ height: 46, objectFit: "contain" }} />
-                </div>
+
                 {/* Year badge */}
-                <div style={{ background: "#0038C6", color: "#fff", borderRadius: 10, padding: "7px 18px",
-                  fontSize: 14, fontWeight: 800 }}>ประจำปี {year}</div>
+                <div style={{
+                  background: S.blue, color: "#fff", borderRadius: 10,
+                  padding: "7px 18px", fontSize: 14, fontWeight: 800,
+                }}>
+                  ประจำปี {year}
+                </div>
               </div>
 
-              {/* Body */}
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center",
-                justifyContent: "center", textAlign: "center", gap: 0 }}>
+              {/* Body — centered vertically */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", textAlign: "center" }}>
 
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#0038C6", marginBottom: 2 }}>
-                  บริษัท วัชรศิริเวช จำกัด
+                {/* Hospital name */}
+                <div style={{ fontSize: 36, fontWeight: 900, color: S.navy }}>
+                  โรงพยาบาลเชียงราย ราม
                 </div>
-                <div style={{ fontSize: 16, color: "#334155", marginBottom: 10 }}>
+
+                {/* Sub-title */}
+                <div style={{ fontSize: 19, color: S.dark, marginTop: 5 }}>
                   ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า
                 </div>
 
-                {/* Name — largest element */}
-                <div style={{ fontSize: 52, fontWeight: 900, color: "#0038C6",
-                  lineHeight: 1.15, letterSpacing: "0.01em", marginBottom: 10 }}>
+                {/* Recipient name — largest element */}
+                <div style={{
+                  fontSize: 58, fontWeight: 900, color: S.navy,
+                  lineHeight: 1.1, margin: "14px 0 16px",
+                }}>
                   {cert.full_name}
                 </div>
 
-                {/* Course detail */}
-                <div style={{ fontSize: 16, color: "#334155", lineHeight: 1.85 }}>
-                  ได้เข้ารับการฝึกอบรม <span style={{ fontWeight: 800, color: "#0a1628" }}>{cert.course_name}</span>
-                  {cert.course_date && (
-                    <><br />วันที่ {thDate(cert.course_date)}</>
-                  )}
-                  <br />ณ โรงพยาบาลเชียงราย ราม
+                {/* Course description */}
+                <div style={{ fontSize: 17, color: S.dark, lineHeight: 1.85, maxWidth: 830 }}>
+                  ได้เข้าร่วมการอบรม {cert.course_name}
+                  {cert.course_date && <><br />วันที่ {thDate(cert.course_date)}</>}
                 </div>
 
-                <div style={{ fontSize: 15, color: "#475569", marginTop: 10 }}>
-                  ขอให้มีความสุขสวัสดิ์ ความเจริญ และประสบผลสำเร็จสืบไป
+                {/* Location + achievement — blue */}
+                <div style={{ fontSize: 17, color: S.blue, marginTop: 7, lineHeight: 1.85 }}>
+                  ณ โรงพยาบาลเชียงราย ราม
+                  <br />โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ
                 </div>
-                <div style={{ fontSize: 13, color: "#64748b", marginTop: 3 }}>
+
+                {/* Issue date */}
+                <div style={{ fontSize: 17, fontWeight: 800, color: S.dark, marginTop: 9 }}>
                   ให้ ณ วันที่ {thDate(cert.issued_at)}
                 </div>
 
-                {/* Signatures */}
-                <div style={{ display: "flex", justifyContent: "space-around", width: "100%", marginTop: 22 }}>
+                {/* Signatures — no lines, name in blue */}
+                <div style={{ display: "flex", justifyContent: "space-around",
+                  width: "100%", marginTop: 22 }}>
                   {[
-                    { name: "นายอนุสิกข์ ทองแผ่น",      pos: "(รักษาการ รองผอ. ฝ่ายบริหารค่าตอบแทน\nและพัฒนาคุณภาพ)" },
-                    { name: "นายแพทย์วัชระ เตชะธีราวัฒน์", pos: "(ผู้อำนวยการโรงพยาบาลเชียงราย ราม)" },
+                    { name: "พญ. พรทิพย์ ลักนะกุล",        pos: "เทคนิคการแพทย์ผู้อำนวยการระดับสูง" },
+                    { name: "นายแพทย์วัชระ เตชะธีราวัฒน์",  pos: "(ผู้อำนวยการโรงพยาบาลเชียงราย ราม)" },
                   ].map(s => (
-                    <div key={s.name} style={{ textAlign: "center", width: 260 }}>
-                      <div style={{ borderTop: "1.5px solid #475569", margin: "0 30px 10px" }} />
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "#0a1628" }}>{s.name}</div>
-                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 3, whiteSpace: "pre-line", lineHeight: 1.45 }}>
-                        {s.pos}
-                      </div>
+                    <div key={s.name} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: 17, fontWeight: 800, color: S.blue }}>{s.name}</div>
+                      <div style={{ fontSize: 13, color: S.slate, marginTop: 3 }}>{s.pos}</div>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Footer */}
-              <div style={{ background: "#0038C6", color: "#fff", textAlign: "center",
-                padding: "8px 0", fontSize: 13, fontWeight: 700, letterSpacing: "0.18em",
-                margin: "0 -75px", paddingLeft: 75, paddingRight: 75 }}>
-                HUMAN RESOURCE DEVELOPMENT ( HRD )
-              </div>
             </div>
 
-            {/* AACI gold seal — watermark */}
-            <img src="/aaci-gold.png" alt="AACI"
-              style={{ position: "absolute", right: 120, bottom: 55,
-                width: 110, height: 110, opacity: 0.18, pointerEvents: "none" }} />
+            {/* Footer — full-width, outside margin div */}
+            <div style={{
+              background: S.blue, color: "#fff",
+              padding: "9px 70px 9px 0",
+              fontSize: 14, fontWeight: 700, letterSpacing: "0.16em",
+              textAlign: "right", position: "relative", zIndex: 1,
+            }}>
+              HUMAN RESOURCE DEVELOPMENT ( HRD )
+            </div>
 
             {/* QR code */}
             <img
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=80x80&data=${encodeURIComponent(qrUrl)}`}
-              alt="QR Verify"
-              style={{ position: "absolute", bottom: 42, right: 68,
-                width: 68, height: 68, borderRadius: 6, border: "1.5px solid #c4cfee" }} />
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=${encodeURIComponent(qrUrl)}`}
+              alt="QR"
+              style={{ position: "absolute", bottom: 44, right: 52,
+                width: 58, height: 58, borderRadius: 5,
+                border: "1px solid #c4cfee", zIndex: 3 }} />
 
-            {/* Cert ID */}
-            <div style={{ position: "absolute", bottom: 44, left: 70,
-              fontSize: 10, color: "#94a3b8", fontFamily: "monospace" }}>
+            {/* Certificate ID */}
+            <div style={{ position: "absolute", bottom: 46, left: 30,
+              fontSize: 9, color: "#94a3b8", fontFamily: "monospace", zIndex: 3 }}>
               {cert.cert_id}
             </div>
+
           </div>
         </div>
       </div>
