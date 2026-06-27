@@ -24,6 +24,27 @@ interface LiveMaps {
   byPosAll: Map<string, LiveEmp[]>; // "pos" — ALL active employees (fallback)
 }
 
+// All unique positions from manpower plan (for dropdowns)
+const ALL_POSITIONS = (() => {
+  const seen = new Set<string>();
+  for (const r of MANPOWER_ROWS) {
+    if (r.type === "slot" && r.pos.trim()) seen.add(r.pos.trim());
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b, "th"));
+})();
+
+const POSITIONS_BY_PLAN_DIV_ID = (() => {
+  const map = new Map<number, string[]>();
+  for (const r of MANPOWER_ROWS) {
+    if (r.type === "slot" && r.pos.trim()) {
+      const arr = map.get(r.divId) ?? [];
+      if (!arr.includes(r.pos.trim())) arr.push(r.pos.trim());
+      map.set(r.divId, arr);
+    }
+  }
+  return map;
+})();
+
 // DB division_id → plan divId when they differ (e.g. ฝ่ายบัญชี DB=5 merged into plan divId=4)
 const DB_TO_PLAN_DIVID: Record<number, number> = {
   5: 4,  // ฝ่ายบัญชี (DB id 5) → show under ฝ่ายการเงิน/บัญชี section (plan divId 4)
@@ -712,10 +733,25 @@ export default function ManpowerTable() {
                 letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
                 ตำแหน่ง
               </label>
-              <input value={editPos} onChange={e => setEditPos(e.target.value)}
-                style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
-                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
-                  outline: "none", boxSizing: "border-box" as const }} />
+              {(() => {
+                const planDivId = editDivId
+                  ? (DB_TO_PLAN_DIVID[editDivId as number] ?? editDivId as number)
+                  : null;
+                const opts = planDivId ? (POSITIONS_BY_PLAN_DIV_ID.get(planDivId) ?? ALL_POSITIONS) : ALL_POSITIONS;
+                return (
+                  <select value={editPos} onChange={e => setEditPos(e.target.value)}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                      border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                      outline: "none", background: "#fff", boxSizing: "border-box" as const }}>
+                    <option value="">-- เลือกตำแหน่ง --</option>
+                    {/* Keep current value if not in list */}
+                    {editPos && !opts.includes(editPos) && (
+                      <option value={editPos}>{editPos} ⚠️ (ไม่อยู่ในแผน)</option>
+                    )}
+                    {opts.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                );
+              })()}
             </div>
 
             {/* Division */}
