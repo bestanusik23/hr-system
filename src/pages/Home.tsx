@@ -176,7 +176,7 @@ export default function Home() {
       {/* ══════════ HERO ══════════ */}
       <section style={{
         paddingTop: 64, minHeight: "100vh",
-        background: "linear-gradient(145deg, #e8f0ff 0%, #dde8ff 50%, #cde4f8 100%)",
+        background: "linear-gradient(145deg, #f5f8ff 0%, #eef3ff 50%, #ddeefa 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden",
       }}>
@@ -225,13 +225,11 @@ export default function Home() {
           position: "relative", zIndex: 2, textAlign: "center",
           padding: "52px 24px 68px", animation: "fadeUp .55s ease both",
         }}>
-          {/* Logo — ไม่มีกล่อง ใช้ mix-blend-mode ให้สีขาวใน PNG หายไป */}
+          {/* Logo พื้นใส */}
           <div style={{ display: "inline-block", marginBottom: 28, lineHeight: 0 }}>
-            <img src="/logo.png" alt="Chiangrai Ram Hospital"
-              style={{
-                height: 130, width: "auto", display: "block", objectFit: "contain",
-                mixBlendMode: "multiply", filter: "contrast(1.05)",
-              }} />
+            <img src="/logo-nobg.png" alt="Chiangrai Ram Hospital"
+              onError={e => { (e.target as HTMLImageElement).src = "/logo.png"; }}
+              style={{ height: 130, width: "auto", display: "block", objectFit: "contain" }} />
           </div>
 
           {/* Hospital English name */}
