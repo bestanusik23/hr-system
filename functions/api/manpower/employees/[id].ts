@@ -91,20 +91,25 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const b = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, position, division_id, department_id, remark,
+  const { full_name, position, division_id, department_id, remark, emp_status,
           license_number, license_expiry, car_plate_1, car_plate_2, moto_plate_1, moto_plate_2 } = b;
 
   if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
 
+  const ALLOWED_STATUSES = ["probation", "passed", "transferred"];
+  const newStatus = ALLOWED_STATUSES.includes(emp_status as string) ? (emp_status as string) : null;
+
   await ctx.env.HR_DB.prepare(`
     UPDATE employees SET full_name=?, position=?, division_id=?, department_id=?, remark=?,
       license_number=?, license_expiry=?, car_plate_1=?, car_plate_2=?, moto_plate_1=?, moto_plate_2=?,
+      ${newStatus ? "emp_status=?," : ""}
       updated_at=datetime('now')
     WHERE id=?
   `).bind(
     String(full_name), position ?? null, division_id ?? null, department_id ?? null, remark ?? null,
     license_number ?? null, license_expiry ?? null,
     car_plate_1 ?? null, car_plate_2 ?? null, moto_plate_1 ?? null, moto_plate_2 ?? null,
+    ...(newStatus ? [newStatus] : []),
     id,
   ).run();
 

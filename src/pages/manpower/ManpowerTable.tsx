@@ -258,7 +258,8 @@ export default function ManpowerTable() {
   const [editEmp,       setEditEmp]       = useState<LiveEmp | null>(null);
   const [editName,      setEditName]      = useState("");
   const [editPos,       setEditPos]       = useState("");
-  const [editPosCustom, setEditPosCustom] = useState(false); // true = free-text mode
+  const [editPosCustom, setEditPosCustom] = useState(false);
+  const [editStatus,    setEditStatus]    = useState("");
   const [editDivId,     setEditDivId]     = useState<number | "">("");
   const [editDeptId,    setEditDeptId]    = useState<number | "">("");
   const [editRemark,    setEditRemark]    = useState("");
@@ -281,11 +282,11 @@ export default function ManpowerTable() {
       const pos = editEmp.position ?? "";
       setEditName(editEmp.full_name ?? "");
       setEditPos(pos);
+      setEditStatus(editEmp.emp_status ?? "probation");
       setEditDivId(editEmp.division_id ?? "");
       setEditDeptId(editEmp.department_id ?? "");
       setEditRemark(editEmp.remark ?? "");
       setEditError("");
-      // If current position is not in any plan list, start in free-text mode
       setEditPosCustom(pos !== "" && !ALL_POSITIONS.includes(pos));
     }
   }, [editEmp]);
@@ -322,6 +323,7 @@ export default function ManpowerTable() {
         body: JSON.stringify({
           full_name: editName.trim(),
           position: editPos.trim() || null,
+          emp_status: editStatus || null,
           division_id: editDivId || null,
           department_id: editDeptId || null,
           remark: editRemark.trim() || null,
@@ -790,6 +792,37 @@ export default function ManpowerTable() {
                   ตำแหน่งนี้จะแสดงในตาราง Manpower ใต้ฝ่ายที่เลือก (หมวด "ไม่มีในแผน")
                 </div>
               )}
+            </div>
+
+            {/* Status */}
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
+                สถานะพนักงาน
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                {[
+                  { value: "probation",   label: "ทดลองงาน",      color: "#d97706", bg: "#fffbeb" },
+                  { value: "passed",      label: "พนักงานประจำ",  color: "#16a34a", bg: "#f0fdf4" },
+                  { value: "transferred", label: "ย้ายแผนก",      color: "#0891b2", bg: "#f0f9ff" },
+                ].map(opt => {
+                  const active = editStatus === opt.value;
+                  return (
+                    <button key={opt.value} type="button" onClick={() => setEditStatus(opt.value)}
+                      style={{
+                        padding: "9px 6px", borderRadius: 8, border: `2px solid`,
+                        borderColor: active ? opt.color : "#e2e8f0",
+                        background: active ? opt.bg : "#fff",
+                        color: active ? opt.color : "#64748b",
+                        fontWeight: active ? 700 : 500,
+                        fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                        transition: "all .15s", textAlign: "center",
+                      }}>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Division */}
