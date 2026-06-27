@@ -19,6 +19,14 @@ const POSITIONS_BY_PLAN_DIV_ID = (() => {
   return map;
 })();
 
+const ALL_POSITIONS = (() => {
+  const seen = new Set<string>();
+  for (const row of MANPOWER_ROWS) {
+    if (row.type === "slot" && row.pos.trim()) seen.add(row.pos.trim());
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b, "th"));
+})();
+
 const PLAN_NAME_TO_DIV_ID = (() => {
   const map = new Map<string, number>();
   for (const row of MANPOWER_ROWS) {
@@ -235,16 +243,14 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
           {filteredDepts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
       </Field>
-      <Field label={`ตำแหน่ง${positionOptions.length > 0 ? ` (${positionOptions.length} ตำแหน่ง)` : ""}`}>
-        {positionOptions.length > 0 ? (
-          <select value={position} onChange={e => setPos(e.target.value)} style={inp}>
-            <option value="">-- เลือกตำแหน่ง --</option>
-            {positionOptions.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        ) : (
-          <input value={position} onChange={e => setPos(e.target.value)} style={inp}
-            placeholder={divId ? "พิมพ์ตำแหน่ง" : "เลือกฝ่ายก่อน"} />
-        )}
+      <Field label={`ตำแหน่ง${positionOptions.length > 0 ? ` (${positionOptions.length} ตำแหน่งในฝ่ายนี้)` : ` (${ALL_POSITIONS.length} ตำแหน่งทั้งหมด)`}`}
+             hint={positionOptions.length === 0 && divId ? "ไม่พบตำแหน่งในแผนสำหรับฝ่ายนี้ — แสดงทุกตำแหน่ง" : undefined}>
+        <select value={position} onChange={e => setPos(e.target.value)} style={inp}>
+          <option value="">-- เลือกตำแหน่ง --</option>
+          {(positionOptions.length > 0 ? positionOptions : ALL_POSITIONS).map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
       </Field>
       <Field label="ประเภทพนักงาน">
         <input value={empType} onChange={e => setType(e.target.value)} style={inp} list="newhire-types" placeholder="เลือกหรือพิมพ์…" />
