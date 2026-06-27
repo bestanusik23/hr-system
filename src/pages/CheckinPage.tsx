@@ -26,6 +26,7 @@ export default function CheckinPage() {
   const [step, setStep]           = useState<Step>("form");
   const [submitting, setSubmitting] = useState(false);
 
+  const [prefix,    setPrefix]    = useState("นาย");
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
   const [position,  setPosition]  = useState("");
@@ -58,7 +59,7 @@ export default function CheckinPage() {
     const r = await fetch("/api/training/checkin", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token, first_name: firstName.trim(), last_name: lastName.trim(),
+        token, first_name: `${prefix}${firstName.trim()}`, last_name: lastName.trim(),
         position: position.trim(), participant_type: partType,
       }),
     });
@@ -259,20 +260,19 @@ export default function CheckinPage() {
           </div>
 
           {/* Name */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-                textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                ชื่อ <span style={{ color: "#dc2626" }}>*</span>
-              </label>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+              ชื่อ-นามสกุล <span style={{ color: "#dc2626" }}>*</span>
+            </label>
+            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr", gap: 8 }}>
+              <select value={prefix} onChange={e => setPrefix(e.target.value)} style={{ ...inp, paddingRight: 4 }}>
+                {["นาย","นาง","น.ส.","ดร.","นพ.","พญ.","ทพ.","ทพญ.","ภก.","ภกญ."].map(p =>
+                  <option key={p} value={p}>{p}</option>
+                )}
+              </select>
               <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="ชื่อจริง" style={inp} />
-            </div>
-            <div>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-                textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-                นามสกุล <span style={{ color: "#dc2626" }}>*</span>
-              </label>
-              <input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="นามสกุล" style={inp} />
+              <input value={lastName}  onChange={e => setLastName(e.target.value)}  placeholder="นามสกุล"  style={inp} />
             </div>
           </div>
 
