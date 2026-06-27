@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Course { id: number; course_code: string; course: string; course_date: string | null; status: string; reg_open: number; qr_token: string | null; target: number; actual: number; }
 interface Reg {
@@ -6,6 +6,7 @@ interface Reg {
   department: string | null; position: string | null; phone: string | null;
   reg_method: string; attendance_status: string; checkin_time: string | null;
 }
+interface EmpOption { id: number; emp_code: string | null; full_name: string; position: string | null; department_name: string | null; }
 
 const STATUS_LABEL: Record<string, string> = {
   registered: "ลงทะเบียน", checked_in: "เช็คชื่อแล้ว", late: "สาย",
@@ -33,8 +34,14 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
   const [fName, setFName]         = useState("");
   const [fDept, setFDept]         = useState("");
   const [fPos, setFPos]           = useState("");
-  const [fPhone, setFPhone]       = useState("");
   const [formErr, setFormErr]     = useState("");
+
+  // employee search
+  const [empList, setEmpList]         = useState<EmpOption[]>([]);
+  const [empSearch, setEmpSearch]     = useState("");
+  const [showDrop, setShowDrop]       = useState(false);
+  const [autoFilled, setAutoFilled]   = useState(false);
+  const searchRef                     = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch("/api/training/courses")
@@ -44,7 +51,19 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
         const startId = initCourseId ?? d.courses[0]?.id;
         if (startId) setSelId(startId);
       });
+    fetch("/api/eval/employees")
+      .then(r => r.json() as Promise<{ ok: boolean; employees: EmpOption[] }>)
+      .then(d => setEmpList(d.employees ?? []));
   }, [initCourseId]);
+
+  // close dropdown on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDrop(false);
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   useEffect(() => {
     if (!selId) return;
@@ -60,17 +79,39 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
     setLoading(false);
   }
 
+  function selectEmp(emp: EmpOption) {
+    setFEmpCode(emp.emp_code ?? "");
+    setFName(emp.full_name);
+    setFDept(emp.department_name ?? "");
+    setFPos(emp.position ?? "");
+    setEmpSearch(emp.full_name);
+    setAutoFilled(true);
+    setShowDrop(false);
+  }
+
+  function clearForm() {
+    setFEmpCode(""); setFName(""); setFDept(""); setFPos("");
+    setEmpSearch(""); setAutoFilled(false); setShowDrop(false); setFormErr("");
+  }
+
+  const filteredEmps = empSearch.trim().length >= 1
+    ? empList.filter(e =>
+        e.full_name.toLowerCase().includes(empSearch.toLowerCase()) ||
+        (e.emp_code ?? "").toLowerCase().includes(empSearch.toLowerCase())
+      ).slice(0, 8)
+    : [];
+
   async function addReg() {
     if (!fName.trim()) { setFormErr("กรุณากรอกชื่อ-นามสกุล"); return; }
     setSaving(true); setFormErr("");
     const r = await fetch("/api/training/registrations", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ course_id: selId, emp_code: fEmpCode || null, name: fName, department: fDept || null, position: fPos || null, phone: fPhone || null }),
+      body: JSON.stringify({ course_id: selId, emp_code: fEmpCode || null, name: fName, department: fDept || null, position: fPos || null, phone: null }),
     });
     const d = await r.json() as { ok: boolean; error?: string };
     setSaving(false);
     if (!d.ok) { setFormErr(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    setFEmpCode(""); setFName(""); setFDept(""); setFPos(""); setFPhone(""); setShowForm(false);
+    clearForm(); setShowForm(false);
     loadRegs(selId as number);
   }
 
@@ -227,22 +268,68 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
             boxShadow: "0 24px 60px rgba(0,56,198,0.25)", border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
             <div style={{ padding: "24px 28px" }}>
               <div style={{ fontSize: 16, fontWeight: 700, color: "#0a1628", marginBottom: 18 }}>เพิ่มผู้เข้าอบรม (Manual)</div>
+
+              {/* Employee search */}
+              <div ref={searchRef} style={{ marginBottom: 14, position: "relative" }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+                  textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+                  ค้นหาพนักงาน (ชื่อ หรือ รหัส)
+                </label>
+                <div style={{ position: "relative" }}>
+                  <input
+                    value={empSearch}
+                    onChange={e => { setEmpSearch(e.target.value); setAutoFilled(false); setShowDrop(true); if (!e.target.value) clearForm(); }}
+                    onFocus={() => { if (empSearch) setShowDrop(true); }}
+                    placeholder="พิมพ์ชื่อหรือรหัสพนักงาน..."
+                    style={{ ...inp, paddingRight: autoFilled ? 32 : 11, borderColor: autoFilled ? "#16a34a" : "#c4cfee" }} />
+                  {autoFilled && (
+                    <button onClick={clearForm} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                      background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 16, lineHeight: 1 }}>✕</button>
+                  )}
+                </div>
+                {showDrop && filteredEmps.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff",
+                    border: "1.5px solid #c4cfee", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,56,198,.12)",
+                    zIndex: 50, maxHeight: 220, overflowY: "auto", marginTop: 2 }}>
+                    {filteredEmps.map(e => (
+                      <div key={e.id} onMouseDown={() => selectEmp(e)}
+                        style={{ padding: "10px 14px", cursor: "pointer", borderBottom: "1px solid #f0f5ff",
+                          display: "flex", alignItems: "center", gap: 10 }}
+                        onMouseEnter={ev => (ev.currentTarget.style.background = "#f4f7ff")}
+                        onMouseLeave={ev => (ev.currentTarget.style.background = "")}>
+                        <div style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b",
+                          background: "#f0f5ff", borderRadius: 4, padding: "2px 6px", whiteSpace: "nowrap" }}>
+                          {e.emp_code ?? "—"}
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#0a1628" }}>{e.full_name}</div>
+                          <div style={{ fontSize: 11, color: "#94a3b8" }}>{[e.position, e.department_name].filter(Boolean).join(" · ")}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Auto-filled fields (read-only when selected) */}
               {[
                 { label: "รหัสพนักงาน", val: fEmpCode, set: setFEmpCode, ph: "EMP-0001" },
                 { label: "ชื่อ-นามสกุล *", val: fName, set: setFName, ph: "นาย/นาง/น.ส. ชื่อ นามสกุล" },
                 { label: "แผนก", val: fDept, set: setFDept, ph: "แผนก / ฝ่าย" },
                 { label: "ตำแหน่ง", val: fPos, set: setFPos, ph: "ตำแหน่งงาน" },
-                { label: "เบอร์โทร", val: fPhone, set: setFPhone, ph: "08X-XXX-XXXX" },
               ].map(f => (
                 <div key={f.label} style={{ marginBottom: 12 }}>
                   <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
                     textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{f.label}</label>
-                  <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph} style={inp} />
+                  <input value={f.val} onChange={e => { f.set(e.target.value); setAutoFilled(false); }}
+                    placeholder={f.ph}
+                    style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff", color: autoFilled ? "#334155" : "#0a1628" }} />
                 </div>
               ))}
+
               {formErr && <div style={{ color: "#dc2626", fontSize: 13, marginBottom: 12 }}>{formErr}</div>}
               <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
-                <button onClick={() => setShowForm(false)}
+                <button onClick={() => { setShowForm(false); clearForm(); }}
                   style={{ flex: 1, padding: "10px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
                     background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
                 <button onClick={addReg} disabled={saving}
