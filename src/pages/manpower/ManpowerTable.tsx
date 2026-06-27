@@ -255,14 +255,15 @@ export default function ManpowerTable() {
     try { return JSON.parse(localStorage.getItem("mpRowOrder") ?? "{}"); } catch { return {}; }
   });
 
-  const [editEmp,    setEditEmp]    = useState<LiveEmp | null>(null);
-  const [editName,   setEditName]   = useState("");
-  const [editPos,    setEditPos]    = useState("");
-  const [editDivId,  setEditDivId]  = useState<number | "">("");
-  const [editDeptId, setEditDeptId] = useState<number | "">("");
-  const [editRemark, setEditRemark] = useState("");
-  const [editSaving, setEditSaving] = useState(false);
-  const [editError,  setEditError]  = useState("");
+  const [editEmp,       setEditEmp]       = useState<LiveEmp | null>(null);
+  const [editName,      setEditName]      = useState("");
+  const [editPos,       setEditPos]       = useState("");
+  const [editPosCustom, setEditPosCustom] = useState(false); // true = free-text mode
+  const [editDivId,     setEditDivId]     = useState<number | "">("");
+  const [editDeptId,    setEditDeptId]    = useState<number | "">("");
+  const [editRemark,    setEditRemark]    = useState("");
+  const [editSaving,    setEditSaving]    = useState(false);
+  const [editError,     setEditError]     = useState("");
   const [orgDivs,    setOrgDivs]    = useState<OrgDiv[]>([]);
   const [orgDepts,   setOrgDepts]   = useState<OrgDept[]>([]);
 
@@ -277,12 +278,15 @@ export default function ManpowerTable() {
   // Populate edit form when employee selected
   useEffect(() => {
     if (editEmp) {
+      const pos = editEmp.position ?? "";
       setEditName(editEmp.full_name ?? "");
-      setEditPos(editEmp.position ?? "");
+      setEditPos(pos);
       setEditDivId(editEmp.division_id ?? "");
       setEditDeptId(editEmp.department_id ?? "");
       setEditRemark(editEmp.remark ?? "");
       setEditError("");
+      // If current position is not in any plan list, start in free-text mode
+      setEditPosCustom(pos !== "" && !ALL_POSITIONS.includes(pos));
     }
   }, [editEmp]);
 
@@ -729,22 +733,51 @@ export default function ManpowerTable() {
 
             {/* Position */}
             <div style={{ marginBottom: 14 }}>
-              <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-                letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
-                ตำแหน่ง
-              </label>
-              {(() => {
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: "#475569",
+                  letterSpacing: "0.08em", textTransform: "uppercase" as const }}>
+                  ตำแหน่ง
+                </label>
+                <button type="button" onClick={() => {
+                  if (editPosCustom) {
+                    setEditPos(""); setEditPosCustom(false);
+                  } else {
+                    setEditPosCustom(true);
+                  }
+                }} style={{ fontSize: 11, color: editPosCustom ? "#64748b" : "#0038C6", background: "none",
+                  border: "none", cursor: "pointer", padding: 0, fontFamily: "inherit", fontWeight: 600 }}>
+                  {editPosCustom ? "← เลือกจากรายการ" : "➕ เพิ่มตำแหน่งใหม่"}
+                </button>
+              </div>
+              {editPosCustom ? (
+                <input
+                  value={editPos}
+                  onChange={e => setEditPos(e.target.value)}
+                  placeholder="พิมพ์ชื่อตำแหน่งใหม่..."
+                  autoFocus
+                  style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
+                    border: "1.5px solid #0038C6", fontSize: 13, fontFamily: "inherit",
+                    outline: "none", boxSizing: "border-box" as const,
+                    background: "#f0f5ff" }}
+                />
+              ) : (() => {
                 const planDivId = editDivId
                   ? (DB_TO_PLAN_DIVID[editDivId as number] ?? editDivId as number)
                   : null;
                 const opts = planDivId ? (POSITIONS_BY_PLAN_DIV_ID.get(planDivId) ?? ALL_POSITIONS) : ALL_POSITIONS;
                 return (
-                  <select value={editPos} onChange={e => setEditPos(e.target.value)}
+                  <select value={editPos} onChange={e => {
+                    if (e.target.value === "__new__") {
+                      setEditPos(""); setEditPosCustom(true);
+                    } else {
+                      setEditPos(e.target.value);
+                    }
+                  }}
                     style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
                       border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
                       outline: "none", background: "#fff", boxSizing: "border-box" as const }}>
                     <option value="">-- เลือกตำแหน่ง --</option>
-                    {/* Keep current value if not in list */}
+                    <option value="__new__">➕ เพิ่มตำแหน่งใหม่...</option>
                     {editPos && !opts.includes(editPos) && (
                       <option value={editPos}>{editPos} ⚠️ (ไม่อยู่ในแผน)</option>
                     )}
@@ -752,6 +785,11 @@ export default function ManpowerTable() {
                   </select>
                 );
               })()}
+              {editPosCustom && editPos && (
+                <div style={{ fontSize: 11, color: "#b45309", marginTop: 4 }}>
+                  ตำแหน่งนี้จะแสดงในตาราง Manpower ใต้ฝ่ายที่เลือก (หมวด "ไม่มีในแผน")
+                </div>
+              )}
             </div>
 
             {/* Division */}
