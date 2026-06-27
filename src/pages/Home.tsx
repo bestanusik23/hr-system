@@ -147,7 +147,6 @@ export default function Home() {
         boxShadow: "0 1px 0 #e6e7e8, 0 2px 10px rgba(0,0,0,.05)",
         display: "flex", alignItems: "center", padding: "0 32px", gap: 16,
       }}>
-        <img src="/logo.png" alt="Chiangrai Ram Hospital" style={{ height: 40, objectFit: "contain" }} />
         <div style={{ flex: 1 }} />
         {/* User info */}
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -176,7 +175,7 @@ export default function Home() {
 
       {/* ══════════ HERO ══════════ */}
       <section style={{
-        paddingTop: 64, minHeight: 400,
+        paddingTop: 64, minHeight: "100vh",
         background: "linear-gradient(145deg, #ffffff 0%, #eef3ff 50%, #ddeefa 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden",
