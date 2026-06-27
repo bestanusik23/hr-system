@@ -34,10 +34,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const body = await ctx.request.json() as {
     token: string; first_name: string; last_name: string;
-    position?: string; participant_type: "attendee" | "trainer";
+    position?: string; participant_type: "attendee" | "trainer"; emp_code?: string;
   };
 
-  const { token, first_name, last_name, position, participant_type } = body;
+  const { token, first_name, last_name, position, participant_type, emp_code } = body;
 
   if (!token || !first_name?.trim() || !last_name?.trim() || !participant_type) {
     return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" }, { status: 400 });
@@ -96,15 +96,29 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     }
   }
 
-  const result = await ctx.env.HR_DB.prepare(`
-    INSERT INTO training_attendees
-      (course_id, name, position, reg_method, attendance_status,
-       checkin_time, device_info, ip_address, participant_type)
-    VALUES (?, ?, ?, 'qr', ?, ${isPreReg ? "NULL" : "datetime('now')"}, ?, ?, ?)
-  `).bind(
-    course.id, fullName, position?.trim() ?? null,
-    attendanceStatus, ua.slice(0, 300), ip, participant_type
-  ).run();
+  let result;
+  try {
+    result = await ctx.env.HR_DB.prepare(`
+      INSERT INTO training_attendees
+        (course_id, emp_code, name, position, reg_method, attendance_status,
+         checkin_time, device_info, ip_address, participant_type)
+      VALUES (?, ?, ?, ?, 'qr', ?, ${isPreReg ? "NULL" : "datetime('now')"}, ?, ?, ?)
+    `).bind(
+      course.id, emp_code?.trim() || null, fullName, position?.trim() ?? null,
+      attendanceStatus, ua.slice(0, 300), ip, participant_type
+    ).run();
+  } catch {
+    // emp_code column may not exist yet — fall back
+    result = await ctx.env.HR_DB.prepare(`
+      INSERT INTO training_attendees
+        (course_id, name, position, reg_method, attendance_status,
+         checkin_time, device_info, ip_address, participant_type)
+      VALUES (?, ?, ?, 'qr', ?, ${isPreReg ? "NULL" : "datetime('now')"}, ?, ?, ?)
+    `).bind(
+      course.id, fullName, position?.trim() ?? null,
+      attendanceStatus, ua.slice(0, 300), ip, participant_type
+    ).run();
+  }
 
   // suppress unused variable warning
   void checkinTime;

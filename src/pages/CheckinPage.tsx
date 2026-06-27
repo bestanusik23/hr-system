@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+interface EmpSuggestion { emp_code: string | null; full_name: string; position: string | null; department_name: string | null; }
+
 interface CourseInfo {
   id: number; course_code: string; course: string; course_type: string;
   course_date: string | null; start_time: string | null; end_time: string | null;
@@ -30,7 +32,17 @@ export default function CheckinPage() {
   const [firstName, setFirstName] = useState("");
   const [lastName,  setLastName]  = useState("");
   const [position,  setPosition]  = useState("");
+  const [empCode,   setEmpCode]   = useState<string | null>(null);
   const [partType,  setPartType]  = useState<"attendee" | "trainer">("attendee");
+
+  // Employee autocomplete
+  const [empSearch,    setEmpSearch]    = useState("");
+  const [suggestions,  setSuggestions]  = useState<EmpSuggestion[]>([]);
+  const [showDrop,     setShowDrop]     = useState(false);
+  const [autoFilled,   setAutoFilled]   = useState(false);
+  const [searching,    setSearching]    = useState(false);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [registeredId,   setRegisteredId]   = useState<number | null>(null);
   const [registeredType, setRegisteredType] = useState<"attendee" | "trainer">("attendee");
   const [trainingDate,   setTrainingDate]   = useState<string | null>(null);
@@ -51,6 +63,57 @@ export default function CheckinPage() {
       });
   }, [token]);
 
+  // Debounced employee search
+  useEffect(() => {
+    if (autoFilled || empSearch.trim().length < 2) { setSuggestions([]); setShowDrop(false); return; }
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      const r = await fetch(`/api/training/emp-lookup?token=${encodeURIComponent(token)}&q=${encodeURIComponent(empSearch.trim())}`);
+      const d = await r.json() as { ok: boolean; employees: EmpSuggestion[] };
+      setSuggestions(d.employees ?? []);
+      setShowDrop(true);
+      setSearching(false);
+    }, 300);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [empSearch, autoFilled]); // eslint-disable-line
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowDrop(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  function selectEmp(emp: EmpSuggestion) {
+    const parts = emp.full_name.trim().split(" ");
+    const PREFIXES = ["นาย","นาง","น.ส.","ดร.","นพ.","พญ.","ทพ.","ทพญ.","ภก.","ภกญ."];
+    const hasPrefix = PREFIXES.some(p => emp.full_name.startsWith(p));
+    if (hasPrefix) {
+      const found = PREFIXES.find(p => emp.full_name.startsWith(p))!;
+      setPrefix(found);
+      const rest = emp.full_name.slice(found.length).trim().split(" ");
+      setFirstName(rest[0] ?? "");
+      setLastName(rest.slice(1).join(" "));
+    } else {
+      setFirstName(parts[0] ?? "");
+      setLastName(parts.slice(1).join(" "));
+    }
+    if (emp.position) setPosition(emp.position);
+    setEmpCode(emp.emp_code ?? null);
+    setEmpSearch(emp.full_name);
+    setAutoFilled(true);
+    setShowDrop(false);
+  }
+
+  function clearEmp() {
+    setEmpSearch(""); setAutoFilled(false); setEmpCode(null);
+    setFirstName(""); setLastName(""); setPosition("");
+    setSuggestions([]); setShowDrop(false);
+  }
+
   async function register() {
     if (!firstName.trim() || !lastName.trim() || !position.trim()) {
       setError("กรุณากรอกชื่อ นามสกุล และตำแหน่งให้ครบถ้วน"); return;
@@ -60,7 +123,7 @@ export default function CheckinPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token, first_name: `${prefix}${firstName.trim()}`, last_name: lastName.trim(),
-        position: position.trim(), participant_type: partType,
+        position: position.trim(), participant_type: partType, emp_code: empCode ?? undefined,
       }),
     });
     const d = await r.json() as {
@@ -259,21 +322,87 @@ export default function CheckinPage() {
             </div>
           </div>
 
-          {/* Name */}
+          {/* Employee search autocomplete */}
+          <div ref={searchRef} style={{ marginBottom: 18, position: "relative" }}>
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+              ค้นหาชื่อพนักงานในระบบ
+            </label>
+            <div style={{ position: "relative" }}>
+              <input
+                value={empSearch}
+                onChange={e => { setEmpSearch(e.target.value); setAutoFilled(false); }}
+                placeholder="พิมพ์ชื่อหรือรหัสพนักงาน (ไม่บังคับ)"
+                style={{ ...inp, borderColor: autoFilled ? "#16a34a" : "#c4cfee",
+                  paddingRight: autoFilled ? 36 : 12 }}
+              />
+              {searching && (
+                <span style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)",
+                  fontSize: 11, color: "#94a3b8" }}>ค้นหา…</span>
+              )}
+              {autoFilled && (
+                <button onClick={clearEmp}
+                  style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+                    background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 18 }}>✕</button>
+              )}
+            </div>
+            {showDrop && suggestions.length > 0 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff",
+                border: "1.5px solid #c4cfee", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,56,198,.14)",
+                zIndex: 50, maxHeight: 240, overflowY: "auto", marginTop: 3 }}>
+                {suggestions.map((e, i) => (
+                  <div key={i} onMouseDown={() => selectEmp(e)}
+                    style={{ padding: "11px 14px", cursor: "pointer", borderBottom: "1px solid #f0f5ff",
+                      display: "flex", alignItems: "center", gap: 10 }}
+                    onMouseEnter={ev => (ev.currentTarget.style.background = "#f4f7ff")}
+                    onMouseLeave={ev => (ev.currentTarget.style.background = "")}>
+                    <div style={{ fontFamily: "monospace", fontSize: 11, color: "#0038C6",
+                      background: "#eff4ff", borderRadius: 4, padding: "2px 7px", whiteSpace: "nowrap", flexShrink: 0 }}>
+                      {e.emp_code ?? "—"}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: "#0a1628" }}>{e.full_name}</div>
+                      <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                        {[e.position, e.department_name].filter(Boolean).join(" · ")}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showDrop && suggestions.length === 0 && !searching && empSearch.trim().length >= 2 && (
+              <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff",
+                border: "1.5px solid #c4cfee", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,56,198,.1)",
+                zIndex: 50, padding: "14px", textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 3 }}>
+                ไม่พบพนักงานในระบบ — กรอกข้อมูลด้านล่างด้วยตนเอง
+              </div>
+            )}
+          </div>
+
+          {/* Name fields */}
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
               textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
               ชื่อ-นามสกุล <span style={{ color: "#dc2626" }}>*</span>
             </label>
-            <div style={{ display: "grid", gridTemplateColumns: "120px 1fr 1fr", gap: 8 }}>
-              <select value={prefix} onChange={e => setPrefix(e.target.value)} style={{ ...inp, paddingRight: 4 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 1fr", gap: 8 }}>
+              <select value={prefix} onChange={e => setPrefix(e.target.value)}
+                style={{ ...inp, paddingRight: 4, background: autoFilled ? "#f8faff" : "#fff" }}
+                disabled={autoFilled}>
                 {["นาย","นาง","น.ส.","ดร.","นพ.","พญ.","ทพ.","ทพญ.","ภก.","ภกญ."].map(p =>
                   <option key={p} value={p}>{p}</option>
                 )}
               </select>
-              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="ชื่อจริง" style={inp} />
-              <input value={lastName}  onChange={e => setLastName(e.target.value)}  placeholder="นามสกุล"  style={inp} />
+              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="ชื่อจริง"
+                style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
+              <input value={lastName}  onChange={e => setLastName(e.target.value)}  placeholder="นามสกุล"
+                style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
             </div>
+            {autoFilled && (
+              <div style={{ fontSize: 11, color: "#16a34a", marginTop: 5 }}>
+                ✓ ดึงข้อมูลจากระบบพนักงาน
+              </div>
+            )}
           </div>
 
           <div style={{ marginBottom: 20 }}>
@@ -282,7 +411,8 @@ export default function CheckinPage() {
               ตำแหน่ง <span style={{ color: "#dc2626" }}>*</span>
             </label>
             <input value={position} onChange={e => setPosition(e.target.value)}
-              placeholder="เช่น พยาบาลวิชาชีพ, เจ้าหน้าที่ธุรการ" style={inp} />
+              placeholder="เช่น พยาบาลวิชาชีพ, เจ้าหน้าที่ธุรการ"
+              style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
           </div>
 
           {error && (
