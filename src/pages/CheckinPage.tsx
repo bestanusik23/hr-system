@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface CourseInfo {
   id: number; course_code: string; course: string; course_type: string;
@@ -33,6 +33,8 @@ export default function CheckinPage() {
   const [registeredId,   setRegisteredId]   = useState<number | null>(null);
   const [registeredType, setRegisteredType] = useState<"attendee" | "trainer">("attendee");
   const [trainingDate,   setTrainingDate]   = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(3);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!token) { setError("ไม่พบ QR Token"); setLoading(false); return; }
@@ -76,8 +78,25 @@ export default function CheckinPage() {
   }
 
   const today       = new Date().toISOString().slice(0, 10);
-  const surveyReady = course && (course.status === "done" || (course.course_date != null && course.course_date <= today));
   const surveyUrl   = `/survey?token=${encodeURIComponent(token)}&aid=${registeredId ?? ""}`;
+
+  // Auto-redirect to survey after check-in (attendee only, on training day)
+  const shouldRedirect = ["success", "updated", "duplicate"].includes(step) && registeredType === "attendee";
+  useEffect(() => {
+    if (!shouldRedirect) return;
+    setCountdown(3);
+    timerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timerRef.current!);
+          window.location.href = surveyUrl;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [step, registeredType]); // eslint-disable-line
 
   const cardStyle: React.CSSProperties = {
     background: "#fff", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,56,198,0.18)",
@@ -184,11 +203,13 @@ export default function CheckinPage() {
           <div style={{ textAlign: "center", fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>
             {new Date().toLocaleString("th-TH")}
           </div>
-          <div style={{ background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0",
-            padding: "10px 16px", fontSize: 12, color: "#15803d", marginBottom: registeredType === "attendee" ? 16 : 0, textAlign: "center" }}>
-            ✔ อัปเดตสถานะจากการลงทะเบียนล่วงหน้า → เช็คชื่อแล้ว
-          </div>
-          {registeredType === "attendee" && <SurveyPrompt ready={surveyReady ?? false} url={surveyUrl} />}
+          {registeredType === "attendee"
+            ? <SurveyRedirect countdown={countdown} url={surveyUrl} />
+            : <div style={{ background: "#eff4ff", borderRadius: 10, border: "1px solid #c4cfee",
+                padding: "18px 20px", textAlign: "center" }}>
+                <div style={{ fontWeight: 700, color: "#0038C6" }}>🎤 ลงทะเบียนเป็นวิทยากรสำเร็จ</div>
+              </div>
+          }
         </div>
 
       ) : (step === "success" || step === "duplicate") ? (
@@ -202,14 +223,14 @@ export default function CheckinPage() {
           <div style={{ textAlign: "center", fontSize: 12, color: "#94a3b8", marginBottom: 24 }}>
             {new Date().toLocaleString("th-TH")}
           </div>
-          {registeredType === "attendee" && <SurveyPrompt ready={surveyReady ?? false} url={surveyUrl} />}
-          {registeredType === "trainer" && (
-            <div style={{ background: "#eff4ff", borderRadius: 10, border: "1px solid #c4cfee",
-              padding: "18px 20px", textAlign: "center" }}>
-              <div style={{ fontWeight: 700, color: "#0038C6" }}>🎤 ลงทะเบียนเป็นวิทยากรสำเร็จ</div>
-              <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>ขอบคุณที่ร่วมเป็นวิทยากร</div>
-            </div>
-          )}
+          {registeredType === "attendee"
+            ? <SurveyRedirect countdown={countdown} url={surveyUrl} />
+            : <div style={{ background: "#eff4ff", borderRadius: 10, border: "1px solid #c4cfee",
+                padding: "18px 20px", textAlign: "center" }}>
+                <div style={{ fontWeight: 700, color: "#0038C6" }}>🎤 ลงทะเบียนเป็นวิทยากรสำเร็จ</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>ขอบคุณที่ร่วมเป็นวิทยากร</div>
+              </div>
+          }
         </div>
 
       ) : course ? (
@@ -287,28 +308,22 @@ export default function CheckinPage() {
   );
 }
 
-function SurveyPrompt({ ready, url }: { ready: boolean; url: string }) {
+function SurveyRedirect({ countdown, url }: { countdown: number; url: string }) {
   return (
-    <div style={{
-      background: ready ? "#f0fdf4" : "#f8faff", borderRadius: 10,
-      border: `1px solid ${ready ? "#bbf7d0" : "#dce4f5"}`, padding: "18px 20px", textAlign: "center",
-    }}>
-      <div style={{ fontSize: 24, marginBottom: 8 }}>📝</div>
-      <div style={{ fontWeight: 700, color: "#0a1628", marginBottom: 6 }}>แบบสอบถามความพึงพอใจ</div>
-      {ready ? (
-        <>
-          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 14 }}>
-            กรุณาตอบแบบสอบถามหลังเสร็จสิ้นการอบรม
-          </div>
-          <a href={url} style={{ display: "inline-block", padding: "11px 32px", borderRadius: 9,
-            background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: 14,
-            textDecoration: "none", boxShadow: "0 4px 12px rgba(22,163,74,0.3)" }}>
-            ตอบแบบสอบถาม →
-          </a>
-        </>
-      ) : (
-        <div style={{ fontSize: 12, color: "#64748b" }}>แบบสอบถามจะเปิดให้กรอกหลังสิ้นสุดการอบรม</div>
-      )}
+    <div style={{ background: "#f0fdf4", borderRadius: 10, border: "1px solid #bbf7d0",
+      padding: "22px 20px", textAlign: "center" }}>
+      <div style={{ fontSize: 28, marginBottom: 10 }}>📝</div>
+      <div style={{ fontWeight: 800, color: "#0a1628", fontSize: 15, marginBottom: 6 }}>
+        กรุณาทำแบบสอบถามเพื่อสำเร็จกระบวนการ
+      </div>
+      <div style={{ fontSize: 13, color: "#475569", marginBottom: 18 }}>
+        กำลังนำไปยังแบบสอบถาม… ({countdown})
+      </div>
+      <a href={url} style={{ display: "inline-block", padding: "11px 32px", borderRadius: 9,
+        background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: 14,
+        textDecoration: "none", boxShadow: "0 4px 12px rgba(22,163,74,0.3)" }}>
+        ไปตอบแบบสอบถาม →
+      </a>
     </div>
   );
 }

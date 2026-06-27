@@ -43,6 +43,15 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     comment?.trim() ?? null
   ).run();
 
+  // Mark attendee as completed after survey submission
+  if (attendee_id) {
+    try {
+      await ctx.env.HR_DB.prepare(
+        "UPDATE training_attendees SET attendance_status = 'completed' WHERE id = ? AND course_id = ? AND attendance_status IN ('checked_in','late')"
+      ).bind(attendee_id, course.id).run();
+    } catch { /* non-critical */ }
+  }
+
   return Response.json({ ok: true }, { status: 201 });
 };
 
