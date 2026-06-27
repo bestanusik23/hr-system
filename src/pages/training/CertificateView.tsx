@@ -21,7 +21,7 @@ function thDate(iso: string | null): string {
 // SVG data-uri สำหรับ print background circles
 const CIRC_ENC = encodeURIComponent(
   `<svg xmlns='http://www.w3.org/2000/svg' width='560' height='794'>`+
-  `<g fill='none' stroke='%237BAFD4' stroke-width='2.5' opacity='0.40'>`+
+  `<g fill='none' stroke='%237BAFD4' stroke-width='2' opacity='0.22'>`+
   [110,205,310,420,540].map(r=>`<circle cx='0' cy='490' r='${r}'/>`).join("")+
   `</g></svg>`
 );
@@ -132,7 +132,7 @@ export default function CertificateView({ cert, onClose }: Props) {
                 pointerEvents: "none", zIndex: 0 }}
               viewBox={`0 0 560 ${H}`}
             >
-              <g fill="none" stroke="#7BAFD4" strokeWidth="2.5" opacity={0.40}>
+              <g fill="none" stroke="#7BAFD4" strokeWidth="2" opacity={0.22}>
                 {[110, 205, 310, 420, 540].map(r => (
                   <circle key={r} cx={C_CX} cy={C_CY} r={r} />
                 ))}
@@ -150,42 +150,42 @@ export default function CertificateView({ cert, onClose }: Props) {
 
               {/* Header row */}
               <div style={{ display: "flex", justifyContent: "space-between",
-                alignItems: "center", padding: "15px 0 12px" }}>
+                alignItems: "center", padding: "12px 0 10px" }}>
 
-                {/* RAM+ logo */}
-                <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
-                  onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
-                  style={{ height: 54, objectFit: "contain" }} />
-
-                {/* Accreditation logos */}
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {(["URS","UKAS"] as string[]).map(a => (
-                    <div key={a} style={{
+                {/* Left group: RAM+ logo + accreditation badges side-by-side */}
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    style={{ height: 72, objectFit: "contain" }} />
+                  <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+                    {(["URS","UKAS"] as string[]).map(a => (
+                      <div key={a} style={{
+                        border: "1.5px solid #c4cfee", borderRadius: 5,
+                        padding: "5px 10px", fontSize: 11, fontWeight: 800,
+                        color: S.blue, background: "#f8faff",
+                      }}>{a}</div>
+                    ))}
+                    <img src="/aaci-gold.png" alt="AACI"
+                      style={{ height: 54, objectFit: "contain" }} />
+                    <img src="/aaci-iso.jpg" alt="AACI ISO"
+                      style={{ height: 48, objectFit: "contain" }} />
+                    <div style={{
                       border: "1.5px solid #c4cfee", borderRadius: 5,
-                      padding: "5px 9px", fontSize: 11, fontWeight: 800,
-                      color: S.blue, background: "#f8faff",
-                    }}>{a}</div>
-                  ))}
-                  <img src="/aaci-gold.png" alt="AACI"
-                    style={{ height: 52, objectFit: "contain" }} />
-                  <img src="/aaci-iso.jpg" alt="AACI ISO"
-                    style={{ height: 46, objectFit: "contain" }} />
-                  <div style={{
-                    border: "1.5px solid #c4cfee", borderRadius: 5,
-                    padding: "4px 9px", textAlign: "center",
-                    color: S.blue, background: "#f8faff", lineHeight: 1.25,
-                  }}>
-                    <div style={{ fontSize: 13, fontWeight: 900 }}>GLP</div>
-                    <div style={{ fontSize: 8, fontWeight: 700 }}>Good Labour<br />Practices</div>
+                      padding: "4px 9px", textAlign: "center",
+                      color: S.blue, background: "#f8faff", lineHeight: 1.25,
+                    }}>
+                      <div style={{ fontSize: 13, fontWeight: 900 }}>GLP</div>
+                      <div style={{ fontSize: 8, fontWeight: 700 }}>Good Labour<br />Practices</div>
+                    </div>
                   </div>
                 </div>
 
-                {/* Year badge */}
+                {/* Year badge — flush right */}
                 <div style={{
                   background: S.blue, color: "#fff", borderRadius: 10,
-                  padding: "7px 18px", fontSize: 14, fontWeight: 800,
+                  padding: "8px 20px", fontSize: 15, fontWeight: 800, whiteSpace: "nowrap",
                 }}>
-                  ประจำปี {year}
+                  ประจำปี พ.ศ. {year}
                 </div>
               </div>
 
@@ -199,40 +199,40 @@ export default function CertificateView({ cert, onClose }: Props) {
                 </div>
 
                 {/* Sub-title */}
-                <div style={{ fontSize: 19, color: S.dark, marginTop: 5 }}>
+                <div style={{ fontSize: 19, color: S.dark, marginTop: 3 }}>
                   ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า
                 </div>
 
                 {/* Recipient name — largest element */}
                 <div style={{
                   fontSize: 58, fontWeight: 900, color: S.navy,
-                  lineHeight: 1.1, margin: "14px 0 16px",
+                  lineHeight: 1.1, margin: "10px 0 12px",
                 }}>
                   {cert.full_name}
                 </div>
 
                 {/* Course description */}
-                <div style={{ fontSize: 17, color: S.dark, lineHeight: 1.85, maxWidth: 830 }}>
+                <div style={{ fontSize: 17, color: S.dark, lineHeight: 1.8, maxWidth: 830 }}>
                   ได้เข้าร่วมการอบรม {cert.course_name}
                   {cert.course_date && <><br />วันที่ {thDate(cert.course_date)}</>}
                 </div>
 
                 {/* Location + achievement — blue */}
-                <div style={{ fontSize: 17, color: S.blue, marginTop: 7, lineHeight: 1.85 }}>
+                <div style={{ fontSize: 17, color: S.blue, marginTop: 4, lineHeight: 1.8 }}>
                   ณ โรงพยาบาลเชียงราย ราม
                   <br />โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ
                 </div>
 
                 {/* Issue date */}
-                <div style={{ fontSize: 17, fontWeight: 800, color: S.dark, marginTop: 9 }}>
+                <div style={{ fontSize: 17, fontWeight: 800, color: S.dark, marginTop: 6 }}>
                   ให้ ณ วันที่ {thDate(cert.issued_at)}
                 </div>
 
                 {/* Signatures — no lines, name in blue */}
                 <div style={{ display: "flex", justifyContent: "space-around",
-                  width: "100%", marginTop: 22 }}>
+                  width: "100%", marginTop: 16 }}>
                   {[
-                    { name: "พญ. พรทิพย์ ลักนะกุล",        pos: "เทคนิคการแพทย์ผู้อำนวยการระดับสูง" },
+                    { name: "นายอนุสิกข์ ทองแผ่น",          pos: "รองผู้อำนวยการฝ่ายบริหารและพัฒนาคุณภาพ" },
                     { name: "นายแพทย์วัชระ เตชะธีราวัฒน์",  pos: "(ผู้อำนวยการโรงพยาบาลเชียงราย ราม)" },
                   ].map(s => (
                     <div key={s.name} style={{ textAlign: "center" }}>
