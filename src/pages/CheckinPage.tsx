@@ -28,12 +28,13 @@ export default function CheckinPage() {
   const [step, setStep]           = useState<Step>("form");
   const [submitting, setSubmitting] = useState(false);
 
-  const [prefix,    setPrefix]    = useState("นาย");
-  const [firstName, setFirstName] = useState("");
-  const [lastName,  setLastName]  = useState("");
-  const [position,  setPosition]  = useState("");
-  const [empCode,   setEmpCode]   = useState<string | null>(null);
-  const [partType,  setPartType]  = useState<"attendee" | "trainer">("attendee");
+  const [prefix,     setPrefix]     = useState("นาย");
+  const [firstName,  setFirstName]  = useState("");
+  const [lastName,   setLastName]   = useState("");
+  const [position,   setPosition]   = useState("");
+  const [department, setDepartment] = useState("");
+  const [empCode,    setEmpCode]    = useState<string | null>(null);
+  const [partType,   setPartType]   = useState<"attendee" | "trainer">("attendee");
 
   // Employee autocomplete
   const [empSearch,    setEmpSearch]    = useState("");
@@ -101,7 +102,8 @@ export default function CheckinPage() {
       setFirstName(parts[0] ?? "");
       setLastName(parts.slice(1).join(" "));
     }
-    if (emp.position) setPosition(emp.position);
+    if (emp.position)        setPosition(emp.position);
+    if (emp.department_name) setDepartment(emp.department_name);
     setEmpCode(emp.emp_code ?? null);
     setEmpSearch(emp.full_name);
     setAutoFilled(true);
@@ -110,7 +112,7 @@ export default function CheckinPage() {
 
   function clearEmp() {
     setEmpSearch(""); setAutoFilled(false); setEmpCode(null);
-    setFirstName(""); setLastName(""); setPosition("");
+    setFirstName(""); setLastName(""); setPosition(""); setDepartment("");
     setSuggestions([]); setShowDrop(false);
   }
 
@@ -123,7 +125,8 @@ export default function CheckinPage() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         token, first_name: `${prefix}${firstName.trim()}`, last_name: lastName.trim(),
-        position: position.trim(), participant_type: partType, emp_code: empCode ?? undefined,
+        position: position.trim(), department: department.trim() || undefined,
+        participant_type: partType, emp_code: empCode ?? undefined,
       }),
     });
     const d = await r.json() as {
@@ -379,6 +382,21 @@ export default function CheckinPage() {
             )}
           </div>
 
+          {/* Auto-filled employee info card */}
+          {autoFilled && (
+            <div style={{ background: "#f0fdf4", borderRadius: 9, border: "1.5px solid #86efac",
+              padding: "12px 16px", marginBottom: 16, fontSize: 13 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase",
+                letterSpacing: "0.07em", marginBottom: 8 }}>✓ ดึงข้อมูลจากระบบพนักงาน</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+                <div><span style={{ color: "#475569" }}>รหัสพนักงาน: </span>
+                  <strong style={{ color: "#0038C6", fontFamily: "monospace" }}>{empCode ?? "—"}</strong></div>
+                <div><span style={{ color: "#475569" }}>แผนก: </span>
+                  <strong style={{ color: "#0a1628" }}>{department || "—"}</strong></div>
+              </div>
+            </div>
+          )}
+
           {/* Name fields */}
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
@@ -398,11 +416,6 @@ export default function CheckinPage() {
               <input value={lastName}  onChange={e => setLastName(e.target.value)}  placeholder="นามสกุล"
                 style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
             </div>
-            {autoFilled && (
-              <div style={{ fontSize: 11, color: "#16a34a", marginTop: 5 }}>
-                ✓ ดึงข้อมูลจากระบบพนักงาน
-              </div>
-            )}
           </div>
 
           <div style={{ marginBottom: 20 }}>

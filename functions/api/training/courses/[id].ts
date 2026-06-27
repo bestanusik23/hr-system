@@ -72,7 +72,14 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const id   = ctx.params.id as string;
-  const body = await ctx.request.json() as { action: "cancel" | "restore" | "set_status"; reason?: string; status?: string };
+  const body = await ctx.request.json() as { action: "cancel" | "restore" | "set_status" | "toggle_reg"; reason?: string; status?: string; reg_open?: boolean };
+
+  if (body.action === "toggle_reg") {
+    await ctx.env.HR_DB.prepare(
+      "UPDATE training_courses SET reg_open=?, updated_at=datetime('now') WHERE id=?"
+    ).bind(body.reg_open ? 1 : 0, id).run();
+    return Response.json({ ok: true });
+  }
 
   if (body.action === "set_status" && body.status) {
     const VALID = ["planned", "approved", "open", "upcoming", "done"];

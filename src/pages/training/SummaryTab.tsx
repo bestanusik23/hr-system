@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 
-interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; }
+interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; reg_open: number; }
+
+function toThaiTime(utc: string | null): string {
+  if (!utc) return "—";
+  const d = new Date(utc.replace(" ", "T") + (utc.includes("Z") ? "" : "Z"));
+  return new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
+}
 interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; participant_type?: string; }
 interface Photo { id: number; course_id: number; url: string; photo_type: string; caption: string | null; uploaded_at: string; }
 interface Survey { id: number; q1: number; q2: number; q3: number; q4: number; q5: number; comment: string | null; submitted_at: string; }
@@ -51,6 +57,16 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     if (!selId) return;
     loadAll(selId as number);
   }, [selId]);
+
+  async function toggleRegOpen() {
+    if (!course || !selId) return;
+    const newVal = course.reg_open ? 0 : 1;
+    await fetch(`/api/training/courses/${selId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "toggle_reg", reg_open: newVal === 1 }),
+    });
+    setCourse({ ...course, reg_open: newVal });
+  }
 
   async function loadAll(id: number) {
     setLoading(true);
@@ -176,19 +192,24 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   <div>✅ เช็คชื่อ : <strong>${checked} / ${regs.length} คน</strong></div>
 </div>
 <table>
-<thead><tr><th>#</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>แผนก</th><th>เวลาเช็คชื่อ</th><th>สถานะ</th><th style="width:90px">ลายเซ็น</th></tr></thead>
+<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ตำแหน่ง</th><th>เวลาเช็คชื่อ</th><th>สถานะ</th><th style="width:80px">ลายเซ็น</th></tr></thead>
 <tbody>
-${attendees.map((r, i) => `<tr>
+${attendees.map((r, i) => {
+  const ct = r.checkin_time
+    ? (() => { const d = new Date((r.checkin_time as string).replace(" ","T") + ((r.checkin_time as string).includes("Z") ? "" : "Z")); return new Date(d.getTime() + 7*3600000).toISOString().slice(0,16).replace("T"," "); })()
+    : "—";
+  return `<tr>
   <td>${i + 1}</td>
+  <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
   <td><strong>${r.name}</strong></td>
-  <td>${r.position ?? "—"}</td>
   <td>${r.department ?? "—"}</td>
-  <td>${r.checkin_time ? r.checkin_time.slice(0, 16).replace("T", " ") : "—"}</td>
+  <td>${r.position ?? "—"}</td>
+  <td>${ct}</td>
   <td><span class="${badgeClass(r.attendance_status)}">${badgeLabel(r.attendance_status)}</span></td>
   <td></td>
-</tr>`).join("")}
-${trainers.length > 0 ? `<tr><td colspan="7" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td><td colspan="4"></td></tr>`).join("")}` : ""}
+</tr>`;}).join("")}
+${trainers.length > 0 ? `<tr><td colspan="8" class="sect">🎤 วิทยากร</td></tr>
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td><strong>${r.name}</strong></td><td>${r.department ?? "—"}</td><td>${r.position ?? "—"}</td><td colspan="3"></td></tr>`).join("")}` : ""}
 </tbody></table>
 <div class="summary">
   <span>ลงทะเบียนทั้งหมด <strong>${regs.length}</strong> คน</span>
@@ -246,9 +267,33 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td><strong>${r.name}</strong></t
           {course && (
             <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #dce4f5",
               borderLeft: "4px solid #0038C6", padding: "20px 24px", marginBottom: 20 }}>
-              <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628", marginBottom: 12 }}>
-                📋 {course.course}
-                <span style={{ marginLeft: 10, fontSize: 12, fontFamily: "monospace", color: "#64748b", fontWeight: 400 }}>{course.course_code}</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628" }}>
+                  📋 {course.course}
+                  <span style={{ marginLeft: 10, fontSize: 12, fontFamily: "monospace", color: "#64748b", fontWeight: 400 }}>{course.course_code}</span>
+                </div>
+                {/* Registration status + toggle */}
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0, marginLeft: 16 }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, padding: "4px 10px", borderRadius: 6,
+                    background: course.reg_open ? "#dcfce7" : "#fee2e2",
+                    color: course.reg_open ? "#16a34a" : "#dc2626",
+                    border: `1px solid ${course.reg_open ? "#86efac" : "#fca5a5"}`,
+                  }}>
+                    {course.reg_open ? "🔓 เปิดรับลงทะเบียน" : "🔒 ปิดรับลงทะเบียน"}
+                  </span>
+                  {canEdit && (
+                    <button onClick={toggleRegOpen} style={{
+                      padding: "5px 14px", borderRadius: 6, border: "1.5px solid",
+                      borderColor: course.reg_open ? "#dc2626" : "#16a34a",
+                      background: course.reg_open ? "#fee2e2" : "#dcfce7",
+                      color: course.reg_open ? "#dc2626" : "#16a34a",
+                      fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                    }}>
+                      {course.reg_open ? "ปิดรับลงทะเบียน" : "เปิดรับลงทะเบียน"}
+                    </button>
+                  )}
+                </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(200px,1fr))", gap: 8, fontSize: 13, color: "#475569" }}>
                 <div>📅 {course.course_date ?? "—"}</div>
@@ -318,7 +363,7 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td><strong>${r.name}</strong></t
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f4f7ff" }}>
-                  {["#", "รหัส", "ชื่อ-นามสกุล", "แผนก", "ตำแหน่ง", "เวลาเช็คชื่อ", "สถานะ"].map(h => (
+                  {["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "แผนก", "ตำแหน่ง", "เวลาเช็คชื่อ", "สถานะ"].map(h => (
                     <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700,
                       color: "#475569", borderBottom: "2px solid #dce4f5", fontSize: 11,
                       letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</th>
@@ -327,7 +372,7 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td><strong>${r.name}</strong></t
               </thead>
               <tbody>
                 {regs.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8" }}>ยังไม่มีผู้เข้าร่วม</td></tr>
+                  <tr><td colSpan={8} style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8" }}>ยังไม่มีผู้เข้าร่วม</td></tr>
                 ) : regs.map((r, i) => (
                   <tr key={r.id} style={{ borderBottom: "1px solid #f0f5ff", background: i % 2 === 0 ? "#fff" : "#fafcff" }}>
                     <td style={{ padding: "9px 14px", color: "#94a3b8" }}>{i + 1}</td>
@@ -335,7 +380,7 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td><strong>${r.name}</strong></t
                     <td style={{ padding: "9px 14px", fontWeight: 600, color: "#0a1628" }}>{r.name}</td>
                     <td style={{ padding: "9px 14px", color: "#64748b" }}>{r.department ?? "—"}</td>
                     <td style={{ padding: "9px 14px", color: "#64748b" }}>{r.position ?? "—"}</td>
-                    <td style={{ padding: "9px 14px", color: "#64748b", fontSize: 11 }}>{r.checkin_time ? r.checkin_time.slice(0, 16).replace("T", " ") : "—"}</td>
+                    <td style={{ padding: "9px 14px", color: "#64748b", fontSize: 11 }}>{toThaiTime(r.checkin_time)}</td>
                     <td style={{ padding: "9px 14px" }}>
                       <span style={{ background: STATUS_COLOR[r.attendance_status] + "20", color: STATUS_COLOR[r.attendance_status],
                         border: `1px solid ${STATUS_COLOR[r.attendance_status]}40`,
