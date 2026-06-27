@@ -17,7 +17,16 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           WHERE TRIM(e.full_name) = TRIM(ta.name)
             AND e.emp_status NOT IN ('resigned','terminated')
           LIMIT 1)
-       ) AS emp_code
+       ) AS emp_code,
+       COALESCE(ta.department,
+         (SELECT COALESCE(d.name, dv.name)
+          FROM employees e
+          LEFT JOIN departments d  ON d.id  = e.department_id
+          LEFT JOIN divisions  dv ON dv.id = e.division_id
+          WHERE TRIM(e.full_name) = TRIM(ta.name)
+            AND e.emp_status NOT IN ('resigned','terminated')
+          LIMIT 1)
+       ) AS department
      FROM training_attendees ta
      WHERE ta.course_id = ?
      ORDER BY
