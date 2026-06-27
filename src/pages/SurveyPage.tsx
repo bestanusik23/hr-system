@@ -68,7 +68,8 @@ export default function SurveyPage() {
   }
 
   const today       = new Date().toISOString().slice(0, 10);
-  const surveyReady = course && (course.status === "done" || (course.course_date != null && course.course_date <= today));
+  // If attendee_id present (came from checkin redirect), always open survey
+  const surveyReady = course && (aid != null || course.status === "done" || (course.course_date != null && course.course_date <= today));
 
   const cardStyle: React.CSSProperties = {
     background: "#fff", borderRadius: 14, boxShadow: "0 8px 32px rgba(0,56,198,0.12)",
