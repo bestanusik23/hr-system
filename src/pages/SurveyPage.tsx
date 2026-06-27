@@ -35,9 +35,11 @@ export default function SurveyPage() {
   const [scores,  setScores]  = useState<number[]>([0, 0, 0, 0, 0]);
   const [comment, setComment] = useState("");
 
+  const storageKey = `survey_${token}_${aid ?? "anon"}`;
+
   useEffect(() => {
     if (!token) { setError("ไม่พบ Token"); setLoading(false); return; }
-    if (localStorage.getItem(`survey_${token}`) === "1") {
+    if (localStorage.getItem(storageKey) === "1") {
       setSubmitted(true); setLoading(false); return;
     }
     fetch(`/api/training/checkin?token=${encodeURIComponent(token)}`)
@@ -63,7 +65,7 @@ export default function SurveyPage() {
     const d = await r.json() as { ok: boolean; duplicate?: boolean; error?: string };
     setSubmitting(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
-    localStorage.setItem(`survey_${token}`, "1");
+    localStorage.setItem(storageKey, "1");
     setSubmitted(true);
   }
 
