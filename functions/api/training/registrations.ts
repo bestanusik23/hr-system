@@ -18,7 +18,18 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
             AND e.emp_status NOT IN ('resigned','terminated')
           LIMIT 1)
        ) AS emp_code,
-       COALESCE(ta.department,
+       COALESCE(
+         ta.department,
+         -- 1st priority: match by emp_code (accurate, handles name prefix variations)
+         (SELECT COALESCE(d.name, dv.name)
+          FROM employees e
+          LEFT JOIN departments d  ON d.id  = e.department_id
+          LEFT JOIN divisions  dv ON dv.id = e.division_id
+          WHERE e.emp_code = ta.emp_code
+            AND ta.emp_code IS NOT NULL
+            AND e.emp_status NOT IN ('resigned','terminated')
+          LIMIT 1),
+         -- 2nd priority: match by name (for QR walk-ins without emp_code)
          (SELECT COALESCE(d.name, dv.name)
           FROM employees e
           LEFT JOIN departments d  ON d.id  = e.department_id
