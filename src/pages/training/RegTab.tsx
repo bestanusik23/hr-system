@@ -8,6 +8,13 @@ interface Reg {
 }
 interface EmpOption { id: number; emp_code: string | null; full_name: string; position: string | null; department_name: string | null; }
 
+function toThaiTime(utc: string | null): string {
+  if (!utc) return "—";
+  const d = new Date(utc.replace(" ", "T") + (utc.includes("Z") ? "" : "Z"));
+  return new Date(d.getTime() + 7 * 3600_000)
+    .toISOString().slice(0, 16).replace("T", " ");
+}
+
 const STATUS_LABEL: Record<string, string> = {
   registered: "ลงทะเบียน", checked_in: "เช็คชื่อแล้ว", late: "สาย",
   absent: "ขาด", completed: "เสร็จสิ้น",
@@ -263,7 +270,7 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.department ?? "—"}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.position ?? "—"}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b", fontSize: 11, whiteSpace: "nowrap" }}>
-                    {reg.checkin_time ? reg.checkin_time.slice(0, 16).replace("T", " ") : "—"}
+                    {toThaiTime(reg.checkin_time)}
                   </td>
                   <td style={{ padding: "10px 14px" }}>
                     <span style={{ fontSize: 11, background: reg.reg_method === "qr" ? "#e8eeff" : "#f0f9ff",
