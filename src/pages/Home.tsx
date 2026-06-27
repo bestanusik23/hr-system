@@ -176,7 +176,7 @@ export default function Home() {
       {/* ══════════ HERO ══════════ */}
       <section style={{
         paddingTop: 64, minHeight: "100vh",
-        background: "linear-gradient(145deg, #ffffff 0%, #eef3ff 50%, #ddeefa 100%)",
+        background: "linear-gradient(145deg, #e8f0ff 0%, #dde8ff 50%, #cde4f8 100%)",
         display: "flex", alignItems: "center", justifyContent: "center",
         position: "relative", overflow: "hidden",
       }}>
