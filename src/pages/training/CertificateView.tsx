@@ -53,6 +53,8 @@ body { margin: 0; padding: 0; font-family: 'Sarabun', 'TH Sarabun New', sans-ser
 .footer { background: #0038C6; color: #fff; text-align: center; padding: 2.5mm 0; font-size: 10pt; font-weight: 700; letter-spacing: 0.18em; margin: 0 12mm; }
 .qr { position: absolute; bottom: 12mm; right: 19mm; width: 18mm; height: 18mm; border-radius: 1.5mm; border: 1px solid #c4cfee; }
 .cert-id { position: absolute; bottom: 13mm; left: 19mm; font-size: 7pt; color: #94a3b8; font-family: monospace; }
+.aaci-wm { position: absolute; right: 32mm; bottom: 14mm; width: 28mm; height: 28mm; opacity: 0.18; pointer-events: none; }
+img { max-width: 100%; }
 `;
 
 export default function CertificateView({ cert, onClose }: Props) {
@@ -123,11 +125,12 @@ export default function CertificateView({ cert, onClose }: Props) {
                   </div>
                 </div>
                 {/* Accreditation badges */}
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  {["URS","UKAS","AACI","GLP"].map(a => (
+                <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                  {["URS","UKAS","GLP"].map(a => (
                     <div key={a} style={{ border: "1.5px solid #c4cfee", borderRadius: 5, padding: "5px 10px",
                       fontSize: 11, fontWeight: 800, color: "#0038C6", background: "#f8faff" }}>{a}</div>
                   ))}
+                  <img src="/aaci-iso.jpg" alt="AACI ISO" style={{ height: 46, objectFit: "contain" }} />
                 </div>
                 {/* Year badge */}
                 <div style={{ background: "#0038C6", color: "#fff", borderRadius: 10, padding: "7px 18px",
@@ -191,6 +194,11 @@ export default function CertificateView({ cert, onClose }: Props) {
                 HUMAN RESOURCE DEVELOPMENT ( HRD )
               </div>
             </div>
+
+            {/* AACI gold seal — watermark */}
+            <img src="/aaci-gold.png" alt="AACI"
+              style={{ position: "absolute", right: 120, bottom: 55,
+                width: 110, height: 110, opacity: 0.18, pointerEvents: "none" }} />
 
             {/* QR code */}
             <img
