@@ -200,9 +200,20 @@ export default function Home() {
           opacity: 0.1, pointerEvents: "none",
         }} />
 
+        {/* Hospital photo background */}
+        <img src="/hospital.jpg" alt=""
+          style={{
+            position: "absolute", inset: 0, width: "100%", height: "100%",
+            objectFit: "cover", objectPosition: "center 30%",
+            opacity: 0.07, pointerEvents: "none", zIndex: 0,
+            filter: "saturate(40%) blur(1px)",
+          }}
+          onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+
         {/* Wave SVG */}
         <svg viewBox="0 0 1440 140" preserveAspectRatio="none"
-          style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: 140, pointerEvents: "none" }}>
+          style={{ position: "absolute", bottom: 0, left: 0, width: "100%", height: 140, pointerEvents: "none", zIndex: 1 }}>
           <path d="M0,70 C360,140 720,0 1080,70 C1260,105 1380,35 1440,70 L1440,140 L0,140 Z"
             fill="#26a9e0" fillOpacity="0.1" />
           <path d="M0,100 C240,50 480,130 720,90 C960,50 1200,110 1440,85 L1440,140 L0,140 Z"
@@ -211,17 +222,16 @@ export default function Home() {
 
         {/* Hero content */}
         <div style={{
-          position: "relative", zIndex: 1, textAlign: "center",
+          position: "relative", zIndex: 2, textAlign: "center",
           padding: "52px 24px 68px", animation: "fadeUp .55s ease both",
         }}>
-          {/* Logo card */}
+          {/* Logo — blend กับพื้นหลัง ไม่มีกล่องขาว */}
           <div style={{
-            display: "inline-block", background: "#fff", borderRadius: 20,
-            padding: "16px 28px", marginBottom: 24,
-            boxShadow: "0 4px 20px rgba(0,56,198,.12)",
+            display: "inline-block", marginBottom: 28,
           }}>
             <img src="/logo.png" alt="Chiangrai Ram Hospital"
-              style={{ height: 64, width: "auto", display: "block", objectFit: "contain" }} />
+              style={{ height: 120, width: "auto", display: "block",
+                objectFit: "contain", mixBlendMode: "multiply" }} />
           </div>
 
           {/* Hospital English name */}
