@@ -150,17 +150,19 @@ export default function RecruitPage() {
     h.toLowerCase().includes("birthdate") || h.toLowerCase().includes("birthday")
   );
 
-  const interviewQueue = statusKey
-    ? applications.filter(a => a[statusKey] === "กรอกใบสมัครและสัมภาษณ์")
-    : [];
+  // Normalize: empty / null status → "รอพิจารณา"
+  function getAppStatus(app: Application): string {
+    return statusKey ? (app[statusKey] || "รอพิจารณา") : "รอพิจารณา";
+  }
 
-  const allStatuses = statusKey
-    ? [...new Set(applications.map(a => a[statusKey] ?? "").filter(Boolean))]
-    : [];
+  const interviewQueue = applications.filter(a => getAppStatus(a) === "กรอกใบสมัครและสัมภาษณ์");
+
+  // Always show all 4 defined statuses
+  const allStatuses = Object.keys(STATUS_COLOR);
 
   const filtered = applications.filter(a => {
     const matchSearch = !search || Object.values(a).some(v => v.toLowerCase().includes(search.toLowerCase()));
-    const matchStatus = !statusFilter || a[statusKey] === statusFilter;
+    const matchStatus = !statusFilter || getAppStatus(a) === statusFilter;
     return matchSearch && matchStatus;
   });
 
@@ -186,7 +188,7 @@ export default function RecruitPage() {
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         <StatCard label="ผู้สมัครทั้งหมด" value={applications.length} color="#0038C6" />
         {allStatuses.map(s => (
-          <StatCard key={s} label={s} value={applications.filter(a => a[statusKey] === s).length}
+          <StatCard key={s} label={s} value={applications.filter(a => getAppStatus(a) === s).length}
             color={STATUS_COLOR[s]?.text ?? "#64748b"} />
         ))}
       </div>
@@ -215,7 +217,7 @@ export default function RecruitPage() {
           )}
 
           {allStatuses.filter(s => s !== "กรอกใบสมัครและสัมภาษณ์" || !isHR).map(s => (
-            <FilterBtn key={s} label={`${s} (${applications.filter(a => a[statusKey] === s).length})`}
+            <FilterBtn key={s} label={`${s} (${applications.filter(a => getAppStatus(a) === s).length})`}
               active={statusFilter === s} onClick={() => setStatusFilter(s)} />
           ))}
         </div>
