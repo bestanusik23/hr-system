@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ใบประกาศนียบัตร — Chiangrai RAM Hospital</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800;900&display=swap" rel="stylesheet" />
+<style>
+/* ─────────────────────────────────────────────────────────────────────────
+   RESET
+───────────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PAGE PRINT
+───────────────────────────────────────────────────────────────────────── */
+@page { size: A4 landscape; margin: 0; }
+
+@media print {
+  html, body { width: 297mm; height: 210mm; background: white; }
+  .print-btn  { display: none !important; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   BODY (browser preview wrapper)
+───────────────────────────────────────────────────────────────────────── */
+body {
+  margin: 0;
+  padding: 24px;
+  background: #e8ecf0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  font-family: 'Sarabun', 'TH Sarabun New', sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PRINT BUTTON (browser only)
+───────────────────────────────────────────────────────────────────────── */
+.print-btn {
+  padding: 10px 24px;
+  background: #0038C6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CERTIFICATE CANVAS
+   297mm × 210mm  |  thin 6px blue border  |  CSS Grid 4 rows
+───────────────────────────────────────────────────────────────────────── */
+.certificate {
+  width:  297mm;
+  height: 210mm;
+  background: #ffffff;
+  border: 6px solid #0038C6;
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: 14% 56% 20% 10%;
+  box-shadow: 0 8px 48px rgba(0,56,198,.18);
+}
+
+/* Subtle concentric arcs — background layer */
+.cert-circles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* All sections sit above circles */
+.cert-header,
+.cert-content,
+.cert-signature,
+.cert-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ROW 1 — HEADER (14% = 29.4mm)
+   3-col Swiss Grid: logo | accreditations | year badge
+───────────────────────────────────────────────────────────────────────── */
+.cert-header {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 0 22mm;
+  border-bottom: 1px solid #E6E7E8;
+}
+
+.header-logo img {
+  height: 19mm;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.header-accred {
+  display: flex;
+  align-items: center;
+  gap: 5mm;
+  justify-content: center;
+}
+
+/* All accreditation logos — same height for perfect alignment */
+.header-accred img {
+  height: 15mm;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.header-badge-wrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.year-badge {
+  display: inline-block;
+  background: #0038C6;
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 2.5mm 6mm;
+  font-size: 10.5pt;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ROW 2 — MAIN CONTENT (56% = 117.6mm)
+   Vertically centred flex column — generous white space
+───────────────────────────────────────────────────────────────────────── */
+.cert-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 28mm;
+  gap: 0;
+}
+
+.hospital-name {
+  font-size: 27pt;
+  font-weight: 800;
+  color: #0A2F6B;
+  letter-spacing: 0.025em;
+  line-height: 1.2;
+}
+
+.cert-subtitle {
+  font-size: 15pt;
+  color: #64748b;
+  font-weight: 400;
+  margin-top: 1.5mm;
+  letter-spacing: 0.01em;
+}
+
+/* Recipient — dominant, single line, auto-scales via JS */
+.recipient-name {
+  font-size: 56pt;        /* starting size — JS may reduce */
+  font-weight: 900;
+  color: #0A2F6B;
+  line-height: 1.05;
+  margin-top: 3.5mm;
+  white-space: nowrap;
+  letter-spacing: -0.015em;
+  max-width: 100%;
+  display: block;
+}
+
+/* Luxury diamond rule beneath name */
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 3.5mm;
+  width: 62%;
+  margin: 2.5mm auto 3mm;
+}
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background: #E6E7E8;
+}
+.divider-gems {
+  display: flex;
+  align-items: center;
+  gap: 2.5mm;
+}
+.gem-s {
+  width: 2mm; height: 2mm;
+  background: #26A9E0;
+  transform: rotate(45deg);
+  display: inline-block;
+  flex-shrink: 0;
+}
+.gem-l {
+  width: 3mm; height: 3mm;
+  background: #0A2F6B;
+  transform: rotate(45deg);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+/* Body text */
+.cert-body {
+  font-size: 14.5pt;
+  color: #1e293b;
+  line-height: 1.85;
+  text-align: center;
+}
+.cert-body strong {
+  font-weight: 700;
+}
+
+.cert-location {
+  font-size: 13.5pt;
+  color: #0038C6;
+  line-height: 1.85;
+  text-align: center;
+  margin-top: 1.5mm;
+}
+
+.cert-issued {
+  font-size: 13.5pt;
+  font-weight: 700;
+  color: #1e293b;
+  margin-top: 2.5mm;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ROW 3 — SIGNATURE (20% = 42mm)
+   2-col symmetric — QR anchored bottom-right corner
+───────────────────────────────────────────────────────────────────────── */
+.cert-signature {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  padding: 0 36mm 5mm;
+  border-top: 1px solid #E6E7E8;
+  position: relative;      /* QR positions inside here */
+}
+
+.sig-block {
+  text-align: center;
+  padding: 5mm 12mm 0;
+}
+
+.sig-rule {
+  height: 1px;
+  background: #0038C6;
+  opacity: 0.28;
+  width: 72%;
+  margin: 0 auto 3mm;
+}
+
+.sig-name {
+  font-size: 11.5pt;
+  font-weight: 800;
+  color: #0A2F6B;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+}
+
+.sig-pos {
+  font-size: 8.5pt;
+  color: #64748b;
+  margin-top: 1.5mm;
+  line-height: 1.4;
+}
+
+/* QR — absolute, bottom-right of signature section */
+.qr-wrap {
+  position: absolute;
+  bottom: 4mm;
+  right: 5mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5mm;
+}
+
+.qr-wrap img {
+  width: 16mm;
+  height: 16mm;
+  display: block;
+  border-radius: 2mm;
+  border: 0.4mm solid #E6E7E8;
+}
+
+.cert-no {
+  font-size: 5.5pt;
+  color: #94a3b8;
+  font-family: monospace;
+  letter-spacing: 0.02em;
+  text-align: center;
+  line-height: 1.4;
+  max-width: 20mm;
+  word-break: break-all;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   ROW 4 — FOOTER (10% = 21mm)
+   Full-width blue bar  |  HRD text centred, letter-spacing 4px
+───────────────────────────────────────────────────────────────────────── */
+.cert-footer {
+  background: #0038C6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24mm;
+}
+
+.footer-text {
+  color: #ffffff;
+  font-size: 11pt;
+  font-weight: 700;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+</style>
+</head>
+<body>
+
+<button class="print-btn" onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button>
+
+<div class="certificate">
+
+  <!-- ── Decorative concentric arcs (very faint, blue, at both edges) ── -->
+  <svg class="cert-circles" viewBox="0 0 297 210" xmlns="http://www.w3.org/2000/svg"
+    preserveAspectRatio="none">
+    <!-- Left arcs centred at (0, 105) -->
+    <g fill="none" stroke="#0038C6" stroke-width="0.5" opacity="0.05">
+      <circle cx="0" cy="105" r="22"  /><circle cx="0" cy="105" r="44"  />
+      <circle cx="0" cy="105" r="68"  /><circle cx="0" cy="105" r="94"  />
+      <circle cx="0" cy="105" r="122" /><circle cx="0" cy="105" r="152" />
+    </g>
+    <!-- Right arcs centred at (297, 105) -->
+    <g fill="none" stroke="#0038C6" stroke-width="0.5" opacity="0.05">
+      <circle cx="297" cy="105" r="22"  /><circle cx="297" cy="105" r="44"  />
+      <circle cx="297" cy="105" r="68"  /><circle cx="297" cy="105" r="94"  />
+      <circle cx="297" cy="105" r="122" /><circle cx="297" cy="105" r="152" />
+    </g>
+  </svg>
+
+  <!-- ════════════════════════════════════════
+       ROW 1 — HEADER
+  ════════════════════════════════════════ -->
+  <header class="cert-header">
+
+    <div class="header-logo">
+      <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
+           onerror="this.style.display='none'" />
+    </div>
+
+    <div class="header-accred">
+      <img src="/urs-ukas.jpg"  alt="URS UKAS"  />
+      <img src="/aaci-gold.png" alt="AACI Gold"  />
+      <img src="/aaci-iso.jpg"  alt="AACI ISO"   />
+      <img src="/glp.webp"      alt="GLP"        />
+    </div>
+
+    <div class="header-badge-wrap">
+      <span class="year-badge">ประจำปี <span id="yearText">2569</span></span>
+    </div>
+
+  </header>
+
+  <!-- ════════════════════════════════════════
+       ROW 2 — MAIN CONTENT
+  ════════════════════════════════════════ -->
+  <main class="cert-content">
+
+    <div class="hospital-name">โรงพยาบาลเชียงราย ราม</div>
+
+    <div class="cert-subtitle">ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า</div>
+
+    <span class="recipient-name" id="recipientName">นางสาวณัธมณฑน์ สามิตร</span>
+
+    <div class="divider">
+      <div class="divider-line"></div>
+      <div class="divider-gems">
+        <span class="gem-s"></span>
+        <span class="gem-l"></span>
+        <span class="gem-s"></span>
+      </div>
+      <div class="divider-line"></div>
+    </div>
+
+    <div class="cert-body">
+      ได้เข้าร่วมการอบรม
+      <strong id="trainingTitle">อบรมโครงการ BLS (การช่วยฟื้นคืนชีพขั้นพื้นฐาน CPR)</strong><br>
+      วันที่ <span id="trainingDate">27 มิถุนายน 2569</span>
+    </div>
+
+    <div class="cert-location">
+      ณ โรงพยาบาลเชียงราย ราม<br>
+      โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ
+    </div>
+
+    <div class="cert-issued">
+      ให้ ณ วันที่ <span id="issueDate">27 มิถุนายน 2569</span>
+    </div>
+
+  </main>
+
+  <!-- ════════════════════════════════════════
+       ROW 3 — SIGNATURE
+  ════════════════════════════════════════ -->
+  <section class="cert-signature">
+
+    <div class="sig-block">
+      <div class="sig-rule"></div>
+      <div class="sig-name" id="signerLeftName">นายอนุสิกข์ ทองแผ่น</div>
+      <div class="sig-pos"  id="signerLeftPosition">
+        (รองผู้อำนวยการฝ่ายบริหารและพัฒนาคุณภาพ)
+      </div>
+    </div>
+
+    <div class="sig-block">
+      <div class="sig-rule"></div>
+      <div class="sig-name" id="signerRightName">นายแพทย์วัชระ เตชะธีราวัฒน์</div>
+      <div class="sig-pos"  id="signerRightPosition">
+        (ผู้อำนวยการโรงพยาบาลเชียงราย ราม)
+      </div>
+    </div>
+
+    <!-- QR Code — bottom-right of signature section -->
+    <div class="qr-wrap">
+      <img id="qrImg"
+           src="https://api.qrserver.com/v1/create-qr-code/?size=72x72&data=CERT-DEMO"
+           alt="QR Code" />
+      <div class="cert-no" id="certificateNo">CERT-2026-TR20260003-0003</div>
+    </div>
+
+  </section>
+
+  <!-- ════════════════════════════════════════
+       ROW 4 — FOOTER
+  ════════════════════════════════════════ -->
+  <footer class="cert-footer">
+    <span class="footer-text">HUMAN RESOURCE DEVELOPMENT &nbsp;(&nbsp; HRD &nbsp;)</span>
+  </footer>
+
+</div><!-- end .certificate -->
+
+<script>
+/*
+ * ─── DYNAMIC DATA ───────────────────────────────────────────────────────
+ * Replace values below to update the certificate.
+ * These IDs map directly to elements on the page.
+ */
+const CERT = {
+  recipientName:       "นางสาวณัธมณฑน์ สามิตร",
+  trainingTitle:       "อบรมโครงการ BLS (การช่วยฟื้นคืนชีพขั้นพื้นฐาน CPR)",
+  trainingDate:        "27 มิถุนายน 2569",
+  issueDate:           "27 มิถุนายน 2569",
+  yearText:            "2569",
+  certificateNo:       "CERT-2026-TR20260003-0003",
+  signerLeftName:      "นายอนุสิกข์ ทองแผ่น",
+  signerLeftPosition:  "(รองผู้อำนวยการฝ่ายบริหารและพัฒนาคุณภาพ)",
+  signerRightName:     "นายแพทย์วัชระ เตชะธีราวัฒน์",
+  signerRightPosition: "(ผู้อำนวยการโรงพยาบาลเชียงราย ราม)",
+  qrVerifyUrl:         "https://hr-system-1r4.pages.dev/cert/verify?token=CERT-2026-TR20260003-0003",
+};
+
+/* Apply text data */
+Object.entries(CERT).forEach(([id, val]) => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+});
+
+/* Apply QR code */
+const qrImg = document.getElementById("qrImg");
+if (qrImg) {
+  qrImg.src =
+    "https://api.qrserver.com/v1/create-qr-code/?size=72x72&data=" +
+    encodeURIComponent(CERT.qrVerifyUrl);
+}
+
+/*
+ * Auto-scale recipient name so it always fits on one line.
+ * Decrements font-size by 1pt until the text no longer overflows.
+ */
+(function autoScaleName() {
+  const el  = document.getElementById("recipientName");
+  const box = el && el.parentElement;
+  if (!el || !box) return;
+
+  const maxW = box.clientWidth - 56; /* account for content padding */
+  let   size = 56;                   /* starting pt value (matches CSS) */
+
+  el.style.fontSize = size + "pt";
+  while (el.scrollWidth > maxW && size > 28) {
+    size -= 1;
+    el.style.fontSize = size + "pt";
+  }
+})();
+</script>
+</body>
+</html>
