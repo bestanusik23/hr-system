@@ -8,6 +8,7 @@ interface LiveEmp {
   position: string;
   division_id: number | null;
   department_id: number | null;
+  department_name?: string | null;
   emp_status: string;
   emp_type: string;
   start_date: string;
@@ -18,10 +19,11 @@ interface LiveEmp {
 interface OrgDiv  { id: number; name: string; }
 interface OrgDept { id: number; name: string; division_id: number; }
 
-// Two-map structure for division-aware employee matching
+// Three-map structure for department+division-aware employee matching
 interface LiveMaps {
-  byDivPos: Map<string, LiveEmp[]>; // "divId|pos" — employees with division_id set
-  byPosAll: Map<string, LiveEmp[]>; // "pos" — ALL active employees (fallback)
+  byDivDeptPos: Map<string, LiveEmp[]>; // "divId|deptName|pos" — department-specific (priority)
+  byDivPos:     Map<string, LiveEmp[]>; // "divId|pos"          — division fallback
+  byPosAll:     Map<string, LiveEmp[]>; // "pos"               — ALL active (final fallback)
 }
 
 // All unique positions from manpower plan (for dropdowns)
@@ -51,20 +53,28 @@ const DB_TO_PLAN_DIVID: Record<number, number> = {
 };
 
 function buildLiveMap(employees: LiveEmp[]): LiveMaps {
-  const byDivPos = new Map<string, LiveEmp[]>();
-  const byPosAll = new Map<string, LiveEmp[]>();
+  const byDivDeptPos = new Map<string, LiveEmp[]>();
+  const byDivPos     = new Map<string, LiveEmp[]>();
+  const byPosAll     = new Map<string, LiveEmp[]>();
   for (const e of employees) {
     if (e.emp_status === "resigned") continue;
-    const pos = (e.position ?? "").trim().toLowerCase();
+    const pos  = (e.position        ?? "").trim().toLowerCase();
+    const dept = (e.department_name ?? "").trim().toLowerCase();
     if (e.division_id) {
       const dk = `${e.division_id}|${pos}`;
       if (!byDivPos.has(dk)) byDivPos.set(dk, []);
       byDivPos.get(dk)!.push(e);
+
+      if (dept) {
+        const ddk = `${e.division_id}|${dept}|${pos}`;
+        if (!byDivDeptPos.has(ddk)) byDivDeptPos.set(ddk, []);
+        byDivDeptPos.get(ddk)!.push(e);
+      }
     }
     if (!byPosAll.has(pos)) byPosAll.set(pos, []);
     byPosAll.get(pos)!.push(e);
   }
-  return { byDivPos, byPosAll };
+  return { byDivDeptPos, byDivPos, byPosAll };
 }
 
 interface AugRow extends ManpowerRow {
@@ -80,15 +90,34 @@ interface AugRow extends ManpowerRow {
   isUnknownPos?: boolean;
 }
 
-function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, allEmps: LiveEmp[]): AugRow[] {
+function buildAugRows(rows: ManpowerRow[], { byDivDeptPos, byDivPos, byPosAll }: LiveMaps, allEmps: LiveEmp[]): AugRow[] {
   const consumed = new Set<number>(); // employee ids already placed
 
-  // Pass 1 — division-aware
-  const ptrDiv = new Map<string, number>();
-  const p1 = new Map<number, LiveEmp>();
+  // Pass 1a — department+division-aware (highest priority: places employee in their exact section)
+  const ptrDivDept = new Map<string, number>();
+  const p1a = new Map<number, LiveEmp>();
+  let curSection = "";
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i];
+    if (r.type === "section" || r.type === "subdept") { curSection = r.name.trim().toLowerCase(); continue; }
     if (r.type !== "slot") continue;
+    const ddk = `${r.divId}|${curSection}|${r.pos.trim().toLowerCase()}`;
+    const pool = byDivDeptPos.get(ddk) ?? [];
+    let ptr = ptrDivDept.get(ddk) ?? 0;
+    while (ptr < pool.length && consumed.has(pool[ptr].id)) ptr++;
+    if (ptr < pool.length) {
+      ptrDivDept.set(ddk, ptr + 1);
+      consumed.add(pool[ptr].id);
+      p1a.set(i, pool[ptr]);
+    }
+  }
+
+  // Pass 1b — division-aware fallback (for employees without department or unmatched dept)
+  const ptrDiv = new Map<string, number>();
+  const p1 = new Map<number, LiveEmp>(p1a);
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.type !== "slot" || p1.has(i)) continue;
     const dk = `${r.divId}|${r.pos.trim().toLowerCase()}`;
     const pool = byDivPos.get(dk) ?? [];
     let ptr = ptrDiv.get(dk) ?? 0;
