@@ -5,12 +5,10 @@ import { useAuth } from "../../context/AuthContext";
 interface Application { _row: string; [key: string]: string; }
 
 const STATUS_COLOR: Record<string, { bg: string; text: string; border: string }> = {
-  "รอพิจารณา":        { bg: "#fef9c3", text: "#b45309",  border: "#fde68a" },
-  "รอนัดสัมภาษณ์":   { bg: "#fff7ed", text: "#c2410c",  border: "#fed7aa" },
-  "รอกรอกใบสมัคร":   { bg: "#ede9fe", text: "#7c3aed",  border: "#ddd6fe" },
-  "ผ่านการสัมภาษณ์": { bg: "#dcfce7", text: "#16a34a",  border: "#bbf7d0" },
-  "รับเข้างาน":       { bg: "#dbeafe", text: "#1d4ed8",  border: "#bfdbfe" },
-  "ไม่ผ่าน":          { bg: "#fee2e2", text: "#dc2626",  border: "#fecaca" },
+  "รอพิจารณา":              { bg: "#fef9c3", text: "#b45309", border: "#fde68a" },
+  "กรอกใบสมัครและสัมภาษณ์": { bg: "#ede9fe", text: "#7c3aed", border: "#ddd6fe" },
+  "ไม่ผ่านการพิจารณา":      { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
+  "ผ่านการพิจารณา":         { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" },
 };
 
 const HIDDEN_COLS = new Set(["_row"]);
@@ -153,7 +151,7 @@ export default function RecruitPage() {
   );
 
   const interviewQueue = statusKey
-    ? applications.filter(a => a[statusKey] === "รอนัดสัมภาษณ์")
+    ? applications.filter(a => a[statusKey] === "กรอกใบสมัครและสัมภาษณ์")
     : [];
 
   const allStatuses = statusKey
@@ -167,16 +165,17 @@ export default function RecruitPage() {
   });
 
   // When HR views interview queue, show cards instead of table
-  const isInterviewQueueView = isHR && statusFilter === "รอนัดสัมภาษณ์";
+  const isInterviewQueueView = isHR && statusFilter === "กรอกใบสมัครและสัมภาษณ์";
 
   const StatusBadge = ({ val }: { val: string }) => {
-    const c = STATUS_COLOR[val] ?? { bg: "#f1f5f9", text: "#64748b", border: "#e2e8f0" };
+    const display = val || "รอพิจารณา";
+    const c = STATUS_COLOR[display] ?? { bg: "#f1f5f9", text: "#64748b", border: "#e2e8f0" };
     return (
       <span style={{
         background: c.bg, color: c.text, border: `1.5px solid ${c.border}`,
         borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700,
         whiteSpace: "nowrap", display: "inline-block",
-      }}>{val || "—"}</span>
+      }}>{display}</span>
     );
   };
 
@@ -199,23 +198,23 @@ export default function RecruitPage() {
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
           <FilterBtn label={`ทั้งหมด (${applications.length})`} active={!statusFilter} onClick={() => setStatusFilter("")} />
 
-          {/* HR special: interview queue button with orange accent */}
+          {/* HR special: interview queue button with purple accent */}
           {isHR && interviewQueue.length > 0 && (
-            <button onClick={() => setStatusFilter("รอนัดสัมภาษณ์")}
-              style={{ padding: "6px 14px", borderRadius: 20, border: `2px solid ${statusFilter === "รอนัดสัมภาษณ์" ? "#c2410c" : "#fed7aa"}`,
+            <button onClick={() => setStatusFilter("กรอกใบสมัครและสัมภาษณ์")}
+              style={{ padding: "6px 14px", borderRadius: 20, border: `2px solid ${statusFilter === "กรอกใบสมัครและสัมภาษณ์" ? "#7c3aed" : "#ddd6fe"}`,
                 fontFamily: "inherit", fontSize: 12, cursor: "pointer", fontWeight: 700,
-                background: statusFilter === "รอนัดสัมภาษณ์" ? "#c2410c" : "#fff7ed",
-                color: statusFilter === "รอนัดสัมภาษณ์" ? "#fff" : "#c2410c",
+                background: statusFilter === "กรอกใบสมัครและสัมภาษณ์" ? "#7c3aed" : "#ede9fe",
+                color: statusFilter === "กรอกใบสมัครและสัมภาษณ์" ? "#fff" : "#7c3aed",
                 display: "flex", alignItems: "center", gap: 6, transition: "all .15s" }}>
-              📞 คิวโทรนัดสัมภาษณ์
-              <span style={{ background: statusFilter === "รอนัดสัมภาษณ์" ? "rgba(255,255,255,.25)" : "#fed7aa",
+              📋 คิวสัมภาษณ์
+              <span style={{ background: statusFilter === "กรอกใบสมัครและสัมภาษณ์" ? "rgba(255,255,255,.25)" : "#ddd6fe",
                 borderRadius: 10, padding: "0 7px", fontSize: 11, fontWeight: 800 }}>
                 {interviewQueue.length}
               </span>
             </button>
           )}
 
-          {allStatuses.filter(s => s !== "รอนัดสัมภาษณ์" || !isHR).map(s => (
+          {allStatuses.filter(s => s !== "กรอกใบสมัครและสัมภาษณ์" || !isHR).map(s => (
             <FilterBtn key={s} label={`${s} (${applications.filter(a => a[statusKey] === s).length})`}
               active={statusFilter === s} onClick={() => setStatusFilter(s)} />
           ))}
@@ -237,14 +236,14 @@ export default function RecruitPage() {
 
         /* ── HR Interview Queue Card View ── */
         <div>
-          <div style={{ background: "linear-gradient(135deg,#fff7ed,#fef3c7)", border: "2px solid #fed7aa",
+          <div style={{ background: "linear-gradient(135deg,#f5f3ff,#ede9fe)", border: "2px solid #ddd6fe",
             borderRadius: 14, padding: "16px 22px", marginBottom: 20,
             display: "flex", alignItems: "center", gap: 14 }}>
-            <span style={{ fontSize: 28 }}>📞</span>
+            <span style={{ fontSize: 28 }}>📋</span>
             <div>
-              <div style={{ fontWeight: 800, color: "#92400e", fontSize: 15 }}>รายการรอโทรนัดสัมภาษณ์</div>
-              <div style={{ fontSize: 13, color: "#b45309", marginTop: 2 }}>
-                หัวหน้าแผนกส่งมา {filtered.length} ราย — กรุณาโทรนัดและอัปเดตสถานะ
+              <div style={{ fontWeight: 800, color: "#5b21b6", fontSize: 15 }}>รายการกรอกใบสมัครและสัมภาษณ์</div>
+              <div style={{ fontSize: 13, color: "#7c3aed", marginTop: 2 }}>
+                {filtered.length} ราย — กรุณาดำเนินการสัมภาษณ์และอัปเดตผล
               </div>
             </div>
           </div>
@@ -286,26 +285,19 @@ export default function RecruitPage() {
                       color: "#475569", fontWeight: 600 }}>
                     🔍 ดูข้อมูล
                   </button>
-                  <button onClick={() => updateStatus(app, "รอกรอกใบสมัคร")} disabled={updating === app._row}
-                    style={{ padding: "7px 16px", borderRadius: 9, border: "none",
-                      background: "#ede9fe", fontSize: 12, cursor: "pointer",
-                      fontFamily: "inherit", color: "#7c3aed", fontWeight: 700,
-                      opacity: updating === app._row ? 0.6 : 1 }}>
-                    ✓ นัดสัมภาษณ์แล้ว
-                  </button>
-                  <button onClick={() => updateStatus(app, "ผ่านการสัมภาษณ์")} disabled={updating === app._row}
+                  <button onClick={() => updateStatus(app, "ผ่านการพิจารณา")} disabled={updating === app._row}
                     style={{ padding: "7px 16px", borderRadius: 9, border: "none",
                       background: "#dcfce7", fontSize: 12, cursor: "pointer",
                       fontFamily: "inherit", color: "#16a34a", fontWeight: 700,
                       opacity: updating === app._row ? 0.6 : 1 }}>
-                    🎉 ผ่านการสัมภาษณ์
+                    🎉 ผ่านการพิจารณา
                   </button>
-                  <button onClick={() => updateStatus(app, "ไม่ผ่าน")} disabled={updating === app._row}
+                  <button onClick={() => updateStatus(app, "ไม่ผ่านการพิจารณา")} disabled={updating === app._row}
                     style={{ padding: "7px 14px", borderRadius: 9, border: "1.5px solid #fecaca",
                       background: "#fff", fontSize: 12, cursor: "pointer",
                       fontFamily: "inherit", color: "#dc2626", fontWeight: 600,
                       opacity: updating === app._row ? 0.6 : 1 }}>
-                    ✗ ไม่เหมาะสม
+                    ✗ ไม่ผ่านการพิจารณา
                   </button>
                 </div>
               </div>
@@ -329,7 +321,7 @@ export default function RecruitPage() {
               </thead>
               <tbody>
                 {filtered.map((app, ri) => {
-                  const curStatus = statusKey ? (app[statusKey] ?? "") : "";
+                  const curStatus = statusKey ? (app[statusKey] || "รอพิจารณา") : "รอพิจารณา";
                   const sc = STATUS_COLOR[curStatus];
                   return (
                     <tr key={app._row}
@@ -461,25 +453,25 @@ export default function RecruitPage() {
               {canSendToHR && statusKey && (
                 <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #f1f5f9" }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: "#475569", marginBottom: 12 }}>การดำเนินการ</div>
-                  {detail[statusKey] === "รอนัดสัมภาษณ์" ? (
-                    <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 12,
+                  {detail[statusKey] === "กรอกใบสมัครและสัมภาษณ์" ? (
+                    <div style={{ background: "#f5f3ff", border: "1.5px solid #ddd6fe", borderRadius: 12,
                       padding: "14px 18px", display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 20 }}>📞</span>
+                      <span style={{ fontSize: 20 }}>📋</span>
                       <div>
-                        <div style={{ fontWeight: 700, color: "#c2410c", fontSize: 14 }}>ส่งให้ HR ติดต่อแล้ว</div>
-                        <div style={{ fontSize: 12, color: "#b45309", marginTop: 2 }}>รอ HR ติดต่อผู้สมัคร</div>
+                        <div style={{ fontWeight: 700, color: "#7c3aed", fontSize: 14 }}>ส่งเข้ากระบวนการสัมภาษณ์แล้ว</div>
+                        <div style={{ fontSize: 12, color: "#6d28d9", marginTop: 2 }}>อยู่ระหว่างการสัมภาษณ์และพิจารณา</div>
                       </div>
                     </div>
                   ) : (
-                    <button onClick={() => updateStatus(detail, "รอนัดสัมภาษณ์")} disabled={updating === detail._row}
+                    <button onClick={() => updateStatus(detail, "กรอกใบสมัครและสัมภาษณ์")} disabled={updating === detail._row}
                       style={{ width: "100%", padding: "14px 24px", borderRadius: 12, border: "none",
-                        background: "linear-gradient(135deg,#c2410c,#ea580c)",
+                        background: "linear-gradient(135deg,#7c3aed,#6d28d9)",
                         color: "#fff", fontWeight: 800, fontSize: 15, cursor: "pointer",
                         fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center",
                         gap: 10, opacity: updating === detail._row ? 0.7 : 1,
-                        boxShadow: "0 4px 14px rgba(194,65,12,.35)", transition: "opacity .15s" }}>
-                      <span style={{ fontSize: 20 }}>📞</span>
-                      ส่งให้ HR ติดต่อผู้สมัคร
+                        boxShadow: "0 4px 14px rgba(124,58,237,.35)", transition: "opacity .15s" }}>
+                      <span style={{ fontSize: 20 }}>📋</span>
+                      ส่งเข้ากระบวนการสัมภาษณ์
                     </button>
                   )}
                 </div>
