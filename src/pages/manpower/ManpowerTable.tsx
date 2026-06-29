@@ -887,16 +887,27 @@ export default function ManpowerTable() {
               </div>
             </div>
 
+            {/* Transfer hint — show only when status = transferred */}
+            {editStatus === "transferred" && (
+              <div style={{ background: "#e0f2fe", border: "1.5px solid #7dd3fc",
+                borderRadius: 8, padding: "10px 14px", fontSize: 12.5, color: "#0369a1",
+                marginBottom: 14, lineHeight: 1.6 }}>
+                <strong>⚠️ กรุณาเปลี่ยนฝ่ายและแผนกด้านล่าง</strong> ให้เป็นที่หมายปลายทาง
+                — มิฉะนั้นพนักงานจะยังอยู่ฝ่ายเดิม
+              </div>
+            )}
+
             {/* Division */}
             <div style={{ marginBottom: 14 }}>
               <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
                 letterSpacing: "0.08em", textTransform: "uppercase" as const, marginBottom: 6 }}>
-                ฝ่าย
+                ฝ่าย {editStatus === "transferred" && <span style={{ color: "#0891b2" }}>← เลือกฝ่ายที่ย้ายไป</span>}
               </label>
               <select value={editDivId}
                 onChange={e => { setEditDivId(e.target.value ? Number(e.target.value) : ""); setEditDeptId(""); }}
                 style={{ width: "100%", padding: "9px 12px", borderRadius: 7,
-                  border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit",
+                  border: editStatus === "transferred" ? "2px solid #0891b2" : "1.5px solid #c4cfee",
+                  fontSize: 13, fontFamily: "inherit",
                   outline: "none", background: "#fff", boxSizing: "border-box" as const }}>
                 <option value="">-- เลือกฝ่าย --</option>
                 {orgDivs.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
