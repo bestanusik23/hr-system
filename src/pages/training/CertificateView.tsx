@@ -1,4 +1,5 @@
 // ใบประกาศนียบัตร — Premium White Design
+import { useRef, useLayoutEffect } from "react";
 
 interface CertData {
   cert_id: string; full_name: string; position: string | null;
@@ -48,12 +49,24 @@ const MUTED = "#64748b";
 const RADII = [83, 165, 248, 338, 434, 540];
 
 export default function CertificateView({ cert, onClose }: Props) {
-  const qrUrl = `${window.location.origin}/cert/verify?token=${cert.qr_token}`;
-  const year  = new Date().getFullYear() + 543;
+  const qrUrl   = `${window.location.origin}/cert/verify?token=${cert.qr_token}`;
+  const year    = new Date().getFullYear() + 543;
+  const nameRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  // Approximate name font-size so it fits on one line
-  const usableW = W - 80;
-  const nameSz  = Math.min(85, Math.max(38, Math.floor(usableW / (cert.full_name.length * 0.52))));
+  // Measure actual rendered width and shrink font until name fits on one line
+  useLayoutEffect(() => {
+    const el  = nameRef.current;
+    const box = bodyRef.current;
+    if (!el || !box) return;
+    const maxW = box.clientWidth - 80;
+    let sz = 85;
+    el.style.fontSize = sz + "px";
+    while (el.scrollWidth > maxW && sz > 32) {
+      sz--;
+      el.style.fontSize = sz + "px";
+    }
+  }, [cert.full_name]);
 
   function print() {
     const el = document.getElementById("cert-print-area");
@@ -174,7 +187,7 @@ export default function CertificateView({ cert, onClose }: Props) {
             </div>
 
             {/* ── ROW 2: BODY ───────────────────────────────────────────── */}
-            <div style={{
+            <div ref={bodyRef} style={{
               position:"relative", zIndex:1,
               display:"flex", flexDirection:"column",
               alignItems:"center", justifyContent:"center",
@@ -187,8 +200,8 @@ export default function CertificateView({ cert, onClose }: Props) {
               <div style={{ fontSize:18, color:MUTED, fontWeight:400, marginTop:6, letterSpacing:"0.01em" }}>
                 ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า
               </div>
-              <div style={{
-                fontSize:nameSz, fontWeight:900, color:NAVY,
+              <div ref={nameRef} style={{
+                fontSize:85, fontWeight:900, color:NAVY,
                 lineHeight:1.15, marginTop:10,
                 whiteSpace:"nowrap", letterSpacing:"-0.015em", maxWidth:"100%",
               }}>
