@@ -1,4 +1,4 @@
-// ใบประกาศนียบัตร — Ultra Premium Design
+// ใบประกาศนียบัตร — Ultra Premium Corporate Design
 
 interface CertData {
   cert_id: string; full_name: string; position: string | null;
@@ -18,7 +18,7 @@ function thDate(iso: string | null): string {
 }
 
 const PRINT_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sarabun:ital,wght@0,300;0,400;0,600;0,700;0,800;0,900;1,400&display=swap');
 @page { size: A4 landscape; margin: 0; }
 * { box-sizing: border-box; }
 body { margin: 0; padding: 0; font-family: 'Sarabun','TH Sarabun New',sans-serif;
@@ -26,17 +26,19 @@ body { margin: 0; padding: 0; font-family: 'Sarabun','TH Sarabun New',sans-serif
 img { max-width: 100%; }
 `;
 
-// Design constants
-const W = 1122, H = 794;
-const PANEL = 158;   // each side panel width
-const TOP   = 7;     // top blue strip height
-const FOOT  = 44;    // footer height
-const RADII = [65, 125, 192, 264, 342, 425]; // circle radii
+// ── Design constants (A4-landscape proportions) ──────────────────────────
+const W     = 1122;
+const H     = 794;
+const PANEL = 190;     // large side panels
+const TOP   = 8;       // top strip
+const FOOT  = 50;      // footer bar
+const RADII = [90, 170, 260, 355, 460, 570]; // concentric arcs
 
 const BLUE  = "#0038C6";
 const NAVY  = "#0A2F6B";
 const DARK  = "#1e293b";
-const SLATE = "#475569";
+const SLATE = "#64748b";
+const MID   = "#26A9E0"; // secondary accent
 
 export default function CertificateView({ cert, onClose }: Props) {
   const qrUrl = `${window.location.origin}/cert/verify?token=${cert.qr_token}`;
@@ -56,38 +58,46 @@ export default function CertificateView({ cert, onClose }: Props) {
     setTimeout(() => { win.print(); win.close(); }, 900);
   }
 
-  // ── panel SVG circles ──
+  // ── SVG concentric arcs inside panels ───────────────────────────────────
   const LeftCircles = () => (
     <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", overflow:"visible" }}>
-      <g fill="none" stroke="white" strokeWidth="1.5" opacity={0.20}>
+      <g fill="none" stroke="white" strokeWidth="1.2" opacity={0.18}>
         {RADII.map(r => <circle key={r} cx={0} cy={H / 2} r={r} />)}
       </g>
     </svg>
   );
   const RightCircles = () => (
     <svg style={{ position:"absolute", inset:0, width:"100%", height:"100%", overflow:"visible" }}>
-      <g fill="none" stroke="white" strokeWidth="1.5" opacity={0.20}>
+      <g fill="none" stroke="white" strokeWidth="1.2" opacity={0.18}>
         {RADII.map(r => <circle key={r} cx={PANEL} cy={H / 2} r={r} />)}
       </g>
     </svg>
   );
 
-  // ── decorative dividers ──
+  // ── Decorative dividers ─────────────────────────────────────────────────
   const TriDivider = () => (
-    <div style={{ display:"flex", alignItems:"center", gap:14, width:"68%", margin:"5px auto 14px" }}>
-      <div style={{ flex:1, height:1.5, background:BLUE }} />
-      <span style={{ color:NAVY, fontSize:16, letterSpacing:9 }}>♦ ♦ ♦</span>
-      <div style={{ flex:1, height:1.5, background:BLUE }} />
+    <div style={{ display:"flex", alignItems:"center", gap:12,
+      width:"78%", margin:"8px auto 12px" }}>
+      <div style={{ flex:1, height:1.5, background:`linear-gradient(to right,transparent,${BLUE})` }} />
+      <div style={{ display:"flex", gap:7, alignItems:"center" }}>
+        <span style={{ color:MID, fontSize:10 }}>◆</span>
+        <span style={{ color:NAVY, fontSize:14 }}>◆</span>
+        <span style={{ color:MID, fontSize:10 }}>◆</span>
+      </div>
+      <div style={{ flex:1, height:1.5, background:`linear-gradient(to left,transparent,${BLUE})` }} />
     </div>
   );
 
   const SigDivider = () => (
-    <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:9 }}>
-      <div style={{ flex:1, height:1, background:BLUE }} />
-      <span style={{ color:BLUE, fontSize:13 }}>♦</span>
-      <div style={{ flex:1, height:1, background:BLUE }} />
+    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:8, width:"100%" }}>
+      <div style={{ flex:1, height:1, background:BLUE, opacity:0.4 }} />
+      <span style={{ color:BLUE, fontSize:10, opacity:0.7 }}>◆</span>
+      <div style={{ flex:1, height:1, background:BLUE, opacity:0.4 }} />
     </div>
   );
+
+  // Inner content area dimensions
+  const contentW = W - PANEL * 2;
 
   return (
     <div>
@@ -117,121 +127,148 @@ export default function CertificateView({ cert, onClose }: Props) {
           }}>
 
             {/* Top blue strip */}
-            <div style={{ position:"absolute", top:0, left:0, right:0, height:TOP, background:BLUE, zIndex:4 }} />
+            <div style={{ position:"absolute", top:0, left:0, right:0, height:TOP,
+              background:BLUE, zIndex:4 }} />
 
-            {/* Left panel */}
-            <div style={{ position:"absolute", left:0, top:0, bottom:0, width:PANEL, background:BLUE, overflow:"hidden", zIndex:2 }}>
+            {/* ── Left panel ── */}
+            <div style={{ position:"absolute", left:0, top:0, bottom:0,
+              width:PANEL, background:BLUE, overflow:"hidden", zIndex:2 }}>
               <LeftCircles />
             </div>
 
-            {/* Right panel */}
-            <div style={{ position:"absolute", right:0, top:0, bottom:0, width:PANEL, background:BLUE, overflow:"hidden", zIndex:2 }}>
+            {/* ── Right panel ── */}
+            <div style={{ position:"absolute", right:0, top:0, bottom:0,
+              width:PANEL, background:BLUE, overflow:"hidden", zIndex:2 }}>
               <RightCircles />
             </div>
 
-            {/* Footer */}
+            {/* ── Footer bar ── */}
             <div style={{
               position:"absolute", bottom:0, left:0, right:0, height:FOOT,
               background:BLUE, zIndex:3,
               display:"flex", alignItems:"center", justifyContent:"flex-end",
-              paddingRight: PANEL + 10,
+              paddingRight: PANEL + 14,
             }}>
-              <span style={{ color:"#fff", fontWeight:700, letterSpacing:"0.17em", fontSize:14 }}>
+              <span style={{
+                color:"#fff", fontWeight:700,
+                letterSpacing:"0.22em", fontSize:15,
+              }}>
                 HUMAN RESOURCE DEVELOPMENT ( HRD )
               </span>
             </div>
 
-            {/* ── Inner content ── */}
+            {/* ── Inner content area ── */}
             <div style={{
               position:"absolute",
               top:TOP, left:PANEL, right:PANEL, bottom:FOOT,
               display:"flex", flexDirection:"column",
-              padding:"0 10px",
+              padding:"0 14px",
             }}>
 
-              {/* HEADER — 3-col grid so center badges are truly centered */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr",
-                alignItems:"center", padding:"10px 0 8px", gap:8 }}>
-
-                {/* Left: Hospital logo */}
+              {/* ── HEADER: 3-column grid for perfect centering ── */}
+              <div style={{
+                display:"grid", gridTemplateColumns:"1fr auto 1fr",
+                alignItems:"center", padding:"10px 0 6px", gap:6,
+              }}>
+                {/* Logo left */}
                 <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
                   onError={e => { (e.target as HTMLImageElement).style.display="none"; }}
-                  style={{ height:72, objectFit:"contain", justifySelf:"start" }} />
+                  style={{ height:76, objectFit:"contain", justifySelf:"start" }} />
 
-                {/* Center: Accreditation logos */}
-                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                {/* Accreditation logos center */}
+                <div style={{ display:"flex", gap:10, alignItems:"center" }}>
                   <img src="/urs-ukas.jpg" alt="URS UKAS"
+                    style={{ height:58, objectFit:"contain" }} />
+                  <img src="/aaci-gold.png" alt="AACI Gold"
+                    style={{ height:62, objectFit:"contain" }} />
+                  <img src="/aaci-iso.jpg" alt="AACI ISO"
                     style={{ height:56, objectFit:"contain" }} />
-                  <img src="/aaci-gold.png" alt="AACI" style={{ height:60, objectFit:"contain" }} />
-                  <img src="/aaci-iso.jpg"  alt="AACI ISO" style={{ height:54, objectFit:"contain" }} />
-                  <img src="/glp.webp" alt="GLP" style={{ height:60, objectFit:"contain" }} />
+                  <img src="/glp.webp" alt="GLP"
+                    style={{ height:62, objectFit:"contain" }} />
                 </div>
 
-                {/* Right: Year badge */}
+                {/* Year badge right */}
                 <div style={{
+                  justifySelf:"end",
                   background:BLUE, color:"#fff", borderRadius:10,
-                  padding:"7px 16px", fontSize:14, fontWeight:800,
-                  whiteSpace:"nowrap", justifySelf:"end",
+                  padding:"8px 18px", fontSize:14, fontWeight:800, whiteSpace:"nowrap",
                 }}>ประจำปี {year}</div>
               </div>
 
-              {/* ── BODY (flex: 1, vertically centered) ── */}
+              {/* ── MAIN BODY: vertically centered ── */}
               <div style={{
                 flex:1, display:"flex", flexDirection:"column",
                 alignItems:"center", justifyContent:"center", textAlign:"center",
+                gap:0,
               }}>
+
                 {/* Hospital name */}
-                <div style={{ fontSize:34, fontWeight:900, color:NAVY }}>
+                <div style={{
+                  fontSize:40, fontWeight:800, color:NAVY,
+                  letterSpacing:"0.02em", lineHeight:1.2,
+                }}>
                   โรงพยาบาลเชียงราย ราม
                 </div>
 
                 {/* Subtitle */}
-                <div style={{ fontSize:18, color:DARK, marginTop:3 }}>
+                <div style={{ fontSize:20, color:SLATE, marginTop:4, letterSpacing:"0.01em" }}>
                   ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า
                 </div>
 
-                {/* Recipient name */}
+                {/* Recipient name — largest text */}
                 <div style={{
-                  fontSize:62, fontWeight:900, color:NAVY,
-                  lineHeight:1.1, margin:"10px 0 4px",
-                  maxWidth: W - PANEL * 2 - 60,
+                  fontSize:66, fontWeight:900, color:NAVY,
+                  lineHeight:1.1, margin:"10px 0 2px",
+                  maxWidth: contentW - 40,
+                  letterSpacing:"-0.01em",
                 }}>
                   {cert.full_name}
                 </div>
 
-                {/* ♦♦♦ divider */}
+                {/* ♦ divider */}
                 <TriDivider />
 
                 {/* Course description */}
-                <div style={{ fontSize:17, color:DARK, lineHeight:1.8, maxWidth:W - PANEL * 2 - 80 }}>
-                  ได้เข้าร่วมการอบรม {cert.course_name}
+                <div style={{
+                  fontSize:19, color:DARK, lineHeight:1.85,
+                  maxWidth: contentW - 60,
+                }}>
+                  ได้เข้าร่วมการอบรม <span style={{ fontWeight:700 }}>{cert.course_name}</span>
                   {cert.course_date && <><br />วันที่ {thDate(cert.course_date)}</>}
                 </div>
 
-                {/* Location + achievement (blue) */}
-                <div style={{ fontSize:17, color:BLUE, marginTop:5, lineHeight:1.8 }}>
+                {/* Location + completion */}
+                <div style={{
+                  fontSize:18, color:BLUE, marginTop:5, lineHeight:1.85,
+                }}>
                   ณ โรงพยาบาลเชียงราย ราม
                   <br />โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ
                 </div>
 
-                {/* Issue date = training date */}
-                <div style={{ fontSize:17, fontWeight:800, color:DARK, marginTop:7 }}>
+                {/* Issue date */}
+                <div style={{
+                  fontSize:19, fontWeight:700, color:DARK, marginTop:6,
+                }}>
                   ให้ ณ วันที่ {thDate(cert.course_date)}
                 </div>
+              </div>
 
-                {/* ── SIGNATURES ── */}
-                <div style={{ display:"flex", justifyContent:"space-around", width:"100%", marginTop:20 }}>
-                  {[
-                    { name:"นายอนุสิกข์ ทองแผ่น",         pos:"(รองผู้อำนวยการฝ่ายบริหารและพัฒนาคุณภาพ)" },
-                    { name:"นายแพทย์วัชระ เตชะธีราวัฒน์",  pos:"(ผู้อำนวยการโรงพยาบาลเชียงราย ราม)" },
-                  ].map(s => (
-                    <div key={s.name} style={{ textAlign:"center", minWidth:220 }}>
-                      <SigDivider />
-                      <div style={{ fontSize:16, fontWeight:800, color:BLUE }}>{s.name}</div>
-                      <div style={{ fontSize:12, color:SLATE, marginTop:3 }}>{s.pos}</div>
-                    </div>
-                  ))}
-                </div>
+              {/* ── SIGNATURES: bottom of content area ── */}
+              <div style={{
+                display:"flex", justifyContent:"space-between",
+                alignItems:"flex-end",
+                padding:"0 32px 14px",
+              }}>
+                {[
+                  { name:"นายอนุสิกข์ ทองแผ่น",        pos:"รองผู้อำนวยการฝ่ายบริหารและพัฒนาคุณภาพ" },
+                  { name:"นายแพทย์วัชระ เตชะธีราวัฒน์", pos:"ผู้อำนวยการโรงพยาบาลเชียงราย ราม" },
+                ].map(s => (
+                  <div key={s.name} style={{ textAlign:"center", minWidth:240 }}>
+                    <SigDivider />
+                    <div style={{ fontSize:16, fontWeight:800, color:NAVY }}>{s.name}</div>
+                    <div style={{ fontSize:12, color:SLATE, marginTop:2 }}>({s.pos})</div>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -240,15 +277,15 @@ export default function CertificateView({ cert, onClose }: Props) {
               src={`https://api.qrserver.com/v1/create-qr-code/?size=72x72&data=${encodeURIComponent(qrUrl)}`}
               alt="QR"
               style={{
-                position:"absolute", bottom:FOOT + 8, right:PANEL + 14,
-                width:56, height:56, borderRadius:6,
+                position:"absolute", bottom:FOOT + 6, right:PANEL + 12,
+                width:52, height:52, borderRadius:5,
                 border:"1px solid #c4cfee", zIndex:4,
               }} />
 
             {/* Cert ID */}
             <div style={{
-              position:"absolute", bottom:FOOT + 10, left:PANEL + 14,
-              fontSize:9, color:"#94a3b8", fontFamily:"monospace", zIndex:4,
+              position:"absolute", bottom:FOOT + 8, left:PANEL + 14,
+              fontSize:8.5, color:"#94a3b8", fontFamily:"monospace", zIndex:4,
             }}>
               {cert.cert_id}
             </div>
