@@ -134,7 +134,7 @@ export default function CertificateView({ cert, onClose }: Props) {
               position:"absolute", bottom:0, left:0, right:0, height:FOOT,
               background:BLUE, zIndex:3,
               display:"flex", alignItems:"center", justifyContent:"flex-end",
-              paddingRight: PANEL + 22,
+              paddingRight: PANEL + 10,
             }}>
               <span style={{ color:"#fff", fontWeight:700, letterSpacing:"0.17em", fontSize:14 }}>
                 HUMAN RESOURCE DEVELOPMENT ( HRD )
@@ -149,32 +149,29 @@ export default function CertificateView({ cert, onClose }: Props) {
               padding:"0 10px",
             }}>
 
-              {/* HEADER */}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0 8px" }}>
-                {/* Hospital logo */}
+              {/* HEADER — 3-col grid so center badges are truly centered */}
+              <div style={{ display:"grid", gridTemplateColumns:"1fr auto 1fr",
+                alignItems:"center", padding:"10px 0 8px", gap:8 }}>
+
+                {/* Left: Hospital logo */}
                 <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
                   onError={e => { (e.target as HTMLImageElement).style.display="none"; }}
-                  style={{ height:72, objectFit:"contain", flexShrink:0 }} />
+                  style={{ height:72, objectFit:"contain", justifySelf:"start" }} />
 
-                {/* Accreditation row */}
-                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-                  {(["URS","UKAS"] as string[]).map(a => (
-                    <div key={a} style={{
-                      border:"1.5px solid #c4cfee", borderRadius:5,
-                      padding:"4px 8px", fontSize:10, fontWeight:800,
-                      color:BLUE, background:"#f8faff",
-                    }}>{a}</div>
-                  ))}
+                {/* Center: Accreditation logos */}
+                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                  <img src="/urs-ukas.jpg" alt="URS UKAS"
+                    style={{ height:56, objectFit:"contain" }} />
                   <img src="/aaci-gold.png" alt="AACI" style={{ height:60, objectFit:"contain" }} />
                   <img src="/aaci-iso.jpg"  alt="AACI ISO" style={{ height:54, objectFit:"contain" }} />
-                  <img src="/%E0%B8%95%E0%B8%A3%E0%B8%B2%E0%B8%AA%E0%B8%B1%E0%B8%8D%E0%B8%A5%E0%B8%B1%E0%B8%81%E0%B8%A9%E0%B8%93%E0%B9%8CGLP-OKz-z502559177169.webp"
-                    alt="GLP" style={{ height:60, objectFit:"contain" }} />
+                  <img src="/glp.webp" alt="GLP" style={{ height:60, objectFit:"contain" }} />
                 </div>
 
-                {/* Year badge */}
+                {/* Right: Year badge */}
                 <div style={{
-                  background:BLUE, color:"#fff", borderRadius:10, flexShrink:0,
-                  padding:"7px 16px", fontSize:14, fontWeight:800, whiteSpace:"nowrap",
+                  background:BLUE, color:"#fff", borderRadius:10,
+                  padding:"7px 16px", fontSize:14, fontWeight:800,
+                  whiteSpace:"nowrap", justifySelf:"end",
                 }}>ประจำปี {year}</div>
               </div>
 
