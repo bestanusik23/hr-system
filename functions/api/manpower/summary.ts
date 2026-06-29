@@ -17,10 +17,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     scope = " AND e.division_id = ?"; sp.push(user.scope_division_id);
   }
 
-  // ── Cut-off: 26th of prev month → 25th of current month ──────────────────
-  // e.g. today 2026-06-23 → period 2026-05-26 to 2026-06-25
-  const pStart = "date('now','start of month','-1 month','+25 days')";
-  const pEnd   = "date('now','start of month','+24 days')";
+  // ── Cut-off: if today >= 26 → period is this-26 to next-25
+  //            if today < 26  → period is prev-26 to this-25
+  const afterCutoff = "CAST(strftime('%d','now') AS INTEGER) >= 26";
+  const pStart = `CASE WHEN ${afterCutoff} THEN date('now','start of month','+25 days') ELSE date('now','start of month','-1 month','+25 days') END`;
+  const pEnd   = `CASE WHEN ${afterCutoff} THEN date('now','start of month','+1 month','+24 days') ELSE date('now','start of month','+24 days') END`;
 
   // --- Summary cards ---
   const headcount = await db.prepare(`SELECT COUNT(*) AS n FROM employees e WHERE e.emp_status != 'resigned'${scope}`).bind(...sp).first<{ n: number }>();
@@ -136,9 +137,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 };
 
 function getPeriodLabel(): string {
-  const now = new Date();
-  const MT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-  const p = new Date(now.getFullYear(), now.getMonth() - 1, 26);
-  const e = new Date(now.getFullYear(), now.getMonth(), 25);
+  const now   = new Date();
+  const MT    = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  const after = now.getDate() >= 26;
+  const p = after ? new Date(now.getFullYear(), now.getMonth(), 26)     : new Date(now.getFullYear(), now.getMonth() - 1, 26);
+  const e = after ? new Date(now.getFullYear(), now.getMonth() + 1, 25) : new Date(now.getFullYear(), now.getMonth(), 25);
   return `26 ${MT[p.getMonth()]} ${p.getFullYear() + 543} – 25 ${MT[e.getMonth()]} ${e.getFullYear() + 543}`;
 }

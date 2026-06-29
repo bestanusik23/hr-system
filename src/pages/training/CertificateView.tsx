@@ -28,7 +28,7 @@ img { max-width: 100%; }
 
 // Design constants
 const W = 1122, H = 794;
-const PANEL = 138;   // each side panel width
+const PANEL = 158;   // each side panel width
 const TOP   = 7;     // top blue strip height
 const FOOT  = 44;    // footer height
 const RADII = [65, 125, 192, 264, 342, 425]; // circle radii
@@ -167,13 +167,8 @@ export default function CertificateView({ cert, onClose }: Props) {
                   ))}
                   <img src="/aaci-gold.png" alt="AACI" style={{ height:60, objectFit:"contain" }} />
                   <img src="/aaci-iso.jpg"  alt="AACI ISO" style={{ height:54, objectFit:"contain" }} />
-                  <div style={{
-                    border:"1.5px solid #c4cfee", borderRadius:5, padding:"3px 8px",
-                    textAlign:"center", color:BLUE, background:"#f8faff", lineHeight:1.25,
-                  }}>
-                    <div style={{ fontSize:12, fontWeight:900 }}>GLP</div>
-                    <div style={{ fontSize:7.5, fontWeight:700 }}>Good Labour<br />Practices</div>
-                  </div>
+                  <img src="/%E0%B8%95%E0%B8%A3%E0%B8%B2%E0%B8%AA%E0%B8%B1%E0%B8%8D%E0%B8%A5%E0%B8%B1%E0%B8%81%E0%B8%A9%E0%B8%93%E0%B9%8CGLP-OKz-z502559177169.webp"
+                    alt="GLP" style={{ height:60, objectFit:"contain" }} />
                 </div>
 
                 {/* Year badge */}
@@ -222,9 +217,9 @@ export default function CertificateView({ cert, onClose }: Props) {
                   <br />โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ
                 </div>
 
-                {/* Issue date */}
+                {/* Issue date = training date */}
                 <div style={{ fontSize:17, fontWeight:800, color:DARK, marginTop:7 }}>
-                  ให้ ณ วันที่ {thDate(cert.issued_at)}
+                  ให้ ณ วันที่ {thDate(cert.course_date)}
                 </div>
 
                 {/* ── SIGNATURES ── */}
