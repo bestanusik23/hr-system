@@ -422,7 +422,7 @@ export default function ManpowerDashboard() {
                 <div style={{ fontWeight: 800, fontSize: 16, color: "#0a1628" }}>
                   {modal === "newhire" ? "พนักงานเข้าใหม่" : "พนักงานลาออก"}
                 </div>
-                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>รอบ {data.period_label}</div>
+                <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>รอบ {periodLabel}</div>
               </div>
               <button onClick={() => { setModal(null); setInModalChecklist(null); }} style={{ background: "none", border: "none",
                 fontSize: 20, cursor: "pointer", color: "#94a3b8", lineHeight: 1, padding: 4 }}>✕</button>
