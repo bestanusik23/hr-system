@@ -49,10 +49,63 @@ function getPlanDivId(divName: string): number | null {
   return null;
 }
 
+const THAI_MONTHS = [
+  "มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
+  "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม",
+];
+
 const inp: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
   fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
 };
+
+function ThaiDatePicker({
+  value, onChange,
+  yearFrom, yearTo,
+}: {
+  value: string; onChange: (v: string) => void;
+  yearFrom?: number; yearTo?: number;
+}) {
+  const now   = new Date();
+  const parts = value ? value.split("-") : [];
+  const year  = parts[0] ? Number(parts[0]) : now.getFullYear();
+  const month = parts[1] ? Number(parts[1]) : now.getMonth() + 1;
+  const day   = parts[2] ? Number(parts[2]) : now.getDate();
+
+  function emit(y: number, m: number, d: number) {
+    const cap = new Date(y, m, 0).getDate();
+    const sd  = Math.min(d, cap);
+    onChange(`${y}-${String(m).padStart(2,"0")}-${String(sd).padStart(2,"0")}`);
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const curYear     = now.getFullYear();
+  const yFrom       = yearFrom ?? curYear - 5;
+  const yTo         = yearTo   ?? curYear + 1;
+  const years       = Array.from({ length: yTo - yFrom + 1 }, (_, i) => yFrom + i).reverse();
+
+  const sel: React.CSSProperties = { ...inp, width: "auto", flex: 1, cursor: "pointer" };
+
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <select value={day} onChange={e => emit(year, month, Number(e.target.value))} style={sel}>
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
+          <option key={d} value={d}>{String(d).padStart(2,"0")}</option>
+        ))}
+      </select>
+      <select value={month} onChange={e => emit(year, Number(e.target.value), day)} style={{ ...sel, flex: 2 }}>
+        {THAI_MONTHS.map((m, i) => (
+          <option key={i} value={i + 1}>{m}</option>
+        ))}
+      </select>
+      <select value={year} onChange={e => emit(Number(e.target.value), month, day)} style={{ ...sel, flex: 1.5 }}>
+        {years.map(y => (
+          <option key={y} value={y}>พ.ศ. {y + 543}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
@@ -80,7 +133,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   const [departments, setDeps]  = useState<Department[]>([]);
   const [fullName, setName]     = useState("");
   const [nameEn, setNameEn]     = useState("");
-  const [startDate, setStart]   = useState("");
+  const [startDate, setStart]   = useState(new Date().toISOString().slice(0, 10));
   const [divId, setDivId]       = useState<number | "">("");
   const [deptId, setDeptId]     = useState<number | "">("");
   const [position, setPos]      = useState("");
@@ -229,7 +282,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
         <input value={empCode} onChange={e => setEmpCode(e.target.value)} style={inp} placeholder="เช่น EMP0042, H001" />
       </Field>
       <Field label="วันที่เริ่มงาน *">
-        <input type="date" value={startDate} onChange={e => setStart(e.target.value)} style={inp} />
+        <ThaiDatePicker value={startDate} onChange={setStart} />
       </Field>
       <Field label="ฝ่าย">
         <select value={divId} onChange={e => handleDivChange(e.target.value ? Number(e.target.value) : "")} style={inp}>
@@ -274,7 +327,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
           placeholder="เช่น ภ.12345, ร.ส.6789" />
       </Field>
       <Field label="วันหมดอายุใบประกอบ">
-        <input type="date" value={licenseExp} onChange={e => setLicExp(e.target.value)} style={inp} />
+        <ThaiDatePicker value={licenseExp} onChange={setLicExp} yearFrom={new Date().getFullYear() - 1} yearTo={new Date().getFullYear() + 15} />
         {licenseExp && licDaysLeft !== null && (
           <div style={{
             marginTop: 6, fontSize: 12, fontWeight: 700, padding: "5px 10px", borderRadius: 6, display: "inline-block",
