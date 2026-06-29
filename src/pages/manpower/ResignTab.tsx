@@ -14,10 +14,61 @@ interface ExitItem {
 
 const RESIGN_TYPES = ["ลาออกเอง", "เลิกจ้าง", "เกษียณ"];
 
+const THAI_MONTHS = [
+  "มกราคม","กุมภาพันธ์","มีนาคม","เมษายน","พฤษภาคม","มิถุนายน",
+  "กรกฎาคม","สิงหาคม","กันยายน","ตุลาคม","พฤศจิกายน","ธันวาคม",
+];
+
 const inp: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
   fontSize: 14, fontFamily: "inherit", outline: "none", boxSizing: "border-box",
 };
+
+function ThaiDatePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const now  = new Date();
+  const parts = value ? value.split("-") : [];
+  const year  = parts[0] ? Number(parts[0]) : now.getFullYear();
+  const month = parts[1] ? Number(parts[1]) : now.getMonth() + 1;
+  const day   = parts[2] ? Number(parts[2]) : now.getDate();
+
+  function emit(y: number, m: number, d: number) {
+    const cap = new Date(y, m, 0).getDate();
+    const sd  = Math.min(d, cap);
+    onChange(`${y}-${String(m).padStart(2,"0")}-${String(sd).padStart(2,"0")}`);
+  }
+
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const curYear     = now.getFullYear();
+  const years       = Array.from({ length: 10 }, (_, i) => curYear - i + 1);
+
+  const sel: React.CSSProperties = {
+    ...inp, width: "auto", flex: 1, cursor: "pointer", backgroundImage: "none",
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      {/* Day */}
+      <select value={day} onChange={e => emit(year, month, Number(e.target.value))} style={sel}>
+        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map(d => (
+          <option key={d} value={d}>{String(d).padStart(2,"0")}</option>
+        ))}
+      </select>
+      {/* Month */}
+      <select value={month} onChange={e => emit(year, Number(e.target.value), day)} style={{ ...sel, flex: 2 }}>
+        {THAI_MONTHS.map((m, i) => (
+          <option key={i} value={i + 1}>{m}</option>
+        ))}
+      </select>
+      {/* Year (display พ.ศ.) */}
+      <select value={year} onChange={e => emit(Number(e.target.value), month, day)} style={{ ...sel, flex: 1.5 }}>
+        {years.map(y => (
+          <option key={y} value={y}>พ.ศ. {y + 543}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -189,7 +240,7 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
       )}
 
       <Field label="วันที่ลาออก *">
-        <input type="date" value={resignDate} onChange={e => setDate(e.target.value)} style={inp} />
+        <ThaiDatePicker value={resignDate} onChange={setDate} />
       </Field>
       <Field label="ประเภทการลาออก">
         <div style={{ display: "flex", gap: 8 }}>
