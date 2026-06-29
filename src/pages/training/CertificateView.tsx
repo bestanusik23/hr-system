@@ -146,41 +146,41 @@ export default function CertificateView({ cert, onClose }: Props) {
               position:"absolute",
               top:TOP, left:PANEL, right:PANEL, bottom:FOOT,
               display:"flex", flexDirection:"column",
-              padding:"0 22px",
+              padding:"0 10px",
             }}>
 
               {/* HEADER */}
-              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"13px 0 11px" }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 0 8px" }}>
                 {/* Hospital logo */}
                 <img src="/logo-nobg.png" alt="Chiangrai RAM+ Hospital"
                   onError={e => { (e.target as HTMLImageElement).style.display="none"; }}
-                  style={{ height:64, objectFit:"contain" }} />
+                  style={{ height:72, objectFit:"contain", flexShrink:0 }} />
 
                 {/* Accreditation row */}
-                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                   {(["URS","UKAS"] as string[]).map(a => (
                     <div key={a} style={{
                       border:"1.5px solid #c4cfee", borderRadius:5,
-                      padding:"5px 10px", fontSize:11, fontWeight:800,
+                      padding:"4px 8px", fontSize:10, fontWeight:800,
                       color:BLUE, background:"#f8faff",
                     }}>{a}</div>
                   ))}
-                  <img src="/aaci-gold.png" alt="AACI" style={{ height:54, objectFit:"contain" }} />
-                  <img src="/aaci-iso.jpg"  alt="AACI ISO" style={{ height:48, objectFit:"contain" }} />
+                  <img src="/aaci-gold.png" alt="AACI" style={{ height:60, objectFit:"contain" }} />
+                  <img src="/aaci-iso.jpg"  alt="AACI ISO" style={{ height:54, objectFit:"contain" }} />
                   <div style={{
-                    border:"1.5px solid #c4cfee", borderRadius:5, padding:"4px 9px",
+                    border:"1.5px solid #c4cfee", borderRadius:5, padding:"3px 8px",
                     textAlign:"center", color:BLUE, background:"#f8faff", lineHeight:1.25,
                   }}>
-                    <div style={{ fontSize:13, fontWeight:900 }}>GLP</div>
-                    <div style={{ fontSize:8, fontWeight:700 }}>Good Labour<br />Practices</div>
+                    <div style={{ fontSize:12, fontWeight:900 }}>GLP</div>
+                    <div style={{ fontSize:7.5, fontWeight:700 }}>Good Labour<br />Practices</div>
                   </div>
                 </div>
 
                 {/* Year badge */}
                 <div style={{
-                  background:BLUE, color:"#fff", borderRadius:10,
-                  padding:"7px 18px", fontSize:14, fontWeight:800, whiteSpace:"nowrap",
-                }}>ประจำปี พ.ศ. {year}</div>
+                  background:BLUE, color:"#fff", borderRadius:10, flexShrink:0,
+                  padding:"7px 16px", fontSize:14, fontWeight:800, whiteSpace:"nowrap",
+                }}>ประจำปี {year}</div>
               </div>
 
               {/* ── BODY (flex: 1, vertically centered) ── */}

@@ -204,6 +204,9 @@ export default function ManpowerDashboard() {
   const [saveMsg, setSaveMsg]   = useState("");
   const [inModalChecklist, setInModalChecklist] = useState<{ id: number; name: string } | null>(null);
   const [exitChecklistEmp, setExitChecklistEmp] = useState<{ id: number; name: string } | null>(null);
+  const [histHireList, setHistHireList]         = useState<NewHireRow[]>([]);
+  const [histResignList, setHistResignList]     = useState<ResignRow[]>([]);
+  const [histListLoad, setHistListLoad]         = useState(false);
   const [showEmpCode, setShowEmpCode]           = useState(false);
   const [empCodeList, setEmpCodeList]           = useState<{ id: number; full_name: string; emp_code: string | null; position: string | null }[]>([]);
   const [empCodeQ, setEmpCodeQ]                 = useState("");
@@ -277,6 +280,20 @@ export default function ManpowerDashboard() {
         setHL(false);
       });
   }, [histMonth]);
+
+  async function openModal(type: Modal) {
+    setModal(type);
+    setInModalChecklist(null);
+    if (isHist && histData) {
+      setHistListLoad(true);
+      try {
+        const r = await fetch(`/api/manpower/period-employees?month=${histData.snapshot_month}`);
+        const d = await r.json() as { ok: boolean; new_hire_list: NewHireRow[]; resign_list: ResignRow[] };
+        if (d.ok) { setHistHireList(d.new_hire_list ?? []); setHistResignList(d.resign_list ?? []); }
+      } catch { /* ignore */ }
+      setHistListLoad(false);
+    }
+  }
 
   async function saveSnapshot() {
     setSaving(true); setSaveMsg("");
@@ -391,7 +408,7 @@ export default function ManpowerDashboard() {
       )}
 
       {/* ── Employee Detail Modal ─────────────────────────────────────── */}
-      {modal && !isHist && (
+      {modal && (
         <div onClick={() => { setModal(null); setInModalChecklist(null); }} style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", zIndex: 999,
           display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
@@ -414,7 +431,9 @@ export default function ManpowerDashboard() {
               {modal === "newhire" && (
                 inModalChecklist
                   ? <InlineChecklist empId={inModalChecklist.id} empName={inModalChecklist.name} onBack={() => setInModalChecklist(null)} />
-                  : data.new_hire_list.length === 0
+                  : histListLoad
+                  ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>
+                  : (isHist ? histHireList : data.new_hire_list).length === 0
                   ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานเข้าใหม่ในรอบนี้</div>
                   : <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead><tr style={{ background: "#f8fafc" }}>
@@ -424,7 +443,7 @@ export default function ManpowerDashboard() {
                         ))}
                       </tr></thead>
                       <tbody>
-                        {data.new_hire_list.map((e, i) => (
+                        {(isHist ? histHireList : data.new_hire_list).map((e, i) => (
                           <tr key={e.id} style={{ background: i % 2 === 0 ? "#fafbff" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{i + 1}</td>
                             <td style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: "#0a1628" }}>{e.full_name}</td>
@@ -447,7 +466,9 @@ export default function ManpowerDashboard() {
                     </table>
               )}
               {modal === "resign" && (
-                data.resign_list.length === 0
+                histListLoad
+                  ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>
+                  : (isHist ? histResignList : data.resign_list).length === 0
                   ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานลาออกในรอบนี้</div>
                   : <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead><tr style={{ background: "#f8fafc" }}>
@@ -457,7 +478,7 @@ export default function ManpowerDashboard() {
                         ))}
                       </tr></thead>
                       <tbody>
-                        {data.resign_list.map((e, i) => (
+                        {(isHist ? histResignList : data.resign_list).map((e, i) => (
                           <tr key={e.id} style={{ background: i % 2 === 0 ? "#fafbff" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{i + 1}</td>
                             <td style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: "#0a1628" }}>{e.full_name}</td>
@@ -584,11 +605,11 @@ export default function ManpowerDashboard() {
       ) : (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
         {CARD_DEFS.map(c => {
-          const clickable = !!c.modal && !isHist;
+          const clickable = !!c.modal;
           const val = cards?.[c.key] ?? 0;
           return (
             <div key={c.key}
-              onClick={clickable ? () => setModal(c.modal!) : undefined}
+              onClick={clickable ? () => openModal(c.modal!) : undefined}
               style={{ background: "#fff", borderRadius: 14, padding: "18px 20px",
                 boxShadow: "0 1px 6px rgba(0,0,0,.06)", borderTop: `3px solid ${c.color}`,
                 cursor: clickable ? "pointer" : "default", position: "relative",

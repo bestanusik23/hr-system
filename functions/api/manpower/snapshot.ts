@@ -9,8 +9,8 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 function getPeriodLabel(ym: string): string {
   const [y, m] = ym.split("-").map(Number);
   const MT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
-  const pDate = new Date(y, m - 1, 26);
-  const eDate = new Date(y, m, 25);
+  const pDate = new Date(y, m - 2, 26); // 26th of previous month
+  const eDate = new Date(y, m - 1, 25); // 25th of current month
   const py = pDate.getFullYear() + 543;
   const ey = eDate.getFullYear() + 543;
   return `26 ${MT[pDate.getMonth()]} ${py} – 25 ${MT[eDate.getMonth()]} ${ey}`;
