@@ -1,5 +1,13 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { formatThaiDate } from "../utils/date";
+
+interface LicenseAlert {
+  id: number; full_name: string; position: string | null;
+  license_number: string; license_expiry: string;
+  division_name: string | null; days_left: number;
+}
 
 /* ─── SVG Icons ─── */
 const IcUsers = () => (
@@ -135,6 +143,19 @@ export default function Home() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const visible = SYSTEMS.filter(s => user && s.roles.includes(user.role));
+
+  const [licAlerts, setLicAlerts] = useState<LicenseAlert[]>([]);
+  const canSeeAlerts = user && ["hr", "deputyHR", "admin"].includes(user.role);
+
+  useEffect(() => {
+    if (!canSeeAlerts) return;
+    fetch("/api/manpower/license-alerts")
+      .then(r => r.json())
+      .then((d: { ok: boolean; alerts: LicenseAlert[] }) => {
+        if (d.ok) setLicAlerts(d.alerts.filter(a => a.days_left <= 15));
+      })
+      .catch(() => {});
+  }, [canSeeAlerts]);
 
   return (
     <div className="home-root" style={{ minHeight: "100vh", background: "#f4f6fb", fontFamily: "'IBM Plex Sans Thai', sans-serif" }}>
@@ -275,6 +296,80 @@ export default function Home() {
           </button>
         </div>
       </section>
+
+      {/* ══════════ LICENSE ALERT BANNER ══════════ */}
+      {canSeeAlerts && licAlerts.length > 0 && (
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 0" }}>
+          <div style={{
+            borderRadius: 16, overflow: "hidden",
+            boxShadow: "0 4px 20px rgba(220,38,38,.15)",
+            border: "1.5px solid #fca5a5",
+          }}>
+            {/* Header bar */}
+            <div style={{
+              background: "#dc2626", color: "#fff",
+              padding: "12px 20px", display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ fontSize: 18 }}>🔔</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>
+                  แจ้งเตือน — ใบประกอบวิชาชีพใกล้หมดอายุ (ภายใน 15 วัน)
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 1 }}>
+                  พบ {licAlerts.length} รายการ — กรุณาติดตามและแจ้งพนักงานต่อใบอนุญาตโดยด่วน
+                </div>
+              </div>
+              <button
+                onClick={() => navigate("/manpower")}
+                style={{
+                  background: "rgba(255,255,255,.2)", border: "1.5px solid rgba(255,255,255,.5)",
+                  borderRadius: 8, padding: "6px 14px", color: "#fff",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  whiteSpace: "nowrap",
+                }}
+              >ไปที่ Manpower →</button>
+            </div>
+
+            {/* Alert rows */}
+            <div style={{ background: "#fff5f5" }}>
+              {licAlerts.map((a, i) => (
+                <div key={a.id} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "11px 20px",
+                  borderTop: i > 0 ? "1px solid #fee2e2" : undefined,
+                }}>
+                  {/* Days badge */}
+                  <div style={{
+                    minWidth: 54, textAlign: "center",
+                    padding: "4px 0", borderRadius: 8, fontWeight: 800, fontSize: 13,
+                    ...(a.days_left < 0
+                      ? { background: "#7f1d1d", color: "#fff" }
+                      : a.days_left <= 7
+                        ? { background: "#dc2626", color: "#fff" }
+                        : { background: "#fef3c7", color: "#92400e" }),
+                  }}>
+                    {a.days_left < 0 ? `หมดแล้ว\n${Math.abs(a.days_left)}ว` : `${a.days_left} วัน`}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "#0a1628" }}>{a.full_name}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      {a.position ?? "—"}{a.division_name ? ` · ${a.division_name}` : ""}
+                    </div>
+                  </div>
+
+                  {/* License info */}
+                  <div style={{ textAlign: "right", fontSize: 12, color: "#475569", flexShrink: 0 }}>
+                    <div style={{ fontFamily: "monospace", fontWeight: 700, color: "#dc2626" }}>{a.license_number}</div>
+                    <div>หมดอายุ {formatThaiDate(a.license_expiry)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ══════════ SYSTEMS GRID ══════════ */}
       <section id="systems-grid" style={{ maxWidth: 1200, margin: "0 auto", padding: "52px 24px 64px" }}>
