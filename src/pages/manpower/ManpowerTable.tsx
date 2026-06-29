@@ -68,6 +68,7 @@ function buildLiveMap(employees: LiveEmp[]): LiveMaps {
 }
 
 interface AugRow extends ManpowerRow {
+  _rowIdx: number;        // index in MANPOWER_ROWS (-1 for overflow rows)
   liveEmp: string;
   liveFilled: number;
   liveVac: number;
@@ -102,10 +103,10 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, all
   // Pass 2 — position fallback
   const ptrPos = new Map<string, number>();
   const result: AugRow[] = rows.map((r, i) => {
-    const empty: AugRow = { ...r, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
+    const empty: AugRow = { ...r, _rowIdx: i, liveEmp: "", liveFilled: 0, liveVac: 0, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
     if (r.type !== "slot") return empty;
     const e = p1.get(i);
-    if (e) return { ...r, liveEmp: e.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: e.emp_status, liveEmpId: e.id, liveEmpRemark: e.remark ?? null, liveEmpObj: e };
+    if (e) return { ...r, _rowIdx: i, liveEmp: e.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: e.emp_status, liveEmpId: e.id, liveEmpRemark: e.remark ?? null, liveEmpObj: e };
 
     const pos = r.pos.trim().toLowerCase();
     const pool = byPosAll.get(pos) ?? [];
@@ -115,9 +116,9 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, all
     if (ptr < pool.length) {
       consumed.add(pool[ptr].id);
       const fb = pool[ptr];
-      return { ...r, liveEmp: fb.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: fb.emp_status, liveEmpId: fb.id, liveEmpRemark: fb.remark ?? null, liveEmpObj: fb };
+      return { ...r, _rowIdx: i, liveEmp: fb.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: fb.emp_status, liveEmpId: fb.id, liveEmpRemark: fb.remark ?? null, liveEmpObj: fb };
     }
-    return { ...r, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
+    return { ...r, _rowIdx: i, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
   });
 
   // Pass 3 — ALL remaining active employees: overflow (known pos) + unmatched (unknown pos).
@@ -164,6 +165,7 @@ function buildAugRows(rows: ManpowerRow[], { byDivPos, byPosAll }: LiveMaps, all
       const ref = result[afterIdx];
       const extras: AugRow[] = items.map(({ emp: e, isUnknownPos }) => ({
         ...ref,
+        _rowIdx: -1,
         type: "slot" as const,
         pos: e.position ?? "",
         name: e.position ?? "",
@@ -265,8 +267,38 @@ export default function ManpowerTable() {
   const [editRemark,    setEditRemark]    = useState("");
   const [editSaving,    setEditSaving]    = useState(false);
   const [editError,     setEditError]     = useState("");
-  const [orgDivs,    setOrgDivs]    = useState<OrgDiv[]>([]);
-  const [orgDepts,   setOrgDepts]   = useState<OrgDept[]>([]);
+  const [orgDivs,       setOrgDivs]       = useState<OrgDiv[]>([]);
+  const [orgDepts,      setOrgDepts]      = useState<OrgDept[]>([]);
+  const [planOverrides, setPlanOverrides] = useState<Record<number, number>>({});
+
+  // Fetch plan overrides
+  useEffect(() => {
+    fetch("/api/manpower/plan-overrides")
+      .then(r => r.json())
+      .then((d: { ok: boolean; overrides?: Record<number, number> }) => {
+        if (d.ok && d.overrides) setPlanOverrides(d.overrides);
+      })
+      .catch(() => { /* silent */ });
+  }, []);
+
+  async function adjustPlan(rowIdx: number, change: 1 | -1) {
+    const cur = planOverrides[rowIdx] ?? 0;
+    const basePlan = MANPOWER_ROWS[rowIdx]?.plan ?? 1;
+    const newDelta = cur + change;
+    if (basePlan + newDelta < 0) return;            // ไม่ให้ติดลบ
+    setPlanOverrides(prev => ({ ...prev, [rowIdx]: newDelta }));
+    try {
+      const r = await fetch("/api/manpower/plan-overrides", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row_idx: rowIdx, delta: newDelta }),
+      });
+      const d = await r.json() as { ok: boolean };
+      if (!d.ok) setPlanOverrides(prev => ({ ...prev, [rowIdx]: cur }));
+    } catch {
+      setPlanOverrides(prev => ({ ...prev, [rowIdx]: cur }));
+    }
+  }
 
   // Fetch org structure for edit modal
   useEffect(() => {
@@ -376,16 +408,19 @@ export default function ManpowerTable() {
   const augRows      = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps, liveEmps), [liveMaps, liveEmps]);
   const orderedRows  = useMemo(() => applyOrder(augRows, customOrder), [augRows, customOrder]);
 
-  // Summary from live data
+  // Summary from live data (using effective plan = plan + override delta)
   const summary = useMemo(() => {
     let totalPlan = 0, totalFilled = 0;
     const deptSet = new Set<number>();
     for (const r of augRows) {
-      if (r.type === "slot") { totalPlan += r.plan; totalFilled += r.liveFilled; }
+      if (r.type === "slot") {
+        const eff = r.plan + (r._rowIdx >= 0 ? (planOverrides[r._rowIdx] ?? 0) : 0);
+        totalPlan += eff; totalFilled += r.liveFilled;
+      }
       if (r.type === "division") deptSet.add(r.divId);
     }
     return { totalPlan, totalFilled, totalVac: totalPlan - totalFilled, totalDepts: deptSet.size };
-  }, [orderedRows]);
+  }, [augRows, planOverrides]);
 
   function toggleDiv(divId: number) {
     setCollapsed(prev => ({ ...prev, [divId]: !prev[divId] }));
@@ -613,7 +648,10 @@ export default function ManpowerTable() {
 
                     // slot row
                     slotNum++;
-                    const vacColor = r.liveVac > 0 ? "#dc2626" : r.liveVac < 0 ? "#0891b2" : "#16a34a";
+                    const delta = r._rowIdx >= 0 ? (planOverrides[r._rowIdx] ?? 0) : 0;
+                    const effPlan = r.plan + delta;
+                    const effVac  = effPlan - r.liveFilled;
+                    const vacColor = effVac > 0 ? "#dc2626" : effVac < 0 ? "#0891b2" : "#16a34a";
                     const badge = r.empStatus ? STATUS_BADGE[r.empStatus] : null;
                     return (
                       <tr key={i} style={{
@@ -635,12 +673,36 @@ export default function ManpowerTable() {
                             </span>
                           )}
                         </td>
-                        <td style={{ ...td, textAlign: "center" }}>{r.plan || "—"}</td>
+                        {/* อัตราตั้งไว้ — แสดง effective plan พร้อม +/- */}
+                        <td style={{ ...td, textAlign: "center" }}>
+                          {canEdit && r._rowIdx >= 0 ? (
+                            <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
+                              <button onClick={() => adjustPlan(r._rowIdx, -1)}
+                                disabled={effPlan <= 0}
+                                style={{ width:18, height:18, lineHeight:"1", padding:0, border:"1px solid #e2e8f0",
+                                  borderRadius:4, background: effPlan <= 0 ? "#f8fafc" : "#fff",
+                                  color: effPlan <= 0 ? "#cbd5e1" : "#64748b",
+                                  cursor: effPlan <= 0 ? "default" : "pointer", fontSize:11, fontWeight:700 }}>
+                                −
+                              </button>
+                              <span style={{ minWidth:20, fontWeight:delta !== 0 ? 700 : 400,
+                                color: delta > 0 ? "#16a34a" : delta < 0 ? "#dc2626" : "#1e293b" }}>
+                                {effPlan || "—"}
+                              </span>
+                              <button onClick={() => adjustPlan(r._rowIdx, 1)}
+                                style={{ width:18, height:18, lineHeight:"1", padding:0, border:"1px solid #e2e8f0",
+                                  borderRadius:4, background:"#fff", color:"#64748b",
+                                  cursor:"pointer", fontSize:11, fontWeight:700 }}>
+                                ＋
+                              </button>
+                            </div>
+                          ) : (effPlan || "—")}
+                        </td>
                         <td style={{ ...td, textAlign: "center", color: "#16a34a", fontWeight: 600 }}>
                           {r.liveFilled || "—"}
                         </td>
                         <td style={{ ...td, textAlign: "center", fontWeight: 700, color: vacColor }}>
-                          {r.liveVac > 0 ? `−${r.liveVac}` : r.liveVac < 0 ? `+${Math.abs(r.liveVac)}` : "0"}
+                          {effVac > 0 ? `−${effVac}` : effVac < 0 ? `+${Math.abs(effVac)}` : "0"}
                         </td>
                         <td style={{ ...td }}>
                           {r.liveEmp ? (
