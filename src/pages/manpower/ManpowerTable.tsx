@@ -26,30 +26,24 @@ interface LiveMaps {
   byPosAll:     Map<string, LiveEmp[]>; // "pos"               — ALL active (final fallback)
 }
 
-// All unique positions from manpower plan (for dropdowns)
-const ALL_POSITIONS = (() => {
+// Helper: build position lookup maps from any plan rows array
+function buildPosMaps(rows: ManpowerRow[]) {
   const seen = new Set<string>();
-  for (const r of MANPOWER_ROWS) {
-    if (r.type === "slot" && r.pos.trim()) seen.add(r.pos.trim());
+  const byDiv = new Map<number, string[]>();
+  for (const r of rows) {
+    if (r.type !== "slot" || !r.pos.trim()) continue;
+    seen.add(r.pos.trim());
+    const arr = byDiv.get(r.divId) ?? [];
+    if (!arr.includes(r.pos.trim())) arr.push(r.pos.trim());
+    byDiv.set(r.divId, arr);
   }
-  return [...seen].sort((a, b) => a.localeCompare(b, "th"));
-})();
+  return { allPos: [...seen].sort((a, b) => a.localeCompare(b, "th")), byDiv };
+}
 
-const POSITIONS_BY_PLAN_DIV_ID = (() => {
-  const map = new Map<number, string[]>();
-  for (const r of MANPOWER_ROWS) {
-    if (r.type === "slot" && r.pos.trim()) {
-      const arr = map.get(r.divId) ?? [];
-      if (!arr.includes(r.pos.trim())) arr.push(r.pos.trim());
-      map.set(r.divId, arr);
-    }
-  }
-  return map;
-})();
-
-// DB division_id → plan divId when they differ (e.g. ฝ่ายบัญชี DB=5 merged into plan divId=4)
+// DB division_id → plan divId when they differ
 const DB_TO_PLAN_DIVID: Record<number, number> = {
-  5: 4,  // ฝ่ายบัญชี (DB id 5) → show under ฝ่ายการเงิน/บัญชี section (plan divId 4)
+  5:  4,  // ฝ่ายบัญชี → ฝ่ายการเงิน/บัญชี plan section
+  11: 2,  // ศูนย์มะเร็ง → ฝ่ายเทคนิคบริการ plan section (รังสีรักษา/เคมีบำบัด slots live here)
 };
 
 function buildLiveMap(employees: LiveEmp[]): LiveMaps {
@@ -296,37 +290,53 @@ export default function ManpowerTable() {
   const [editRemark,    setEditRemark]    = useState("");
   const [editSaving,    setEditSaving]    = useState(false);
   const [editError,     setEditError]     = useState("");
-  const [orgDivs,       setOrgDivs]       = useState<OrgDiv[]>([]);
-  const [orgDepts,      setOrgDepts]      = useState<OrgDept[]>([]);
-  const [planOverrides, setPlanOverrides] = useState<Record<number, number>>({});
+  const [orgDivs,  setOrgDivs]  = useState<OrgDiv[]>([]);
+  const [orgDepts, setOrgDepts] = useState<OrgDept[]>([]);
+  // Plan rows — start with static file instantly, then hydrate from DB
+  const [planRows, setPlanRows] = useState<ManpowerRow[]>(MANPOWER_ROWS);
+  // Note editing
+  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
+  const [noteVal,        setNoteVal]        = useState("");
 
-  // Fetch plan overrides
+  // Fetch plan from DB (hydrates on top of static fallback)
   useEffect(() => {
-    fetch("/api/manpower/plan-overrides")
+    fetch("/api/manpower/plan")
       .then(r => r.json())
-      .then((d: { ok: boolean; overrides?: Record<number, number> }) => {
-        if (d.ok && d.overrides) setPlanOverrides(d.overrides);
+      .then((d: { ok: boolean; plan?: Array<{ row_idx: number; type: string; name: string; pos: string; div_id: number; plan_qty: number; note: string }> }) => {
+        if (!d.ok || !d.plan?.length) return;
+        setPlanRows(d.plan.map(p => ({
+          type: p.type as ManpowerRow["type"],
+          name: p.name, pos: p.pos, divId: p.div_id,
+          plan: p.plan_qty, filled: 0, vac: 0, emp: "", note: p.note,
+        })));
       })
-      .catch(() => { /* silent */ });
+      .catch(() => { /* keep static fallback */ });
   }, []);
 
   async function adjustPlan(rowIdx: number, change: 1 | -1) {
-    const cur = planOverrides[rowIdx] ?? 0;
-    const basePlan = MANPOWER_ROWS[rowIdx]?.plan ?? 1;
-    const newDelta = cur + change;
-    if (basePlan + newDelta < 0) return;            // ไม่ให้ติดลบ
-    setPlanOverrides(prev => ({ ...prev, [rowIdx]: newDelta }));
+    const cur = planRows[rowIdx]?.plan ?? 1;
+    const next = Math.max(0, cur + change);
+    if (next === cur) return;
+    setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, plan: next } : r));
     try {
-      const r = await fetch("/api/manpower/plan-overrides", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ row_idx: rowIdx, delta: newDelta }),
+      const res = await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan_qty: next }),
       });
-      const d = await r.json() as { ok: boolean };
-      if (!d.ok) setPlanOverrides(prev => ({ ...prev, [rowIdx]: cur }));
+      const d = await res.json() as { ok: boolean };
+      if (!d.ok) setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, plan: cur } : r));
     } catch {
-      setPlanOverrides(prev => ({ ...prev, [rowIdx]: cur }));
+      setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, plan: cur } : r));
     }
+  }
+
+  async function saveNote(rowIdx: number, val: string) {
+    setEditingNoteIdx(null);
+    setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, note: val } : r));
+    await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: val }),
+    }).catch(() => { /* silent */ });
   }
 
   // Fetch org structure for edit modal
@@ -348,7 +358,7 @@ export default function ManpowerTable() {
       setEditDeptId(editEmp.department_id ?? "");
       setEditRemark(editEmp.remark ?? "");
       setEditError("");
-      setEditPosCustom(pos !== "" && !ALL_POSITIONS.includes(pos));
+      setEditPosCustom(pos !== "" && !posMaps.allPos.includes(pos));
     }
   }, [editEmp]);
 
@@ -433,8 +443,9 @@ export default function ManpowerTable() {
   }
 
   const divNames     = useMemo(() => buildDivNames(orgDivs), [orgDivs]);
+  const posMaps      = useMemo(() => buildPosMaps(planRows), [planRows]);
   const liveMaps     = useMemo(() => buildLiveMap(liveEmps), [liveEmps]);
-  const augRows      = useMemo(() => buildAugRows(MANPOWER_ROWS, liveMaps, liveEmps), [liveMaps, liveEmps]);
+  const augRows      = useMemo(() => buildAugRows(planRows, liveMaps, liveEmps), [planRows, liveMaps, liveEmps]);
   const orderedRows  = useMemo(() => applyOrder(augRows, customOrder), [augRows, customOrder]);
 
   // Summary from live data (using effective plan = plan + override delta)
@@ -443,13 +454,12 @@ export default function ManpowerTable() {
     const deptSet = new Set<number>();
     for (const r of augRows) {
       if (r.type === "slot") {
-        const eff = r.plan + (r._rowIdx >= 0 ? (planOverrides[r._rowIdx] ?? 0) : 0);
-        totalPlan += eff; totalFilled += r.liveFilled;
+        totalPlan += r.plan; totalFilled += r.liveFilled;
       }
       if (r.type === "division") deptSet.add(r.divId);
     }
     return { totalPlan, totalFilled, totalVac: totalPlan - totalFilled, totalDepts: deptSet.size };
-  }, [augRows, planOverrides]);
+  }, [augRows]);
 
   function toggleDiv(divId: number) {
     setCollapsed(prev => ({ ...prev, [divId]: !prev[divId] }));
@@ -509,7 +519,7 @@ export default function ManpowerTable() {
   };
   const td: React.CSSProperties = { padding: "8px 12px", fontSize: 12.5, color: "#1e293b" };
 
-  const divIds = Array.from(new Set(MANPOWER_ROWS.filter(r => r.type === "division").map(r => r.divId))).sort();
+  const divIds = Array.from(new Set(planRows.filter(r => r.type === "division").map(r => r.divId))).sort();
 
   let lastDivId = 0;
   const visibleRows: (AugRow & { _hidden?: boolean })[] = [];
@@ -520,7 +530,7 @@ export default function ManpowerTable() {
   }
 
   const fillPct = Math.round((summary.totalFilled / Math.max(1, summary.totalPlan)) * 100);
-  const allDivIds = Array.from(new Set(MANPOWER_ROWS.filter(r => r.type === "division").map(r => r.divId)));
+  const allDivIds = Array.from(new Set(planRows.filter(r => r.type === "division").map(r => r.divId)));
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -677,8 +687,7 @@ export default function ManpowerTable() {
 
                     // slot row
                     slotNum++;
-                    const delta = r._rowIdx >= 0 ? (planOverrides[r._rowIdx] ?? 0) : 0;
-                    const effPlan = r.plan + delta;
+                    const effPlan = r.plan;
                     const effVac  = effPlan - r.liveFilled;
                     const vacColor = effVac > 0 ? "#dc2626" : effVac < 0 ? "#0891b2" : "#16a34a";
                     const badge = r.empStatus ? STATUS_BADGE[r.empStatus] : null;
@@ -749,8 +758,30 @@ export default function ManpowerTable() {
                             <span style={{ color: "#f87171", fontSize: 12 }}>ว่าง</span>
                           )}
                         </td>
-                        <td style={{ ...td, color: "#94a3b8", fontSize: 11.5 }}>
-                          {r.liveEmpRemark || r.note || ""}
+                        <td style={{ ...td, color: "#94a3b8", fontSize: 11.5, minWidth: 120 }}>
+                          {r.liveEmpRemark ? (
+                            <span>{r.liveEmpRemark}</span>
+                          ) : editingNoteIdx === r._rowIdx && r._rowIdx >= 0 ? (
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <input autoFocus value={noteVal}
+                                onChange={e => setNoteVal(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") saveNote(r._rowIdx, noteVal); if (e.key === "Escape") setEditingNoteIdx(null); }}
+                                style={{ fontSize: 11.5, padding: "2px 6px", border: "1px solid #93c5fd", borderRadius: 4, width: 160 }} />
+                              <button onClick={() => saveNote(r._rowIdx, noteVal)}
+                                style={{ fontSize: 10, padding: "2px 7px", background: "#0038C6", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>บันทึก</button>
+                              <button onClick={() => setEditingNoteIdx(null)}
+                                style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>ยกเลิก</button>
+                            </div>
+                          ) : (
+                            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                              <span style={{ color: r.note ? "#64748b" : "#cbd5e1" }}>{r.note || (canEdit && r._rowIdx >= 0 ? "—" : "")}</span>
+                              {canEdit && r._rowIdx >= 0 && (
+                                <button onClick={() => { setEditingNoteIdx(r._rowIdx); setNoteVal(r.note || ""); }}
+                                  title="แก้ไขหมายเหตุ"
+                                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#94a3b8", fontSize: 12, lineHeight: 1 }}>✏️</button>
+                              )}
+                            </span>
+                          )}
                         </td>
                         {canEdit && (
                           <td style={{ ...td, textAlign: "center", padding: "4px 6px" }}>
@@ -857,7 +888,7 @@ export default function ManpowerTable() {
                 const planDivId = editDivId
                   ? (DB_TO_PLAN_DIVID[editDivId as number] ?? editDivId as number)
                   : null;
-                const opts = planDivId ? (POSITIONS_BY_PLAN_DIV_ID.get(planDivId) ?? ALL_POSITIONS) : ALL_POSITIONS;
+                const opts = planDivId ? (posMaps.byDiv.get(planDivId) ?? posMaps.allPos) : posMaps.allPos;
                 return (
                   <select value={editPos} onChange={e => {
                     if (e.target.value === "__new__") {
