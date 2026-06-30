@@ -105,6 +105,16 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
     );
     const d = await res.json() as { updatedCells?: number };
     if (!d.updatedCells) return Response.json({ ok: false, error: "อัปเดตไม่สำเร็จ" }, { status: 500 });
+
+    // Notify HR when head/deputy sends applicant for interview
+    if (["head", "deputy"].includes(user.role)) {
+      const text = `${user.full_name} ส่งใบสมัคร (แถว ${row}) เพื่อนัดสัมภาษณ์`;
+      await ctx.env.HR_DB.prepare(
+        `INSERT INTO notifications (target_role, icon, text, kind, link, created_at)
+         VALUES ('hr', '📋', ?, 'recruit', '/recruit', datetime('now','localtime'))`
+      ).bind(text).run().catch(() => { /* non-fatal */ });
+    }
+
     return Response.json({ ok: true });
   } catch (e) {
     return Response.json({ ok: false, error: String(e) }, { status: 500 });
