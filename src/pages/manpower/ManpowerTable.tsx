@@ -141,6 +141,10 @@ function buildAugRows(rows: ManpowerRow[], { byDivDeptPos, byDivPos, byPosAll }:
       const fb = pool[ptr];
       return { ...r, _rowIdx: i, liveEmp: fb.full_name, liveFilled: 1, liveVac: r.plan - 1, empStatus: fb.emp_status, liveEmpId: fb.id, liveEmpRemark: fb.remark ?? null, liveEmpObj: fb };
     }
+    // Manually assigned name (name differs from pos → a person was typed in)
+    if (r.name && r.name.trim() !== "" && r.name.trim() !== r.pos.trim()) {
+      return { ...r, _rowIdx: i, liveEmp: r.name, liveFilled: 1, liveVac: r.plan - 1, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
+    }
     return { ...r, _rowIdx: i, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
   });
 
@@ -297,6 +301,9 @@ export default function ManpowerTable() {
   // Note editing
   const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
   const [noteVal,        setNoteVal]        = useState("");
+  // Name editing (manual emp assignment)
+  const [editingNameIdx, setEditingNameIdx] = useState<number | null>(null);
+  const [nameEditVal,    setNameEditVal]    = useState("");
 
   // Fetch plan from DB (hydrates on top of static fallback)
   useEffect(() => {
@@ -328,6 +335,18 @@ export default function ManpowerTable() {
     } catch {
       setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, plan: cur } : r));
     }
+  }
+
+  async function savePlanName(rowIdx: number, val: string) {
+    const trimmed = val.trim();
+    const fallback = planRows[rowIdx]?.pos ?? "";
+    const stored = trimmed || fallback;
+    setEditingNameIdx(null);
+    setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, name: stored } : r));
+    await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: stored }),
+    }).catch(() => { /* silent */ });
   }
 
   async function saveNote(rowIdx: number, val: string) {
@@ -744,7 +763,7 @@ export default function ManpowerTable() {
                         </td>
                         <td style={{ ...td }}>
                           {r.liveEmp ? (
-                            <span>
+                            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
                               {r.liveEmp}
                               {badge && (
                                 <span style={{ marginLeft: 6, fontSize: 10, color: badge.color,
@@ -753,9 +772,33 @@ export default function ManpowerTable() {
                                   {badge.label}
                                 </span>
                               )}
+                              {canEdit && r.liveEmpId === null && r._rowIdx >= 0 && (
+                                <button onClick={() => { setEditingNameIdx(r._rowIdx); setNameEditVal(r.liveEmp); }}
+                                  title="แก้ไขชื่อ"
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 11, padding: "0 2px" }}>✏️</button>
+                              )}
                             </span>
+                          ) : editingNameIdx === r._rowIdx && r._rowIdx >= 0 ? (
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <input autoFocus value={nameEditVal}
+                                onChange={e => setNameEditVal(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") savePlanName(r._rowIdx, nameEditVal); if (e.key === "Escape") setEditingNameIdx(null); }}
+                                placeholder="ชื่อ-นามสกุล"
+                                style={{ fontSize: 12, padding: "2px 6px", border: "1px solid #93c5fd", borderRadius: 4, width: 150 }} />
+                              <button onClick={() => savePlanName(r._rowIdx, nameEditVal)}
+                                style={{ fontSize: 10, padding: "2px 7px", background: "#0038C6", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>บันทึก</button>
+                              <button onClick={() => setEditingNameIdx(null)}
+                                style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>ยกเลิก</button>
+                            </div>
                           ) : (
-                            <span style={{ color: "#f87171", fontSize: 12 }}>ว่าง</span>
+                            <span style={{ color: "#f87171", fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                              ว่าง
+                              {canEdit && r._rowIdx >= 0 && (
+                                <button onClick={() => { setEditingNameIdx(r._rowIdx); setNameEditVal(""); }}
+                                  title="เพิ่มชื่อบุคลากร"
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "#0038C6", fontSize: 11, padding: "0 2px" }}>✏️</button>
+                              )}
+                            </span>
                           )}
                         </td>
                         <td style={{ ...td, color: "#94a3b8", fontSize: 11.5, minWidth: 120 }}>
