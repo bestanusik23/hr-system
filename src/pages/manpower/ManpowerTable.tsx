@@ -723,8 +723,8 @@ export default function ManpowerTable() {
                                   cursor: effPlan <= 0 ? "default" : "pointer", fontSize:11, fontWeight:700 }}>
                                 −
                               </button>
-                              <span style={{ minWidth:20, fontWeight:delta !== 0 ? 700 : 400,
-                                color: delta > 0 ? "#16a34a" : delta < 0 ? "#dc2626" : "#1e293b" }}>
+                              <span style={{ minWidth:20, fontWeight:400,
+                                color: "#1e293b" }}>
                                 {effPlan || "—"}
                               </span>
                               <button onClick={() => adjustPlan(r._rowIdx, 1)}
