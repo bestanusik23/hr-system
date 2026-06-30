@@ -81,10 +81,10 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const { row, col, value } = body;
   if (!row || !col) return Response.json({ ok: false, error: "Missing row/col" }, { status: 400 });
 
-  // head and deputy can ONLY set "รอนัดสัมภาษณ์" (flag for HR to contact)
+  // head and deputy can ONLY send to interview queue
   if (["head", "deputy"].includes(user.role)) {
-    if (value !== "รอนัดสัมภาษณ์") {
-      return Response.json({ ok: false, error: "หัวหน้าและรองผู้อำนวยการสามารถส่งให้ HR ติดต่อเท่านั้น" }, { status: 403 });
+    if (value !== "กรอกใบสมัครและสัมภาษณ์") {
+      return Response.json({ ok: false, error: "หัวหน้าและรองผู้อำนวยการสามารถส่งเข้ากระบวนการสัมภาษณ์เท่านั้น" }, { status: 403 });
     }
   } else if (!["hr", "deputyHR", "admin"].includes(user.role)) {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
