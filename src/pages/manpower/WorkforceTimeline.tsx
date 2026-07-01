@@ -1,44 +1,75 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, formatThaiDate, todayThai } from "./workforce/api";
-import type { ParseResult, DashboardData, DeptTimelineItem, HourlyPoint, ShiftSummaryItem } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai } from "./workforce/api";
+import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary } from "./workforce/api";
 
 // ─── Static fallback data (shown before any import) ──────────────────────────
+// Same 3-block shape as before, just expressed as explicit time-period blocks
+// instead of a fixed night/morning/evening record — this is only example data
+// shown before the user imports a real payroll file.
 const INITIAL_DEPTS: DeptTimelineItem[] = [
-  { name: "ฝ่ายเทคนิคบริการ", sub: "สหสาขา",    plan: 52, filled: 36, shifts: { night: 6,  morning: 22, evening: 8 } },
-  { name: "ฝ่ายการพยาบาล",    sub: "ส่วนหน้า",   plan: 41, filled: 29, shifts: { night: 8,  morning: 14, evening: 7 } },
-  { name: "ฝ่ายบริการ",       sub: "",            plan: 47, filled: 24, shifts: { night: 4,  morning: 14, evening: 6 } },
-  { name: "ฝ่ายการเงิน",      sub: "",            plan: 20, filled: 16, shifts: { night: 0,  morning: 16, evening: 0 } },
-  { name: "ฝ่ายสนับสนุน",     sub: "",            plan: 23, filled: 16, shifts: { night: 2,  morning: 10, evening: 4 } },
-  { name: "ฝ่ายการแพทย์",     sub: "",            plan: 20, filled: 14, shifts: { night: 2,  morning: 10, evening: 2 } },
-  { name: "สนง.ผู้อำนวยการ",  sub: "",            plan: 17, filled: 10, shifts: { night: 0,  morning: 10, evening: 0 } },
-  { name: "ฝ่ายพัฒนาองค์กร",  sub: "",            plan: 12, filled:  9, shifts: { night: 0,  morning:  9, evening: 0 } },
-  { name: "ฝ่ายบริหาร",       sub: "ค่าตอบแทนฯ", plan:  7, filled:  4, shifts: { night: 0,  morning:  4, evening: 0 } },
+  { name: "ฝ่ายเทคนิคบริการ", sub: "สหสาขา",    plan: 52, filled: 36, blocks: mkBlocks(6, 22, 8) },
+  { name: "ฝ่ายการพยาบาล",    sub: "ส่วนหน้า",   plan: 41, filled: 29, blocks: mkBlocks(8, 14, 7) },
+  { name: "ฝ่ายบริการ",       sub: "",            plan: 47, filled: 24, blocks: mkBlocks(4, 14, 6) },
+  { name: "ฝ่ายการเงิน",      sub: "",            plan: 20, filled: 16, blocks: mkBlocks(0, 16, 0) },
+  { name: "ฝ่ายสนับสนุน",     sub: "",            plan: 23, filled: 16, blocks: mkBlocks(2, 10, 4) },
+  { name: "ฝ่ายการแพทย์",     sub: "",            plan: 20, filled: 14, blocks: mkBlocks(2, 10, 2) },
+  { name: "สนง.ผู้อำนวยการ",  sub: "",            plan: 17, filled: 10, blocks: mkBlocks(0, 10, 0) },
+  { name: "ฝ่ายพัฒนาองค์กร",  sub: "",            plan: 12, filled:  9, blocks: mkBlocks(0,  9, 0) },
+  { name: "ฝ่ายบริหาร",       sub: "ค่าตอบแทนฯ", plan:  7, filled:  4, blocks: mkBlocks(0,  4, 0) },
 ];
 
-// ─── Computed stats from dept array (used when no import yet) ─────────────────
+function mkBlocks(night: number, morning: number, evening: number): ShiftBlock[] {
+  const blocks: ShiftBlock[] = [];
+  if (night   > 0) blocks.push({ label: "00:00–08:00", startMin: 0,   endMin: 480,  count: night,   color: "#1d4ed8" });
+  if (morning > 0) blocks.push({ label: "08:00–16:00", startMin: 480, endMin: 960,  count: morning, color: "#3fb96a" });
+  if (evening > 0) blocks.push({ label: "16:00–24:00", startMin: 960, endMin: 1440, count: evening, color: "#8b6fe0" });
+  return blocks;
+}
+
+// ─── Computed stats from dept blocks (used when no import yet) ────────────────
 function computeStats(depts: DeptTimelineItem[]) {
-  const night   = depts.reduce((s, d) => s + d.shifts.night,   0);
-  const morning = depts.reduce((s, d) => s + d.shifts.morning, 0);
-  const evening = depts.reduce((s, d) => s + d.shifts.evening, 0);
-  const total   = night + morning + evening;
-  const hourly: [string, number][] = Array.from({ length: 24 }, (_, h) => [
-    `${String(h).padStart(2, "0")}:00`,
-    h < 8 ? night : h < 16 ? morning : evening,
-  ] as [string, number]);
+  const total = depts.reduce((s, d) => s + d.filled, 0);
+
+  const hourlyCounts = new Array(24).fill(0);
+  for (const d of depts) {
+    for (const b of d.blocks) {
+      for (let h = 0; h < 24; h++) {
+        const hourMin = h * 60;
+        const inRange = (hourMin >= b.startMin && hourMin < b.endMin) || (hourMin + 1440 >= b.startMin && hourMin + 1440 < b.endMin);
+        if (inRange) hourlyCounts[h] += b.count;
+      }
+    }
+  }
+  const displayHours = [...Array.from({ length: 18 }, (_, i) => i + 6), ...Array.from({ length: 6 }, (_, i) => i)];
+  const hourly: [string, number][] = displayHours.map(h => [`${String(h).padStart(2, "0")}:00`, hourlyCounts[h]] as [string, number]);
   const maxHourly = Math.max(...hourly.map(([, v]) => v), 1);
   const peakIdx   = hourly.findIndex(([, v]) => v === maxHourly);
-  return { night, morning, evening, total, hourly, maxHourly, peakHour: peakIdx >= 0 ? hourly[peakIdx][0] : "08:00" };
+
+  const rangeMap = new Map<string, { label: string; staff: number; color: string }>();
+  for (const d of depts) for (const b of d.blocks) {
+    const key = `${b.startMin}-${b.endMin}`;
+    const cur = rangeMap.get(key);
+    if (cur) cur.staff += b.count;
+    else rangeMap.set(key, { label: b.label, staff: b.count, color: b.color });
+  }
+  const shiftSummary: ShiftSummaryItem[] = Array.from(rangeMap.values())
+    .map(r => ({ shift: r.label, staff: r.staff, percentage: total ? Math.round(r.staff / total * 100) : 0, color: r.color }))
+    .sort((a, b) => b.staff - a.staff);
+
+  return { total, hourly, maxHourly, peakHour: peakIdx >= 0 ? hourly[peakIdx][0] : "08:00", shiftSummary };
+}
+
+/** Splits a block into 1 or 2 {left,width} segments (in minutes, 0-1440 scale) so overnight blocks wrap correctly on the ruler */
+function blockSegments(b: ShiftBlock): { left: number; width: number }[] {
+  if (b.endMin <= 1440) return [{ left: b.startMin, width: b.endMin - b.startMin }];
+  return [
+    { left: b.startMin, width: 1440 - b.startMin },
+    { left: 0, width: b.endMin - 1440 },
+  ];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-type ShiftKey = "night" | "morning" | "evening";
-const SHIFT_INFO: Record<ShiftKey, { label: string; color: string; sMin: number; eMin: number }> = {
-  night:   { label: "เวรดึก 00:00–08:00",  color: "#1d4ed8", sMin: 0,   eMin: 480  },
-  morning: { label: "เวรเช้า 08:00–16:00", color: "#3fb96a", sMin: 480, eMin: 960  },
-  evening: { label: "เวรบ่าย 16:00–24:00", color: "#8b6fe0", sMin: 960, eMin: 1440 },
-};
-const SHIFT_KEYS: ShiftKey[] = ["night", "morning", "evening"];
 const ROW_H     = 64;
 const DEPT_W    = 164;
 const COUNT_W   = 90;
@@ -94,9 +125,6 @@ const CSS = `
 .hrwt-kpi::after{content:"";position:absolute;right:-24px;top:-24px;width:80px;height:80px;border-radius:50%;opacity:.05;}
 .hrwt-kpi.c1 .ic,.hrwt-kpi.c1::after{background:rgba(0,56,198,.10);color:var(--hr-blue);}
 .hrwt-kpi.c2 .ic,.hrwt-kpi.c2::after{background:rgba(38,169,224,.12);color:var(--hr-cyan);}
-.hrwt-kpi.c3 .ic,.hrwt-kpi.c3::after{background:rgba(63,185,106,.14);color:#2f9e56;}
-.hrwt-kpi.c4 .ic,.hrwt-kpi.c4::after{background:rgba(139,111,224,.14);color:#7a5be0;}
-.hrwt-kpi.c5 .ic,.hrwt-kpi.c5::after{background:rgba(17,42,107,.12);color:#112a6b;}
 .hrwt-kpi.c6 .ic,.hrwt-kpi.c6::after{background:rgba(245,165,36,.15);color:#e08c00;}
 .hrwt-legend{display:flex;flex-wrap:wrap;gap:8px 16px;padding:8px 4px;font-size:12px;color:var(--hr-ink);}
 .hrwt-legend span{display:inline-flex;align-items:center;gap:7px;}
@@ -132,7 +160,8 @@ const CSS = `
 .hrwt-bcol .bx{font-size:7px;color:var(--hr-muted);transform:rotate(-45deg);transform-origin:center;white-space:nowrap;margin-top:3px;}
 .hrwt-bcol .peak-tag{position:absolute;top:-2px;background:#f5a524;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:4px;}
 .hrwt-tbl{width:100%;border-collapse:collapse;font-size:12.5px;}
-.hrwt-tbl th{text-align:left;color:var(--hr-muted);font-weight:600;font-size:11px;padding:8px 10px;border-bottom:2px solid var(--hr-line);}
+.hrwt-tbl-wrap{max-height:280px;overflow-y:auto;}
+.hrwt-tbl th{text-align:left;color:var(--hr-muted);font-weight:600;font-size:11px;padding:8px 10px;border-bottom:2px solid var(--hr-line);position:sticky;top:0;background:#fff;}
 .hrwt-tbl td{padding:10px 10px;border-bottom:1px solid var(--hr-line);}
 .hrwt-tbl td:first-child{display:flex;align-items:center;gap:8px;font-weight:500;}
 .hrwt-tbl .sw{width:11px;height:11px;border-radius:3px;flex:0 0 auto;}
@@ -151,19 +180,20 @@ const CSS = `
 // ─── SVG icons ────────────────────────────────────────────────────────────────
 const IcUsers    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>;
 const IcBuilding = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 21V4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v17M15 21V9h4a1 1 0 0 1 1 1v11M2 21h20M9 7h1M9 11h1M9 15h1"/></svg>;
-const IcSunrise  = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 18a5 5 0 0 0-10 0M12 2v7M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M8 6l4-3 4 3"/></svg>;
-const IcSunset   = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 18a5 5 0 0 0-10 0M12 9V2M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M16 5l-4 4-4-4"/></svg>;
-const IcMoon     = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
+const IcClock    = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 const IcBolt     = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>;
 const IcDownload = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
 const IcUpload   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 
 // ─── Template download (simple format for manual editing) ─────────────────────
 function downloadTemplate(depts: DeptTimelineItem[]) {
-  const header = ["ฝ่าย", "แผนก", "แผน", "ปฏิบัติงาน", "เวรดึก (0-8น.)", "เวรเช้า (8-16น.)", "เวรบ่าย (16-24น.)"];
-  const rows   = depts.map(d => [d.name, d.sub, d.plan, d.filled, d.shifts.night, d.shifts.morning, d.shifts.evening]);
+  const header = ["ฝ่าย", "แผนก", "แผน", "ปฏิบัติงาน", "ช่วงเวลาทำงาน (ช่วง:จำนวนคน)"];
+  const rows   = depts.map(d => [
+    d.name, d.sub, d.plan, d.filled,
+    d.blocks.map(b => `${b.label}:${b.count}`).join("; "),
+  ]);
   const ws     = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  ws["!cols"]  = [{ wch: 24 }, { wch: 16 }, { wch: 6 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+  ws["!cols"]  = [{ wch: 24 }, { wch: 16 }, { wch: 6 }, { wch: 12 }, { wch: 40 }];
   const wb     = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "กำลังคนรายวัน");
   XLSX.writeFile(wb, `แบบฟอร์ม_กำลังคนรายวัน_${todayThai().replace(/\//g, "-")}.xlsx`);
@@ -184,6 +214,9 @@ export default function WorkforceTimeline() {
   const [tip, setTip]               = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
   const [selectedDept, setSelectedDept] = useState<string>(""); // "" = all departments
   const [deptView, setDeptView]         = useState<{ hourlyWorkforce: HourlyPoint[]; shiftSummary: ShiftSummaryItem[] } | null>(null);
+  const [viewMode, setViewMode]         = useState<"daily" | "monthly">("daily");
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
+  const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
@@ -198,42 +231,74 @@ export default function WorkforceTimeline() {
     setDepts(data.departmentTimeline);
   }, [parsed, targetDate]);
 
-  // Recalculate hourly chart + shift summary when user filters by department
-  useEffect(() => {
-    if (!parsed || !targetDate) { setDeptView(null); return; }
-    setDeptView(switchDeptView(parsed, targetDate, selectedDept || null));
-  }, [parsed, targetDate, selectedDept]);
+  const monthOptions: MonthOption[] = parsed ? getAvailableMonths(parsed) : [];
+  const selectedMonth = monthOptions.find(m => m.key === selectedMonthKey) ?? monthOptions[monthOptions.length - 1] ?? null;
+  const isMonthly = viewMode === "monthly" && !!monthlySummary;
 
-  // ── Derive display values from dashData (real) or computeStats (fallback) ───
+  // Recalculate the monthly aggregate when the user switches to "รายเดือน" or changes the month
+  useEffect(() => {
+    if (!parsed || viewMode !== "monthly" || !selectedMonth) { setMonthlySummary(null); return; }
+    setMonthlySummary(calculateMonthly(parsed, selectedMonth));
+  }, [parsed, viewMode, selectedMonth?.key]);
+
+  // Dates in scope for the hourly chart / shift summary / department filter:
+  // one day in "รายวัน" mode, the whole payroll cycle's dates in "รายเดือน" mode.
+  const activeDates: string[] = viewMode === "monthly"
+    ? (selectedMonth?.dates ?? [])
+    : (targetDate ? [targetDate] : []);
+
+  // Recalculate hourly chart + shift summary when user filters by department (or switches mode/month/date)
+  useEffect(() => {
+    if (!parsed || activeDates.length === 0) { setDeptView(null); return; }
+    setDeptView(switchDeptView(parsed, activeDates, selectedDept || null));
+  }, [parsed, targetDate, viewMode, selectedMonth?.key, selectedDept]);
+
+  // Department list driving the Gantt panel, search, ranking and dept dropdown
+  const displayDepts = isMonthly ? monthlySummary!.departmentTimeline : depts;
+
+  // ── Derive display values: monthly aggregate > daily import > static fallback ─
   const stats = computeStats(depts);
-  const T_NIGHT   = dashData?.kpi.nightShift   ?? stats.night;
-  const T_MORNING = dashData?.kpi.morningShift ?? stats.morning;
-  const T_EVENING = dashData?.kpi.eveningShift ?? stats.evening;
-  const T_TOTAL   = dashData?.kpi.totalActiveStaff ?? stats.total;
-  const PEAK_HOUR = dashData?.kpi.peakHour    ?? stats.peakHour;
-  const MAX_HOURLY = dashData?.kpi.peakWorkforce ?? stats.maxHourly;
+  const T_TOTAL    = isMonthly ? monthlySummary!.totalPersonDays : dashData?.kpi.totalActiveStaff ?? stats.total;
+  const PEAK_HOUR  = isMonthly ? monthlySummary!.peakHour        : dashData?.kpi.peakHour    ?? stats.peakHour;
+  const MAX_HOURLY = isMonthly ? monthlySummary!.peakWorkforce   : dashData?.kpi.peakWorkforce ?? stats.maxHourly;
 
   // Convert HourlyPoint[] → [string, number][] for chart (deptView takes priority when a department filter is active)
-  const hourlySource = deptView?.hourlyWorkforce ?? dashData?.hourlyWorkforce;
+  const aggregateHourly = isMonthly ? monthlySummary!.hourlyWorkforce : dashData?.hourlyWorkforce;
+  const hourlySource = deptView?.hourlyWorkforce ?? aggregateHourly;
   const HOURLY: [string, number][] = hourlySource
     ? hourlySource.map(h => [h.hour, h.staff] as [string, number])
     : stats.hourly;
   const hourlyMaxLocal = Math.max(...HOURLY.map(([, v]) => v), 1);
 
-  const shiftSummaryRows = deptView?.shiftSummary ?? dashData?.shiftSummary ?? null;
-  const shiftSummaryTotal = shiftSummaryRows ? shiftSummaryRows.reduce((s, x) => s + x.staff, 0) : T_TOTAL;
+  // Shift summary is grouped by actual time period (not morning/afternoon/night) at every level
+  const aggregateShiftSummary = isMonthly ? monthlySummary!.shiftSummary : dashData?.shiftSummary;
+  const shiftSummaryRows: ShiftSummaryItem[] = deptView?.shiftSummary ?? aggregateShiftSummary ?? stats.shiftSummary;
+  const shiftSummaryTotal = shiftSummaryRows.reduce((s, x) => s + x.staff, 0) || T_TOTAL;
+  const topRanges = shiftSummaryRows.slice(0, 3);
 
   const filtered = search.trim()
-    ? depts.filter(d =>
+    ? displayDepts.filter(d =>
         d.name.toLowerCase().includes(search.toLowerCase()) ||
         d.sub.toLowerCase().includes(search.toLowerCase())
       )
-    : depts;
+    : displayDepts;
 
-  const dateStr  = targetDate ? formatThaiDate(targetDate) : new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+  // Legend: every distinct time period currently visible in the Gantt, sorted by start time
+  const legendItems = Array.from(
+    new Map(filtered.flatMap(d => d.blocks).map(b => [`${b.startMin}-${b.endMin}`, b])).values()
+  ).sort((a, b) => a.startMin - b.startMin);
+
+  const dateStr  = isMonthly
+    ? monthlySummary!.monthLabel
+    : targetDate ? formatThaiDate(targetDate) : new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
   const nowPct   = toPct(now.min);
-  const maxFill  = Math.max(...depts.map(d => d.filled), 1);
   const availDates = dashData?.metadata.availableDates ?? [];
+
+  // Ranking uses total person-days in monthly mode (report-appropriate), daily "filled" count otherwise
+  const rankingList: { name: string; value: number }[] = isMonthly
+    ? monthlySummary!.departmentRanking.map(r => ({ name: r.department, value: r.staff }))
+    : displayDepts.map(d => ({ name: d.name, value: d.filled }));
+  const maxRanking = Math.max(...rankingList.map(r => r.value), 1);
 
   // ── Import handler ────────────────────────────────────────────────────────────
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -268,7 +333,7 @@ export default function WorkforceTimeline() {
             <span className="bar" />
             ตารางการทำงานบุคลากรประจำวัน
           </h2>
-          <p className="hrwt-sub">สรุปจำนวนบุคลากรที่ปฏิบัติงานในแต่ละฝ่าย แยกตามช่วงเวลาการทำงาน</p>
+          <p className="hrwt-sub">สรุปจำนวนบุคลากรที่ปฏิบัติงานในแต่ละฝ่าย แยกตามช่วงเวลาการทำงานจริง</p>
         </div>
         <div className="hrwt-date-tag">
           <span className="dot" />
@@ -289,8 +354,24 @@ export default function WorkforceTimeline() {
           />
         </div>
 
-        {/* Date selector — shown after import */}
-        {availDates.length > 0 && (
+        {/* Daily / Monthly view toggle — shown after import */}
+        {parsed && (
+          <div style={{ display:"flex", border:"1.5px solid #eaedf5", borderRadius:10, overflow:"hidden" }}>
+            <button
+              className={`hrwt-btn ${viewMode === "daily" ? "hrwt-btn-primary" : "hrwt-btn-outline"}`}
+              style={{ border:"none", borderRadius:0 }}
+              onClick={() => setViewMode("daily")}
+            >รายวัน</button>
+            <button
+              className={`hrwt-btn ${viewMode === "monthly" ? "hrwt-btn-primary" : "hrwt-btn-outline"}`}
+              style={{ border:"none", borderRadius:0 }}
+              onClick={() => setViewMode("monthly")}
+            >รายเดือน</button>
+          </div>
+        )}
+
+        {/* Date selector — daily mode */}
+        {viewMode === "daily" && availDates.length > 0 && (
           <select
             className="hrwt-date-sel"
             value={targetDate}
@@ -302,8 +383,21 @@ export default function WorkforceTimeline() {
           </select>
         )}
 
+        {/* Month (payroll cycle) selector — monthly mode */}
+        {viewMode === "monthly" && monthOptions.length > 0 && (
+          <select
+            className="hrwt-date-sel"
+            value={selectedMonth?.key ?? ""}
+            onChange={e => setSelectedMonthKey(e.target.value)}
+          >
+            {monthOptions.map(m => (
+              <option key={m.key} value={m.key}>{m.label} ({m.dates.length} วัน)</option>
+            ))}
+          </select>
+        )}
+
         {/* Download simple template */}
-        <button className="hrwt-btn hrwt-btn-outline" onClick={() => downloadTemplate(depts)}>
+        <button className="hrwt-btn hrwt-btn-outline" onClick={() => downloadTemplate(displayDepts)}>
           <IcDownload /> ดาวน์โหลดแบบฟอร์ม
         </button>
 
@@ -316,7 +410,7 @@ export default function WorkforceTimeline() {
         {importedAt && !importErr && (
           <span className="hrwt-import-info">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            อัปเดต {importedAt} · {depts.length} ฝ่าย · {T_TOTAL} คน
+            อัปเดต {importedAt} · {displayDepts.length} ฝ่าย · {T_TOTAL} คน
           </span>
         )}
         {importErr && (
@@ -329,21 +423,35 @@ export default function WorkforceTimeline() {
 
       {/* ── KPI Cards ── */}
       <div className="hrwt-kpis">
-        {([
-          { c:"c1", icon:<IcUsers/>,    lbl:"บุคลากรปฏิบัติงานวันนี้", val:T_TOTAL,   unit:"คน",   foot:<><b>▲ ปฏิบัติงานจริง</b></> },
-          { c:"c2", icon:<IcBuilding/>, lbl:"ฝ่ายที่เปิดให้บริการ",    val:depts.length, unit:"ฝ่าย", foot:"ครอบคลุมทุกฝ่าย" },
-          { c:"c3", icon:<IcSunrise/>,  lbl:"กะเช้า 06:00–16:00",      val:T_MORNING, unit:"คน",   foot:T_TOTAL ? `${(T_MORNING/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` : "-" },
-          { c:"c4", icon:<IcSunset/>,   lbl:"กะบ่าย 16:00–24:00",      val:T_EVENING, unit:"คน",   foot:T_TOTAL ? `${(T_EVENING/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` : "-" },
-          { c:"c5", icon:<IcMoon/>,     lbl:"กะดึก 00:00–06:00",       val:T_NIGHT,   unit:"คน",   foot:T_TOTAL ? `${(T_NIGHT/T_TOTAL*100).toFixed(0)}% ของทั้งหมด`   : "-" },
-          { c:"c6", icon:<IcBolt/>,     lbl:"ช่วงเวลากำลังคนสูงสุด",  val:PEAK_HOUR, unit:"",     foot:<><b>{MAX_HOURLY} คน</b> กำลังปฏิบัติงาน</> },
-        ] as const).map((k, i) => (
-          <div key={i} className={`hrwt-kpi ${k.c}`}>
-            <div className="ic">{k.icon}</div>
-            <div className="lbl">{k.lbl}</div>
-            <div className="val">{k.val}{k.unit && <small>{k.unit}</small>}</div>
-            <div className="foot">{k.foot}</div>
+        <div className="hrwt-kpi c1">
+          <div className="ic"><IcUsers/></div>
+          <div className="lbl">{isMonthly ? "ยอดรวมคน-วันทั้งเดือน" : "บุคลากรปฏิบัติงานวันนี้"}</div>
+          <div className="val">{T_TOTAL}<small>{isMonthly ? "คน-วัน" : "คน"}</small></div>
+          <div className="foot">{isMonthly ? <>เฉลี่ย <b>{monthlySummary!.avgStaffPerDay}</b> คน/วัน</> : <b>▲ ปฏิบัติงานจริง</b>}</div>
+        </div>
+        <div className="hrwt-kpi c2">
+          <div className="ic"><IcBuilding/></div>
+          <div className="lbl">ฝ่ายที่เปิดให้บริการ</div>
+          <div className="val">{displayDepts.length}<small>ฝ่าย</small></div>
+          <div className="foot">ครอบคลุมทุกฝ่าย</div>
+        </div>
+
+        {/* Top 3 actual time periods by headcount — replaces the old fixed morning/afternoon/night split */}
+        {topRanges.map((r, i) => (
+          <div key={r.shift} className={`hrwt-kpi c${3 + i}`}>
+            <div className="ic" style={{ background: `${r.color}22`, color: r.color }}><IcClock/></div>
+            <div className="lbl">ช่วงเวลา {r.shift}</div>
+            <div className="val">{r.staff}<small>{isMonthly ? "คน-วัน" : "คน"}</small></div>
+            <div className="foot">{r.percentage}% ของทั้งหมด</div>
           </div>
         ))}
+
+        <div className="hrwt-kpi c6">
+          <div className="ic"><IcBolt/></div>
+          <div className="lbl">ช่วงเวลากำลังคนสูงสุด</div>
+          <div className="val">{PEAK_HOUR}</div>
+          <div className="foot">{isMonthly ? <>เฉลี่ย <b>{MAX_HOURLY} คน</b> ต่อวัน</> : <><b>{MAX_HOURLY} คน</b> กำลังปฏิบัติงาน</>}</div>
+        </div>
       </div>
 
       {/* ── Timeline Panel ── */}
@@ -351,8 +459,8 @@ export default function WorkforceTimeline() {
         <div className="hrwt-panel-head">
           <h3>ไทม์ไลน์การปฏิบัติงานรายฝ่าย</h3>
           <div className="hrwt-legend">
-            {SHIFT_KEYS.map(s => (
-              <span key={s}><i style={{ background: SHIFT_INFO[s].color }} />{SHIFT_INFO[s].label}</span>
+            {legendItems.map(b => (
+              <span key={`${b.startMin}-${b.endMin}`}><i style={{ background: b.color }} />{b.label}</span>
             ))}
             <span><i style={{ background: "#ef4444", height: 2, borderRadius: 1 }} />เวลาปัจจุบัน</span>
           </div>
@@ -378,10 +486,11 @@ export default function WorkforceTimeline() {
 
             {/* Dept rows */}
             {filtered.map(dept => {
-              const bars    = SHIFT_KEYS.filter(s => dept.shifts[s] > 0);
+              const bars    = dept.blocks;
               const laneH   = 16, gap = 5;
               const blockH  = bars.length * laneH + Math.max(bars.length - 1, 0) * gap;
-              const top0    = (ROW_H - blockH) / 2;
+              const rowH    = Math.max(ROW_H, blockH + 20);
+              const top0    = (rowH - blockH) / 2;
               const fillPct = dept.plan > 0 ? Math.round(dept.filled / dept.plan * 100) : 0;
 
               return (
@@ -396,22 +505,20 @@ export default function WorkforceTimeline() {
                     )}
                   </div>
                   <div className="hrwt-c-count">{dept.filled}<small>คน</small></div>
-                  <div className="hrwt-track">
+                  <div className="hrwt-track" style={{ height: rowH }}>
                     {HOURS.map(h => <div key={h} className="hrwt-slot" />)}
-                    {bars.map((s, i) => {
-                      const info  = SHIFT_INFO[s];
-                      const count = dept.shifts[s];
-                      const top   = top0 + i * (laneH + gap);
-                      return (
-                        <div key={s}
+                    {bars.map((b, i) => {
+                      const top = top0 + i * (laneH + gap);
+                      return blockSegments(b).map((seg, si) => (
+                        <div key={`${b.startMin}-${b.endMin}-${si}`}
                           className="hrwt-bar"
-                          style={{ left: toPct(info.sMin), width: `${((info.eMin - info.sMin) / TOTAL_MIN * 100).toFixed(4)}%`, top, background: info.color }}
-                          onMouseMove={e => setTip({ x: e.clientX + 14, y: e.clientY + 14, dept: dept.name + (dept.sub ? ` · ${dept.sub}` : ""), shift: info.label, count, color: info.color })}
+                          style={{ left: toPct(seg.left), width: `${(seg.width / TOTAL_MIN * 100).toFixed(4)}%`, top, background: b.color }}
+                          onMouseMove={e => setTip({ x: e.clientX + 14, y: e.clientY + 14, dept: dept.name + (dept.sub ? ` · ${dept.sub}` : ""), shift: b.label, count: b.count, color: b.color })}
                           onMouseLeave={() => setTip(null)}
                         >
-                          {count} คน
+                          {si === 0 ? `${b.count} คน` : ""}
                         </div>
-                      );
+                      ));
                     })}
                     <div className="hrwt-now-seg" style={{ left: nowPct }} />
                   </div>
@@ -433,7 +540,7 @@ export default function WorkforceTimeline() {
             onChange={e => setSelectedDept(e.target.value)}
           >
             <option value="">ทั้งหมด (ทุกแผนก)</option>
-            {[...depts].sort((a, b) => a.name.localeCompare(b.name, "th")).map(d => (
+            {[...displayDepts].sort((a, b) => a.name.localeCompare(b.name, "th")).map(d => (
               <option key={d.name} value={d.name}>{d.name}</option>
             ))}
           </select>
@@ -445,7 +552,7 @@ export default function WorkforceTimeline() {
 
         {/* Hourly bar chart */}
         <div className="hrwt-scard">
-          <h4>สรุปจำนวนบุคลากรตามช่วงเวลา{selectedDept && ` — ${selectedDept}`}</h4>
+          <h4>สรุปจำนวนบุคลากรตามช่วงเวลา{isMonthly ? ` (เฉลี่ย/วัน — ${monthlySummary!.monthLabel})` : ""}{selectedDept && ` — ${selectedDept}`}</h4>
           <div className="hrwt-bars">
             {HOURLY.map(([t, v]) => {
               const isPeak = v === hourlyMaxLocal && hourlyMaxLocal > 0;
@@ -460,58 +567,47 @@ export default function WorkforceTimeline() {
           </div>
         </div>
 
-        {/* Shift summary table */}
+        {/* Shift summary table — grouped by actual time period, not morning/afternoon/night */}
         <div className="hrwt-scard">
-          <h4>สรุปตามกะการทำงาน{selectedDept && ` — ${selectedDept}`}</h4>
-          <table className="hrwt-tbl">
-            <thead>
-              <tr>
-                <th>ช่วงเวลา</th>
-                <th style={{ textAlign:"right" }}>จำนวน (คน)</th>
-                <th style={{ textAlign:"right" }}>ร้อยละ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shiftSummaryRows
-                ? shiftSummaryRows.map(s => (
-                    <tr key={s.shift}>
-                      <td><span className="sw" style={{ background: s.shift.includes("เช้า") ? SHIFT_INFO.morning.color : s.shift.includes("บ่าย") ? SHIFT_INFO.evening.color : SHIFT_INFO.night.color }} />{s.shift}</td>
-                      <td className="num">{s.staff}</td>
-                      <td className="num">{s.percentage}%</td>
-                    </tr>
-                  ))
-                : SHIFT_KEYS.map(s => {
-                    const cnt  = { night: T_NIGHT, morning: T_MORNING, evening: T_EVENING }[s];
-                    const info = SHIFT_INFO[s];
-                    return (
-                      <tr key={s}>
-                        <td><span className="sw" style={{ background: info.color }} />{info.label}</td>
-                        <td className="num">{cnt}</td>
-                        <td className="num">{T_TOTAL ? (cnt / T_TOTAL * 100).toFixed(1) : "0.0"}%</td>
-                      </tr>
-                    );
-                  })
-              }
-              <tr className="total">
-                <td>รวมทั้งหมด</td>
-                <td className="num">{shiftSummaryTotal}</td>
-                <td className="num">100%</td>
-              </tr>
-            </tbody>
-          </table>
+          <h4>สรุปตามช่วงเวลาทำงาน{isMonthly ? ` (รวมทั้งเดือน — ${monthlySummary!.monthLabel})` : ""}{selectedDept && ` — ${selectedDept}`}</h4>
+          <div className="hrwt-tbl-wrap">
+            <table className="hrwt-tbl">
+              <thead>
+                <tr>
+                  <th>ช่วงเวลา</th>
+                  <th style={{ textAlign:"right" }}>จำนวน (คน)</th>
+                  <th style={{ textAlign:"right" }}>ร้อยละ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {shiftSummaryRows.map(s => (
+                  <tr key={s.shift}>
+                    <td><span className="sw" style={{ background: s.color }} />{s.shift}</td>
+                    <td className="num">{s.staff}</td>
+                    <td className="num">{s.percentage}%</td>
+                  </tr>
+                ))}
+                <tr className="total">
+                  <td>รวมทั้งหมด</td>
+                  <td className="num">{shiftSummaryTotal}</td>
+                  <td className="num">100%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Dept comparison */}
         <div className="hrwt-scard">
-          <h4>เปรียบเทียบจำนวนบุคลากรตามฝ่าย</h4>
+          <h4>เปรียบเทียบจำนวนบุคลากรตามฝ่าย{isMonthly ? " (รวมคน-วันทั้งเดือน)" : ""}</h4>
           <div className="hrwt-deptbars">
-            {[...depts].sort((a, b) => b.filled - a.filled).map(d => (
+            {[...rankingList].sort((a, b) => b.value - a.value).map(d => (
               <div key={d.name} className="hrwt-db">
                 <div className="nm" title={d.name}>{d.name}</div>
                 <div className="tr">
-                  <div className="fl" style={{ width: `${(d.filled / maxFill * 100).toFixed(1)}%` }} />
+                  <div className="fl" style={{ width: `${(d.value / maxRanking * 100).toFixed(1)}%` }} />
                 </div>
-                <div className="qv">{d.filled}</div>
+                <div className="qv">{d.value}</div>
               </div>
             ))}
           </div>
@@ -531,7 +627,9 @@ export default function WorkforceTimeline() {
       {/* Footer */}
       <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", textAlign:"right" }}>
         {importedAt
-          ? `ข้อมูลจาก: รายงานประกาศกะ · นำเข้า ${importedAt} · วันที่ ${dateStr} · ${T_TOTAL} คน`
+          ? isMonthly
+            ? `ข้อมูลจาก: รายงานประกาศกะ · นำเข้า ${importedAt} · เดือน ${dateStr} (${monthlySummary!.daysInRange} วัน, รอบ 26-25) · รวม ${T_TOTAL} คน-วัน`
+            : `ข้อมูลจาก: รายงานประกาศกะ · นำเข้า ${importedAt} · วันที่ ${dateStr} · ${T_TOTAL} คน`
           : "ข้อมูล: แผนกำลังคน 2569 · อัปเดต มิ.ย. 2569 (กด นำเข้า Excel กะ เพื่อโหลดข้อมูลจริง)"}
       </div>
     </div>

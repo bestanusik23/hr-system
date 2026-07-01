@@ -38,9 +38,6 @@ export interface ParseResult {
 export interface KPIData {
   totalActiveStaff: number;
   departmentsOperating: number;
-  morningShift: number;
-  eveningShift: number;
-  nightShift: number;
   currentActiveStaff: number;
   peakHour: string;
   peakWorkforce: number;
@@ -53,19 +50,29 @@ export interface HourlyPoint {
   staff: number;
 }
 
+/** One distinct working-time period found in the actual data (e.g. "07:00–16:00", "20:00–08:00") */
+export interface ShiftBlock {
+  label: string;      // "HH:MM–HH:MM" already wrapped for display
+  startMin: number;   // 0–1439
+  endMin: number;     // may exceed 1440 for overnight blocks
+  count: number;      // staff working this exact block
+  color: string;      // stable color for this time period, shared across departments
+}
+
 /** Compatible with the existing Dept type used by WorkforceTimeline */
 export interface DeptTimelineItem {
   name: string;
   sub: string;
   plan: number;
   filled: number;
-  shifts: { night: number; morning: number; evening: number };
+  blocks: ShiftBlock[];   // variable-length list of actual time periods worked in this department
 }
 
 export interface ShiftSummaryItem {
-  shift: string;
+  shift: string;       // actual time period label, e.g. "08:00–16:00"
   staff: number;
   percentage: number;
+  color: string;
 }
 
 export interface DeptRankItem {
@@ -85,4 +92,26 @@ export interface DashboardData {
     generatedAt: string;
     totalEmployees: number;
   };
+}
+
+/** One calendar month grouped from ParseResult.availableDates */
+export interface MonthOption {
+  key: string;      // "MM/YYYY" Thai BE, e.g. "06/2569"
+  label: string;    // "มิถุนายน 2569"
+  dates: string[];  // all "DD/MM/YYYY" dates in this file that fall in this month
+}
+
+/** Monthly aggregate — person-day totals for reporting, reuses the same panel shapes as DashboardData */
+export interface MonthlySummary {
+  monthLabel: string;
+  daysInRange: number;
+  totalPersonDays: number;
+  avgStaffPerDay: number;
+  departmentsOperating: number;
+  shiftSummary: ShiftSummaryItem[];       // total person-days per actual time period
+  hourlyWorkforce: HourlyPoint[];         // averaged per hour across the month
+  peakHour: string;
+  peakWorkforce: number;                 // average, not a period sum
+  departmentTimeline: DeptTimelineItem[]; // filled/blocks = avg per day, for the Gantt panel
+  departmentRanking: DeptRankItem[];      // staff = total person-days
 }
