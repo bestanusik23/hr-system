@@ -22,15 +22,13 @@ const SHIFT_INFO: Record<ShiftKey, { label: string; color: string; sMin: number;
 };
 
 const SHIFT_KEYS: ShiftKey[] = ["night", "morning", "evening"];
-const HOUR_W    = 46;
 const ROW_H     = 64;
 const DEPT_W    = 164;
 const COUNT_W   = 90;
-const TRACK_W   = 24 * HOUR_W;
 const HEADER_H  = 46;
 const TOTAL_MIN = 1440;
 const HOURS     = Array.from({ length: 24 }, (_, i) => i);
-const minToPx   = (m: number) => (m / TOTAL_MIN) * TRACK_W;
+const toPct     = (min: number) => `${(min / TOTAL_MIN * 100).toFixed(4)}%`;
 
 const T_NIGHT = 22, T_MORNING = 109, T_EVENING = 27, T_TOTAL = 158;
 
@@ -105,25 +103,23 @@ const CSS = `
 .hrwt-panel-head h3{margin:0;font-size:16px;font-weight:700;}
 
 /* Grid */
-.hrwt-grid{overflow:auto;max-height:560px;}
-.hrwt-canvas{position:relative;min-width:max-content;}
+.hrwt-grid{overflow-y:auto;overflow-x:hidden;max-height:660px;}
+.hrwt-canvas{position:relative;}
 .hrwt-row{display:flex;border-bottom:1px solid var(--hr-line);}
 .hrwt-row:last-child{border-bottom:none;}
-.hrwt-c-dept,.hrwt-c-count{position:sticky;background:#fff;display:flex;align-items:center;z-index:6;}
-.hrwt-c-dept{left:0;width:${DEPT_W}px;padding:0 8px 0 16px;font-weight:600;font-size:13.5px;}
-.hrwt-c-count{left:${DEPT_W}px;width:${COUNT_W}px;padding:0 12px;color:var(--hr-blue);font-weight:700;font-size:14px;border-right:1px solid var(--hr-line);}
+.hrwt-c-dept,.hrwt-c-count{background:#fff;display:flex;align-items:center;flex-shrink:0;}
+.hrwt-c-dept{width:${DEPT_W}px;padding:0 8px 0 16px;font-weight:600;font-size:13.5px;}
+.hrwt-c-count{width:${COUNT_W}px;padding:0 12px;color:var(--hr-blue);font-weight:700;font-size:14px;border-right:1px solid var(--hr-line);}
 .hrwt-c-count small{color:var(--hr-muted);font-weight:500;font-size:11px;margin-left:2px;}
 .hrwt-header{position:sticky;top:0;z-index:7;background:#f8fafd;box-shadow:0 1px 0 var(--hr-line);}
-.hrwt-header .hrwt-c-dept,.hrwt-header .hrwt-c-count{background:#f8fafd;z-index:9;height:${HEADER_H}px;font-size:12px;color:var(--hr-muted);font-weight:600;}
-.hrwt-ruler{display:flex;height:${HEADER_H}px;}
-.hrwt-tick{flex:0 0 ${HOUR_W}px;width:${HOUR_W}px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--hr-muted);border-left:1px solid #eef1f7;}
-.hrwt-track{position:relative;height:${ROW_H}px;display:flex;width:${TRACK_W}px;}
-.hrwt-slot{flex:0 0 ${HOUR_W}px;width:${HOUR_W}px;border-left:1px solid #f1f4fa;}
+.hrwt-header .hrwt-c-dept,.hrwt-header .hrwt-c-count{background:#f8fafd;height:${HEADER_H}px;font-size:12px;color:var(--hr-muted);font-weight:600;}
+.hrwt-ruler{flex:1;display:flex;height:${HEADER_H}px;position:relative;}
+.hrwt-tick{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--hr-muted);border-left:1px solid #eef1f7;overflow:hidden;}
+.hrwt-track{position:relative;flex:1;height:${ROW_H}px;display:flex;min-width:0;}
+.hrwt-slot{flex:1;min-width:0;border-left:1px solid #f1f4fa;}
 .hrwt-bar{position:absolute;height:16px;border-radius:9px;display:flex;align-items:center;padding:0 8px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;cursor:pointer;box-shadow:0 2px 6px rgba(20,40,90,.18);transition:transform .12s,filter .12s,box-shadow .12s;}
 .hrwt-bar:hover{transform:scaleY(1.15);filter:saturate(1.2);box-shadow:0 5px 14px rgba(20,40,90,.28);z-index:3;}
-.hrwt-now-line{position:absolute;bottom:0;width:2px;background:#ef4444;z-index:5;pointer-events:none;}
-.hrwt-now-dot{position:absolute;top:0;left:-3px;width:8px;height:8px;border-radius:50%;background:#ef4444;}
-.hrwt-now-pill{position:absolute;top:-26px;left:50%;transform:translateX(-50%);background:#ef4444;color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;white-space:nowrap;box-shadow:0 2px 6px rgba(239,68,68,.4);}
+.hrwt-now-seg{position:absolute;top:0;bottom:0;width:2px;background:#ef4444;opacity:.7;pointer-events:none;z-index:4;}
 
 /* Summary */
 .hrwt-summary{display:grid;grid-template-columns:1.4fr 1fr 1.1fr;gap:16px;}
@@ -179,9 +175,9 @@ export default function WorkforceTimeline() {
       )
     : DEPTS;
 
-  const dateStr = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
-  const nowX    = DEPT_W + COUNT_W + minToPx(now.min);
-  const maxFill = Math.max(...DEPTS.map(d => d.filled));
+  const dateStr  = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+  const nowPct   = toPct(now.min);
+  const maxFill  = Math.max(...DEPTS.map(d => d.filled));
 
   return (
     <div id="hrwt">
@@ -264,6 +260,11 @@ export default function WorkforceTimeline() {
                 {HOURS.map(h => (
                   <div key={h} className="hrwt-tick">{String(h).padStart(2,"0")}:00</div>
                 ))}
+                {/* NOW pill in ruler */}
+                <div style={{ position:"absolute", bottom:0, left:nowPct, transform:"translateX(-50%)", pointerEvents:"none", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center" }}>
+                  <span style={{ fontSize:9.5, fontWeight:700, color:"#ef4444", background:"#fff", border:"1.5px solid rgba(239,68,68,.3)", padding:"1px 6px", borderRadius:4, whiteSpace:"nowrap", marginBottom:1, lineHeight:1.6, boxShadow:"0 2px 5px rgba(239,68,68,.2)" }}>NOW {now.str}</span>
+                  <div style={{ width:0, height:0, borderLeft:"4px solid transparent", borderRight:"4px solid transparent", borderTop:"5px solid #ef4444" }} />
+                </div>
               </div>
             </div>
 
@@ -290,30 +291,25 @@ export default function WorkforceTimeline() {
                     {bars.map((s, i) => {
                       const info  = SHIFT_INFO[s];
                       const count = dept.shifts[s];
-                      const left  = minToPx(info.sMin);
-                      const w     = minToPx(info.eMin) - left;
                       const top   = top0 + i * (laneH + gap);
                       return (
                         <div key={s}
                           className="hrwt-bar"
-                          style={{ left, width: w, top, background: info.color }}
+                          style={{ left: toPct(info.sMin), width: `${((info.eMin - info.sMin) / TOTAL_MIN * 100).toFixed(4)}%`, top, background: info.color }}
                           onMouseMove={e => setTip({ x: e.clientX + 14, y: e.clientY + 14, dept: dept.name + (dept.sub ? ` · ${dept.sub}` : ""), shift: info.label, count, color: info.color })}
                           onMouseLeave={() => setTip(null)}
                         >
-                          {w > 60 ? `${count} คน` : ""}
+                          {count} คน
                         </div>
                       );
                     })}
+                    {/* NOW line segment */}
+                    <div className="hrwt-now-seg" style={{ left: nowPct }} />
                   </div>
                 </div>
               );
             })}
 
-            {/* NOW line */}
-            <div className="hrwt-now-line" style={{ left: nowX, top: HEADER_H }}>
-              <div className="hrwt-now-dot" />
-              <div className="hrwt-now-pill">NOW {now.str}</div>
-            </div>
 
           </div>
         </div>
