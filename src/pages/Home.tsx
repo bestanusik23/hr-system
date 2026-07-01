@@ -63,6 +63,14 @@ const IcFlow = () => (
     <path d="M7 6h10"/><path d="M6.5 7.5l4.5 9"/><path d="M17.5 7.5l-4.5 9"/>
   </svg>
 );
+const IcTimeline = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="3" y1="5" x2="21" y2="5"/>
+    <rect x="3" y="8" width="10" height="3" rx="1"/>
+    <rect x="8" y="13" width="13" height="3" rx="1"/>
+    <line x1="3" y1="19" x2="21" y2="19"/>
+  </svg>
+);
 
 /* ─── System definitions ─── */
 interface SystemCard {
@@ -123,6 +131,12 @@ const SYSTEMS: SystemCard[] = [
     key: "workflow", no: "09", icon: <IcFlow />,
     title: "Workflow & สิทธิ์การอนุมัติ",
     desc: "ดูขั้นตอนการอนุมัติและสิทธิ์ของแต่ละ Role ในทุกระบบขององค์กร",
+    roles: ["deputyHR","admin"],
+  },
+  {
+    key: "workforce-timeline", no: "10", icon: <IcTimeline />,
+    title: "Workforce Timeline",
+    desc: "ภาพรวมกำลังคนประจำเวร (ดึก / เช้า / บ่าย) แยกตามฝ่าย พร้อมตัวบ่งชี้เวลาปัจจุบันแบบ Real-time",
     roles: ["deputyHR","admin"],
   },
 ];
