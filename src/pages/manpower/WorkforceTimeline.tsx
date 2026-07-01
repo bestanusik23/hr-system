@@ -219,7 +219,7 @@ export default function WorkforceTimeline() {
   const [viewMode, setViewMode]         = useState<"daily" | "monthly">("daily");
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
-  const [showNowSnapshot, setShowNowSnapshot]   = useState(false);
+  const [nowClick, setNowClick] = useState<{ x: number; y: number; label: string; count: number } | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
@@ -350,19 +350,17 @@ export default function WorkforceTimeline() {
     : divisionFilteredDepts.map(d => ({ name: d.name, value: d.filled }));
   const maxRanking = Math.max(...rankingList.map(r => r.value), 1);
 
-  // Real-time snapshot: current staff-on-duty per department, computed by checking
-  // which of each department's blocks cover "now" (works for both daily and the
-  // typical-pattern shown in monthly mode)
+  // Real-time check: does a block cover the current minute of day? (works for both daily
+  // and the typical pattern shown in monthly mode)
   function blockCoversNow(b: ShiftBlock, nowMin: number): boolean {
     if (nowMin >= b.startMin && nowMin < b.endMin) return true;
     const wrapped = nowMin + 1440;
     return wrapped >= b.startMin && wrapped < b.endMin;
   }
-  const nowSnapshot = divisionFilteredDepts
-    .map(d => ({ name: d.name, count: d.blocks.filter(b => blockCoversNow(b, now.min)).reduce((s, b) => s + b.count, 0) }))
-    .filter(d => d.count > 0)
-    .sort((a, b) => b.count - a.count);
-  const nowSnapshotTotal = nowSnapshot.reduce((s, d) => s + d.count, 0);
+  const nowSnapshotTotal = divisionFilteredDepts.reduce(
+    (sum, d) => sum + d.blocks.filter(b => blockCoversNow(b, now.min)).reduce((s, b) => s + b.count, 0),
+    0,
+  );
 
   // ── Import handler ────────────────────────────────────────────────────────────
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -544,7 +542,7 @@ export default function WorkforceTimeline() {
                   <div key={h} className="hrwt-tick">{String(h).padStart(2,"0")}:00</div>
                 ))}
                 <div
-                  onClick={() => setShowNowSnapshot(v => !v)}
+                  onClick={e => setNowClick({ x: e.clientX + 14, y: e.clientY + 14, label: "รวมทั้งหมด (ทุกแผนก)", count: nowSnapshotTotal })}
                   title="คลิกเพื่อดูจำนวนเจ้าหน้าที่ที่ปฏิบัติงานอยู่ ณ เวลานี้"
                   style={{ position:"absolute", bottom:0, left:nowPct, transform:"translateX(-50%)", cursor:"pointer", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center" }}
                 >
@@ -593,7 +591,10 @@ export default function WorkforceTimeline() {
                     <div
                       className="hrwt-now-seg"
                       style={{ left: nowPct, cursor: "pointer", pointerEvents: "auto" }}
-                      onClick={() => setShowNowSnapshot(v => !v)}
+                      onClick={e => {
+                        const count = dept.blocks.filter(b => blockCoversNow(b, now.min)).reduce((s, b) => s + b.count, 0);
+                        setNowClick({ x: e.clientX + 14, y: e.clientY + 14, label: dept.name, count });
+                      }}
                       title="คลิกเพื่อดูจำนวนเจ้าหน้าที่ที่ปฏิบัติงานอยู่ ณ เวลานี้"
                     />
                   </div>
@@ -604,31 +605,6 @@ export default function WorkforceTimeline() {
           </div>
         </div>
       </div>
-
-      {/* ── Real-time snapshot panel — opens when the NOW line is clicked ── */}
-      {showNowSnapshot && (
-        <div className="hrwt-panel" style={{ padding: 16, marginBottom: 12 }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 10 }}>
-            <h4 style={{ margin:0, fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
-              <span style={{ width:8, height:8, borderRadius:"50%", background:"#ef4444", display:"inline-block" }} />
-              เจ้าหน้าที่ปฏิบัติงาน ณ เวลา {now.str} น. — รวม {nowSnapshotTotal} คน
-            </h4>
-            <button className="hrwt-btn hrwt-btn-outline" style={{ height:30, padding:"0 10px" }} onClick={() => setShowNowSnapshot(false)}>ปิด</button>
-          </div>
-          {nowSnapshot.length === 0 ? (
-            <div style={{ fontSize:13, color:"#94a3b8" }}>ไม่มีเจ้าหน้าที่ปฏิบัติงานอยู่ในช่วงเวลานี้</div>
-          ) : (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8 }}>
-              {nowSnapshot.map(d => (
-                <div key={d.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fbfcfe", border:"1px solid #eaedf5", borderRadius:8, padding:"8px 12px" }}>
-                  <span style={{ fontSize:12.5, fontWeight:500 }}>{d.name}</span>
-                  <span style={{ fontSize:14, fontWeight:700, color:"#0038C6" }}>{d.count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── Cascading ฝ่าย → แผนก filter for Hourly Chart / Shift Summary / Gantt ── */}
       {parsed && (
@@ -733,6 +709,18 @@ export default function WorkforceTimeline() {
           <div style={{ fontWeight:700, marginBottom:3 }}>{tip.dept}</div>
           <div><span style={{ display:"inline-block", width:9, height:9, borderRadius:3, background:tip.color, marginRight:6, verticalAlign:"middle" }} />{tip.shift}</div>
           <div>ปฏิบัติงาน <span style={{ color:"#7fc6ff", fontWeight:700 }}>{tip.count} คน</span></div>
+        </div>
+      )}
+
+      {/* Real-time click info — appears right at the clicked point on the NOW line */}
+      {nowClick && (
+        <div
+          onClick={() => setNowClick(null)}
+          style={{ position:"fixed", left:nowClick.x, top:nowClick.y, cursor:"pointer", background:"#ef4444", color:"#fff", padding:"9px 12px", borderRadius:10, fontSize:12, lineHeight:1.6, zIndex:9999, boxShadow:"0 10px 30px rgba(0,0,0,.3)", maxWidth:230 }}
+        >
+          <div style={{ fontWeight:700, marginBottom:3 }}>{nowClick.label}</div>
+          <div>เวลา {now.str} น. — <span style={{ fontWeight:700 }}>{nowClick.count} คน</span> กำลังปฏิบัติงาน</div>
+          <div style={{ fontSize:10, opacity:.8, marginTop:3 }}>คลิกเพื่อปิด</div>
         </div>
       )}
 
