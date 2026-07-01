@@ -101,6 +101,13 @@ export interface MonthOption {
   dates: string[];  // all "DD/MM/YYYY" dates in this file that fall in this month
 }
 
+/** One employee actively on duty at a specific point in time (used by the real-time NOW-line click) */
+export interface CurrentStaffEntry {
+  department: string;
+  name: string;
+  rangeLabel: string;   // the shift time period they're working, e.g. "08:00–16:00"
+}
+
 /** Monthly aggregate — person-day totals for reporting, reuses the same panel shapes as DashboardData */
 export interface MonthlySummary {
   monthLabel: string;

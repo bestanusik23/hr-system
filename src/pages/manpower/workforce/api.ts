@@ -7,12 +7,13 @@
 import { parseWorkbook } from "./parser";
 import {
   calculateDashboardData, calculateHourlyForDept, calculateShiftSummaryForDept,
-  calculateMonthlySummary,
+  calculateMonthlySummary, getCurrentStaffDetail,
 } from "./calculator";
 import type { ParseResult, DashboardData, MonthOption, MonthlySummary } from "./types";
 
 export type { ParseResult, DashboardData, MonthOption, MonthlySummary };
-export type { DeptTimelineItem, HourlyPoint, KPIData, ShiftSummaryItem, ShiftBlock } from "./types";
+export type { DeptTimelineItem, HourlyPoint, KPIData, ShiftSummaryItem, ShiftBlock, CurrentStaffEntry } from "./types";
+export { getCurrentStaffDetail };
 
 const THAI_MONTHS = [
   "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",

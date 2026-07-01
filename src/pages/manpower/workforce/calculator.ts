@@ -19,7 +19,7 @@
 
 import type {
   ParseResult, DashboardData, KPIData, HourlyPoint,
-  DeptTimelineItem, ShiftSummaryItem, ShiftBlock, TimeRange, MonthlySummary,
+  DeptTimelineItem, ShiftSummaryItem, ShiftBlock, TimeRange, MonthlySummary, CurrentStaffEntry,
 } from "./types";
 
 // ─── Hourly coverage check ────────────────────────────────────────────────────
@@ -402,4 +402,34 @@ export function calculateMonthlySummary(parsed: ParseResult, dates: string[]): M
     departmentTimeline,
     departmentRanking,
   };
+}
+
+// ─── Real-time snapshot (individual employees, for the NOW-line click) ───────
+
+/**
+ * Lists every employee actively on duty right now on `date`, optionally scoped
+ * to a set of departments. Unlike the aggregated ShiftBlock counts used
+ * elsewhere, this keeps each employee's name so the UI can show who (and,
+ * cross-referenced against the manpower plan, what position) is on duty.
+ *
+ * @param date "DD/MM/YYYY" — the day to check against the current wall-clock time
+ */
+export function getCurrentStaffDetail(parsed: ParseResult, date: string, deptNames?: string[] | null): CurrentStaffEntry[] {
+  const nowMin = nowMinutes();
+  const deptSet = deptNames && deptNames.length > 0 ? new Set(deptNames) : null;
+  const result: CurrentStaffEntry[] = [];
+
+  for (const emp of parsed.employees) {
+    if (deptSet && !deptSet.has(emp.deptName)) continue;
+    for (const rec of emp.records) {
+      if (rec.date !== date || !rec.isActive) continue;
+      for (const r of rec.ranges) {
+        if (coversHour(r, nowMin)) {
+          result.push({ department: emp.deptName, name: emp.name, rangeLabel: formatRangeLabel(r.startMin, r.endMin) });
+          break;
+        }
+      }
+    }
+  }
+  return result.sort((a, b) => a.department.localeCompare(b.department, "th"));
 }

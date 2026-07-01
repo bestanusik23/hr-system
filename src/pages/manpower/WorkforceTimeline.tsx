@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai } from "./workforce/api";
-import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail } from "./workforce/api";
+import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry } from "./workforce/api";
 import { getDivisionForDept } from "./workforce/divisionMap";
+import { getPositionForName } from "./workforce/positionMap";
 
 // ─── Static fallback data (shown before any import) ──────────────────────────
 // Same 3-block shape as before, just expressed as explicit time-period blocks
@@ -219,7 +220,7 @@ export default function WorkforceTimeline() {
   const [viewMode, setViewMode]         = useState<"daily" | "monthly">("daily");
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
-  const [nowClick, setNowClick] = useState<{ x: number; y: number; label: string; count: number } | null>(null);
+  const [nowClick, setNowClick] = useState<{ x: number; y: number; entries: CurrentStaffEntry[]; date: string } | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
@@ -350,17 +351,18 @@ export default function WorkforceTimeline() {
     : divisionFilteredDepts.map(d => ({ name: d.name, value: d.filled }));
   const maxRanking = Math.max(...rankingList.map(r => r.value), 1);
 
-  // Real-time check: does a block cover the current minute of day? (works for both daily
-  // and the typical pattern shown in monthly mode)
-  function blockCoversNow(b: ShiftBlock, nowMin: number): boolean {
-    if (nowMin >= b.startMin && nowMin < b.endMin) return true;
-    const wrapped = nowMin + 1440;
-    return wrapped >= b.startMin && wrapped < b.endMin;
-  }
-  const nowSnapshotTotal = divisionFilteredDepts.reduce(
-    (sum, d) => sum + d.blocks.filter(b => blockCoversNow(b, now.min)).reduce((s, b) => s + b.count, 0),
-    0,
-  );
+  // Date checked for the real-time NOW-line click: the selected day in "รายวัน" mode,
+  // or the most recent date in the selected cycle in "รายเดือน" mode (a month has no
+  // single "now", so the last known day stands in).
+  const nowSnapshotDate = viewMode === "monthly"
+    ? (selectedMonth?.dates[selectedMonth.dates.length - 1] ?? "")
+    : targetDate;
+
+  const openNowSnapshot = (x: number, y: number) => {
+    if (!parsed || !nowSnapshotDate) return;
+    const entries = getCurrentStaffDetail(parsed, nowSnapshotDate, deptScope);
+    setNowClick({ x, y, entries, date: nowSnapshotDate });
+  };
 
   // ── Import handler ────────────────────────────────────────────────────────────
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -542,7 +544,7 @@ export default function WorkforceTimeline() {
                   <div key={h} className="hrwt-tick">{String(h).padStart(2,"0")}:00</div>
                 ))}
                 <div
-                  onClick={e => setNowClick({ x: e.clientX + 14, y: e.clientY + 14, label: "รวมทั้งหมด (ทุกแผนก)", count: nowSnapshotTotal })}
+                  onClick={e => openNowSnapshot(e.clientX + 14, e.clientY + 14)}
                   title="คลิกเพื่อดูจำนวนเจ้าหน้าที่ที่ปฏิบัติงานอยู่ ณ เวลานี้"
                   style={{ position:"absolute", bottom:0, left:nowPct, transform:"translateX(-50%)", cursor:"pointer", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center" }}
                 >
@@ -591,10 +593,7 @@ export default function WorkforceTimeline() {
                     <div
                       className="hrwt-now-seg"
                       style={{ left: nowPct, cursor: "pointer", pointerEvents: "auto" }}
-                      onClick={e => {
-                        const count = dept.blocks.filter(b => blockCoversNow(b, now.min)).reduce((s, b) => s + b.count, 0);
-                        setNowClick({ x: e.clientX + 14, y: e.clientY + 14, label: dept.name, count });
-                      }}
+                      onClick={e => openNowSnapshot(e.clientX + 14, e.clientY + 14)}
                       title="คลิกเพื่อดูจำนวนเจ้าหน้าที่ที่ปฏิบัติงานอยู่ ณ เวลานี้"
                     />
                   </div>
@@ -712,17 +711,58 @@ export default function WorkforceTimeline() {
         </div>
       )}
 
-      {/* Real-time click info — appears right at the clicked point on the NOW line */}
-      {nowClick && (
-        <div
-          onClick={() => setNowClick(null)}
-          style={{ position:"fixed", left:nowClick.x, top:nowClick.y, cursor:"pointer", background:"#ef4444", color:"#fff", padding:"9px 12px", borderRadius:10, fontSize:12, lineHeight:1.6, zIndex:9999, boxShadow:"0 10px 30px rgba(0,0,0,.3)", maxWidth:230 }}
-        >
-          <div style={{ fontWeight:700, marginBottom:3 }}>{nowClick.label}</div>
-          <div>เวลา {now.str} น. — <span style={{ fontWeight:700 }}>{nowClick.count} คน</span> กำลังปฏิบัติงาน</div>
-          <div style={{ fontSize:10, opacity:.8, marginTop:3 }}>คลิกเพื่อปิด</div>
-        </div>
-      )}
+      {/* Real-time click info — everyone on duty right now, grouped by ฝ่าย → แผนก, anchored at the clicked point */}
+      {nowClick && (() => {
+        const byDivision = new Map<string, Map<string, CurrentStaffEntry[]>>();
+        for (const entry of nowClick.entries) {
+          const div = getDivisionForDept(entry.department);
+          if (!byDivision.has(div)) byDivision.set(div, new Map());
+          const deptMap = byDivision.get(div)!;
+          if (!deptMap.has(entry.department)) deptMap.set(entry.department, []);
+          deptMap.get(entry.department)!.push(entry);
+        }
+        const divisions = Array.from(byDivision.entries()).sort((a, b) => b[1].size - a[1].size);
+        const left = Math.min(nowClick.x, Math.max(window.innerWidth - 340, 0));
+        const top  = Math.min(nowClick.y, Math.max(window.innerHeight - 420, 0));
+
+        return (
+          <div style={{ position:"fixed", left, top, width:320, maxHeight:420, display:"flex", flexDirection:"column", background:"#fff", color:"#1b2a4a", borderRadius:12, border:"1px solid #eaedf5", boxShadow:"0 20px 50px rgba(0,0,0,.35)", zIndex:9999 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderBottom:"1px solid #eaedf5" }}>
+              <div style={{ fontWeight:700, fontSize:13 }}>
+                <span style={{ display:"inline-block", width:8, height:8, borderRadius:"50%", background:"#ef4444", marginRight:6 }} />
+                เวลา {now.str} น. — รวม {nowClick.entries.length} คน
+              </div>
+              <button onClick={() => setNowClick(null)} style={{ border:"none", background:"none", cursor:"pointer", fontSize:18, color:"#94a3b8", lineHeight:1, padding:0 }}>×</button>
+            </div>
+            {nowClick.date !== todayThai() && (
+              <div style={{ fontSize:10.5, color:"#e08c00", padding:"6px 14px 0" }}>* อ้างอิงข้อมูลวันที่ {formatThaiDate(nowClick.date)} (ไม่ใช่วันนี้)</div>
+            )}
+            <div style={{ overflowY:"auto", padding:"8px 14px 12px" }}>
+              {nowClick.entries.length === 0 ? (
+                <div style={{ fontSize:12.5, color:"#94a3b8", padding:"12px 0" }}>ไม่มีเจ้าหน้าที่ปฏิบัติงานอยู่ในช่วงเวลานี้</div>
+              ) : divisions.map(([div, deptMap]) => {
+                const divTotal = Array.from(deptMap.values()).reduce((s, arr) => s + arr.length, 0);
+                return (
+                  <div key={div} style={{ marginBottom:10 }}>
+                    <div style={{ fontSize:11.5, fontWeight:700, color:"#0038C6", marginBottom:4 }}>{div} ({divTotal})</div>
+                    {Array.from(deptMap.entries()).sort((a, b) => b[1].length - a[1].length).map(([dept, list]) => (
+                      <div key={dept} style={{ marginBottom:6, paddingLeft:8 }}>
+                        <div style={{ fontSize:12, fontWeight:600, marginBottom:2 }}>{dept} ({list.length})</div>
+                        {list.map((e, i) => (
+                          <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:11, color:"#475569", padding:"2px 0" }}>
+                            <span>{e.name}</span>
+                            <span style={{ color:"#94a3b8", textAlign:"right", whiteSpace:"nowrap" }}>{getPositionForName(e.name) ?? "-"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Footer */}
       <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", textAlign:"right" }}>
