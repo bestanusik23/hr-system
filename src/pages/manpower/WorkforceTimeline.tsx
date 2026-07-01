@@ -1,7 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import * as XLSX from "xlsx";
 
-// ─── Static data ────────────────────────────────────────────────────────────
-const DEPTS = [
+// ─── Types & initial data ────────────────────────────────────────────────────
+type Dept = { name: string; sub: string; plan: number; filled: number; shifts: { night: number; morning: number; evening: number } };
+type ShiftKey = "night" | "morning" | "evening";
+
+const INITIAL_DEPTS: Dept[] = [
   { name: "ฝ่ายเทคนิคบริการ", sub: "สหสาขา",    plan: 52, filled: 36, shifts: { night: 6,  morning: 22, evening: 8 } },
   { name: "ฝ่ายการพยาบาล",    sub: "ส่วนหน้า",   plan: 41, filled: 29, shifts: { night: 8,  morning: 14, evening: 7 } },
   { name: "ฝ่ายบริการ",       sub: "",            plan: 47, filled: 24, shifts: { night: 4,  morning: 14, evening: 6 } },
@@ -11,10 +15,67 @@ const DEPTS = [
   { name: "สนง.ผู้อำนวยการ",  sub: "",            plan: 17, filled: 10, shifts: { night: 0,  morning: 10, evening: 0 } },
   { name: "ฝ่ายพัฒนาองค์กร",  sub: "",            plan: 12, filled:  9, shifts: { night: 0,  morning:  9, evening: 0 } },
   { name: "ฝ่ายบริหาร",       sub: "ค่าตอบแทนฯ", plan:  7, filled:  4, shifts: { night: 0,  morning:  4, evening: 0 } },
-] as const;
+];
 
-type ShiftKey = "night" | "morning" | "evening";
+// ─── Computed stats from dept array ─────────────────────────────────────────
+function computeStats(depts: Dept[]) {
+  const night   = depts.reduce((s, d) => s + d.shifts.night,   0);
+  const morning = depts.reduce((s, d) => s + d.shifts.morning, 0);
+  const evening = depts.reduce((s, d) => s + d.shifts.evening, 0);
+  const total   = night + morning + evening;
 
+  const hourly: [string, number][] = Array.from({ length: 24 }, (_, h) => {
+    const label = `${String(h).padStart(2, "0")}:00`;
+    const count = h < 8 ? night : h < 16 ? morning : evening;
+    return [label, count] as [string, number];
+  });
+  const maxHourly = Math.max(...hourly.map(([, v]) => v), 1);
+  const peakIdx   = hourly.findIndex(([, v]) => v === maxHourly);
+  const peakHour  = peakIdx >= 0 ? hourly[peakIdx][0] : "08:00";
+
+  return { night, morning, evening, total, hourly, maxHourly, peakHour };
+}
+
+// ─── Excel import ────────────────────────────────────────────────────────────
+async function parseExcel(file: File): Promise<Dept[]> {
+  const buffer = await file.arrayBuffer();
+  const wb     = XLSX.read(buffer, { type: "array" });
+  const ws     = wb.Sheets[wb.SheetNames[0]];
+  const rows   = XLSX.utils.sheet_to_json<(string | number | undefined)[]>(ws, { header: 1 });
+
+  const depts: Dept[] = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const name = String(row[0] ?? "").trim();
+    if (!name) continue;
+    depts.push({
+      name,
+      sub:    String(row[1] ?? "").trim(),
+      plan:   Number(row[2] ?? 0),
+      filled: Number(row[3] ?? 0),
+      shifts: {
+        night:   Number(row[4] ?? 0),
+        morning: Number(row[5] ?? 0),
+        evening: Number(row[6] ?? 0),
+      },
+    });
+  }
+  return depts;
+}
+
+// ─── Excel template download ─────────────────────────────────────────────────
+function downloadTemplate(depts: Dept[]) {
+  const header = ["ฝ่าย", "แผนก", "แผน", "ปฏิบัติงาน", "เวรดึก (0-8น.)", "เวรเช้า (8-16น.)", "เวรบ่าย (16-24น.)"];
+  const data   = [header, ...depts.map(d => [d.name, d.sub, d.plan, d.filled, d.shifts.night, d.shifts.morning, d.shifts.evening])];
+  const ws     = XLSX.utils.aoa_to_sheet(data);
+  ws["!cols"]  = [{ wch: 24 }, { wch: 16 }, { wch: 6 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
+  const wb     = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "กำลังคนรายวัน");
+  const month = new Date().toLocaleDateString("th-TH", { year: "numeric", month: "long" });
+  XLSX.writeFile(wb, `แบบฟอร์ม_กำลังคนรายวัน_${month}.xlsx`);
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
 const SHIFT_INFO: Record<ShiftKey, { label: string; color: string; sMin: number; eMin: number }> = {
   night:   { label: "เวรดึก 00:00–08:00",  color: "#1d4ed8", sMin: 0,   eMin: 480  },
   morning: { label: "เวรเช้า 08:00–16:00", color: "#3fb96a", sMin: 480, eMin: 960  },
@@ -30,26 +91,13 @@ const TOTAL_MIN = 1440;
 const HOURS     = Array.from({ length: 24 }, (_, i) => i);
 const toPct     = (min: number) => `${(min / TOTAL_MIN * 100).toFixed(4)}%`;
 
-const T_NIGHT = 22, T_MORNING = 109, T_EVENING = 27, T_TOTAL = 158;
-
-const HOURLY: [string, number][] = [
-  ["00:00",22],["01:00",22],["02:00",22],["03:00",22],
-  ["04:00",22],["05:00",22],["06:00",22],["07:00",22],
-  ["08:00",109],["09:00",109],["10:00",109],["11:00",109],
-  ["12:00",109],["13:00",109],["14:00",109],["15:00",109],
-  ["16:00",27],["17:00",27],["18:00",27],["19:00",27],
-  ["20:00",27],["21:00",27],["22:00",27],["23:00",27],
-];
-const MAX_HOURLY = 109;
-const PEAK_HOUR  = "08:00";
-
 function getNow() {
   const d = new Date();
   const min = d.getHours() * 60 + d.getMinutes();
   return { str: `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`, min };
 }
 
-// ─── Scoped CSS (prefix hrwt- / id #hrwt) ───────────────────────────────────
+// ─── Scoped CSS ───────────────────────────────────────────────────────────────
 const CSS = `
 #hrwt{
   --hr-blue:#0038C6; --hr-cyan:#26A9E0; --hr-line:#eaedf5;
@@ -70,9 +118,16 @@ const CSS = `
 
 /* Filter */
 .hrwt-filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;background:#fff;border:1px solid var(--hr-line);border-radius:14px;padding:12px;margin-bottom:16px;box-shadow:0 4px 14px rgba(20,40,90,.04);}
-.hrwt-search{flex:1 1 200px;min-width:180px;display:flex;align-items:center;gap:8px;background:#fbfcfe;border:1px solid var(--hr-line);border-radius:10px;padding:0 12px;height:40px;}
+.hrwt-search{flex:1 1 180px;min-width:160px;display:flex;align-items:center;gap:8px;background:#fbfcfe;border:1px solid var(--hr-line);border-radius:10px;padding:0 12px;height:40px;}
 .hrwt-search svg{flex:0 0 auto;color:var(--hr-muted);}
 .hrwt-search input{border:none;background:none;outline:none;font-family:inherit;font-size:13.5px;width:100%;color:var(--hr-ink);}
+.hrwt-btn{display:inline-flex;align-items:center;gap:6px;height:40px;padding:0 14px;border-radius:10px;border:1.5px solid;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all .15s;}
+.hrwt-btn-outline{background:#fff;border-color:var(--hr-line);color:var(--hr-muted);}
+.hrwt-btn-outline:hover{background:#f4f6fb;border-color:#c4cfee;color:var(--hr-ink);}
+.hrwt-btn-primary{background:var(--hr-blue);border-color:var(--hr-blue);color:#fff;}
+.hrwt-btn-primary:hover{background:#002fa8;border-color:#002fa8;}
+.hrwt-import-info{font-size:12px;color:#16a34a;display:flex;align-items:center;gap:5px;}
+.hrwt-import-err{font-size:12px;color:#dc2626;display:flex;align-items:center;gap:5px;}
 
 /* KPI */
 .hrwt-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
@@ -156,28 +211,59 @@ const IcSunrise  = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="n
 const IcSunset   = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M17 18a5 5 0 0 0-10 0M12 9V2M4.2 10.2l1.4 1.4M1 18h2M21 18h2M18.4 11.6l1.4-1.4M23 22H1M16 5l-4 4-4-4"/></svg>;
 const IcMoon     = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>;
 const IcBolt     = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>;
+const IcDownload = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+const IcUpload   = () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function WorkforceTimeline() {
-  const [now, setNow] = useState(getNow);
-  const [search, setSearch] = useState("");
-  const [tip, setTip] = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
+  const [depts, setDepts]           = useState<Dept[]>(INITIAL_DEPTS);
+  const [now, setNow]               = useState(getNow);
+  const [search, setSearch]         = useState("");
+  const [importedAt, setImportedAt] = useState<string | null>(null);
+  const [importErr, setImportErr]   = useState<string | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const fileRef                     = useRef<HTMLInputElement>(null);
+  const [tip, setTip]               = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
     return () => clearInterval(id);
   }, []);
 
+  const { night: T_NIGHT, morning: T_MORNING, evening: T_EVENING, total: T_TOTAL,
+          hourly: HOURLY, maxHourly: MAX_HOURLY, peakHour: PEAK_HOUR } = computeStats(depts);
+
   const filtered = search.trim()
-    ? DEPTS.filter(d =>
+    ? depts.filter(d =>
         d.name.toLowerCase().includes(search.toLowerCase()) ||
         d.sub.toLowerCase().includes(search.toLowerCase())
       )
-    : DEPTS;
+    : depts;
 
-  const dateStr  = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
-  const nowPct   = toPct(now.min);
-  const maxFill  = Math.max(...DEPTS.map(d => d.filled));
+  const dateStr = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+  const nowPct  = toPct(now.min);
+  const maxFill = Math.max(...depts.map(d => d.filled), 1);
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLoading(true);
+    setImportErr(null);
+    try {
+      const newDepts = await parseExcel(file);
+      if (newDepts.length === 0) {
+        setImportErr("ไม่พบข้อมูลในไฟล์ กรุณาตรวจสอบรูปแบบ");
+      } else {
+        setDepts(newDepts);
+        setImportedAt(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+      }
+    } catch {
+      setImportErr("อ่านไฟล์ไม่ได้ กรุณาใช้ไฟล์ .xlsx หรือ .xls");
+    } finally {
+      setLoading(false);
+      e.target.value = "";
+    }
+  };
 
   return (
     <div id="hrwt">
@@ -198,7 +284,7 @@ export default function WorkforceTimeline() {
         </div>
       </div>
 
-      {/* ── Filter ── */}
+      {/* ── Filter + Import bar ── */}
       <div className="hrwt-filters">
         <div className="hrwt-search">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
@@ -210,16 +296,51 @@ export default function WorkforceTimeline() {
             onChange={e => setSearch(e.target.value)}
           />
         </div>
+
+        {/* Download template */}
+        <button className="hrwt-btn hrwt-btn-outline" onClick={() => downloadTemplate(depts)}>
+          <IcDownload /> ดาวน์โหลดแบบฟอร์ม
+        </button>
+
+        {/* Import Excel */}
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls"
+          style={{ display: "none" }}
+          onChange={handleImport}
+        />
+        <button
+          className="hrwt-btn hrwt-btn-primary"
+          onClick={() => fileRef.current?.click()}
+          disabled={loading}
+        >
+          <IcUpload /> {loading ? "กำลังโหลด..." : "นำเข้า Excel"}
+        </button>
+
+        {/* Status */}
+        {importedAt && !importErr && (
+          <span className="hrwt-import-info">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            อัปเดตแล้ว {importedAt} · {depts.length} ฝ่าย
+          </span>
+        )}
+        {importErr && (
+          <span className="hrwt-import-err">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            {importErr}
+          </span>
+        )}
       </div>
 
       {/* ── KPI Cards ── */}
       <div className="hrwt-kpis">
         {([
           { c:"c1", icon:<IcUsers/>,    lbl:"บุคลากรปฏิบัติงานวันนี้", val:T_TOTAL,   unit:"คน",   foot:<><b>▲ ปฏิบัติงานจริง</b></> },
-          { c:"c2", icon:<IcBuilding/>, lbl:"ฝ่ายที่เปิดให้บริการ",    val:9,         unit:"ฝ่าย", foot:"ครอบคลุมทุกฝ่าย" },
-          { c:"c3", icon:<IcSunrise/>,  lbl:"กะเช้า 08:00–16:00",      val:T_MORNING, unit:"คน",   foot:`${(T_MORNING/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` },
-          { c:"c4", icon:<IcSunset/>,   lbl:"กะบ่าย 16:00–24:00",      val:T_EVENING, unit:"คน",   foot:`${(T_EVENING/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` },
-          { c:"c5", icon:<IcMoon/>,     lbl:"กะดึก 00:00–08:00",       val:T_NIGHT,   unit:"คน",   foot:`${(T_NIGHT/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` },
+          { c:"c2", icon:<IcBuilding/>, lbl:"ฝ่ายที่เปิดให้บริการ",    val:depts.length, unit:"ฝ่าย", foot:"ครอบคลุมทุกฝ่าย" },
+          { c:"c3", icon:<IcSunrise/>,  lbl:"กะเช้า 08:00–16:00",      val:T_MORNING, unit:"คน",   foot:T_TOTAL ? `${(T_MORNING/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` : "-" },
+          { c:"c4", icon:<IcSunset/>,   lbl:"กะบ่าย 16:00–24:00",      val:T_EVENING, unit:"คน",   foot:T_TOTAL ? `${(T_EVENING/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` : "-" },
+          { c:"c5", icon:<IcMoon/>,     lbl:"กะดึก 00:00–08:00",       val:T_NIGHT,   unit:"คน",   foot:T_TOTAL ? `${(T_NIGHT/T_TOTAL*100).toFixed(0)}% ของทั้งหมด` : "-" },
           { c:"c6", icon:<IcBolt/>,     lbl:"ช่วงเวลากำลังคนสูงสุด",  val:PEAK_HOUR, unit:"",     foot:<><b>{MAX_HOURLY} คน</b> กำลังปฏิบัติงาน</> },
         ] as const).map((k, i) => (
           <div key={i} className={`hrwt-kpi ${k.c}`}>
@@ -260,7 +381,6 @@ export default function WorkforceTimeline() {
                 {HOURS.map(h => (
                   <div key={h} className="hrwt-tick">{String(h).padStart(2,"0")}:00</div>
                 ))}
-                {/* NOW pill in ruler */}
                 <div style={{ position:"absolute", bottom:0, left:nowPct, transform:"translateX(-50%)", pointerEvents:"none", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center" }}>
                   <span style={{ fontSize:9.5, fontWeight:700, color:"#ef4444", background:"#fff", border:"1.5px solid rgba(239,68,68,.3)", padding:"1px 6px", borderRadius:4, whiteSpace:"nowrap", marginBottom:1, lineHeight:1.6, boxShadow:"0 2px 5px rgba(239,68,68,.2)" }}>NOW {now.str}</span>
                   <div style={{ width:0, height:0, borderLeft:"4px solid transparent", borderRight:"4px solid transparent", borderTop:"5px solid #ef4444" }} />
@@ -274,7 +394,7 @@ export default function WorkforceTimeline() {
               const laneH = 16, gap = 5;
               const blockH = bars.length * laneH + (bars.length - 1) * gap;
               const top0   = (ROW_H - blockH) / 2;
-              const fillPct = Math.round(dept.filled / dept.plan * 100);
+              const fillPct = dept.plan > 0 ? Math.round(dept.filled / dept.plan * 100) : 0;
 
               return (
                 <div key={dept.name} className="hrwt-row">
@@ -303,13 +423,11 @@ export default function WorkforceTimeline() {
                         </div>
                       );
                     })}
-                    {/* NOW line segment */}
                     <div className="hrwt-now-seg" style={{ left: nowPct }} />
                   </div>
                 </div>
               );
             })}
-
 
           </div>
         </div>
@@ -323,7 +441,7 @@ export default function WorkforceTimeline() {
           <h4>สรุปจำนวนบุคลากรตามช่วงเวลา</h4>
           <div className="hrwt-bars">
             {HOURLY.map(([t, v]) => {
-              const isPeak = v === MAX_HOURLY;
+              const isPeak = v === MAX_HOURLY && MAX_HOURLY > 0;
               return (
                 <div key={t} className={`hrwt-bcol${isPeak ? " peak" : ""}`}>
                   {isPeak
@@ -356,7 +474,7 @@ export default function WorkforceTimeline() {
                   <tr key={s}>
                     <td><span className="sw" style={{ background: info.color }} />{info.label}</td>
                     <td className="num">{cnt}</td>
-                    <td className="num">{(cnt / T_TOTAL * 100).toFixed(1)}%</td>
+                    <td className="num">{T_TOTAL ? (cnt / T_TOTAL * 100).toFixed(1) : "0.0"}%</td>
                   </tr>
                 );
               })}
@@ -373,7 +491,7 @@ export default function WorkforceTimeline() {
         <div className="hrwt-scard">
           <h4>เปรียบเทียบจำนวนบุคลากรตามฝ่าย</h4>
           <div className="hrwt-deptbars">
-            {[...DEPTS].sort((a, b) => b.filled - a.filled).map(d => (
+            {[...depts].sort((a, b) => b.filled - a.filled).map(d => (
               <div key={d.name} className="hrwt-db">
                 <div className="nm" title={d.name}>{d.name}</div>
                 <div className="tr">
@@ -403,7 +521,9 @@ export default function WorkforceTimeline() {
 
       {/* Footer note */}
       <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", textAlign:"right" }}>
-        ข้อมูล: แผนกำลังคน 2569 · อัปเดต มิ.ย. 2569
+        {importedAt
+          ? `นำเข้าข้อมูลล่าสุด ${importedAt} · ${depts.length} ฝ่าย ${T_TOTAL} คน`
+          : "ข้อมูล: แผนกำลังคน 2569 · อัปเดต มิ.ย. 2569"}
       </div>
     </div>
   );
