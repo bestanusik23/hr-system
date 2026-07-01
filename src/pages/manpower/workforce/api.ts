@@ -78,11 +78,11 @@ export function switchDate(parsed: ParseResult, targetDate: string): DashboardDa
  * Pass an array of dates (e.g. a whole month) to average the hourly curve
  * across that range instead of a single day.
  */
-export function switchDeptView(parsed: ParseResult, dates: string | string[], deptName: string | null) {
+export function switchDeptView(parsed: ParseResult, dates: string | string[], deptNames: string[] | null) {
   const average = Array.isArray(dates) && dates.length > 1;
   return {
-    hourlyWorkforce: calculateHourlyForDept(parsed, dates, deptName, average),
-    shiftSummary:    calculateShiftSummaryForDept(parsed, dates, deptName),
+    hourlyWorkforce: calculateHourlyForDept(parsed, dates, deptNames, average),
+    shiftSummary:    calculateShiftSummaryForDept(parsed, dates, deptNames),
   };
 }
 

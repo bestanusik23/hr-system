@@ -103,21 +103,23 @@ type ActiveEntry = {
 
 /**
  * Extracts one entry per employee per active working day across `dates`,
- * optionally scoped to one department.
+ * optionally scoped to a set of departments (e.g. every department in one
+ * ฝ่าย/division, or a single แผนก).
  *
  * Passing a single date gives that day's active workforce (daily dashboard).
  * Passing every date in a month gives one entry per person-day worked, which
  * is exactly what monthly person-day totals need — no separate code path.
  *
- * @param dates    List of "DD/MM/YYYY" dates to include
- * @param deptName When provided, only entries whose deptName matches are returned
+ * @param dates     List of "DD/MM/YYYY" dates to include
+ * @param deptNames When provided, only entries whose deptName is in this list are returned
  */
-function getActiveEntries(parsed: ParseResult, dates: string[], deptName?: string | null): ActiveEntry[] {
+function getActiveEntries(parsed: ParseResult, dates: string[], deptNames?: string[] | null): ActiveEntry[] {
   const dateSet = new Set(dates);
+  const deptSet = deptNames && deptNames.length > 0 ? new Set(deptNames) : null;
   const active: ActiveEntry[] = [];
 
   for (const emp of parsed.employees) {
-    if (deptName && emp.deptName !== deptName) continue;
+    if (deptSet && !deptSet.has(emp.deptName)) continue;
     for (const rec of emp.records) {
       if (dateSet.has(rec.date) && rec.isActive && rec.ranges.length > 0) {
         active.push({ deptCode: emp.deptCode, deptName: emp.deptName, ranges: rec.ranges });
@@ -234,7 +236,8 @@ function toDepartmentTimeline(
 // ─── Per-department views (for the dept filter in Hourly Chart / Shift Summary) ─
 
 /**
- * Hourly workforce curve scoped to one department (or all, when deptName is null/omitted).
+ * Hourly workforce curve scoped to a set of departments (or all, when deptNames is null/omitted) —
+ * e.g. every department in one ฝ่าย, or a single แผนก.
  *
  * @param dates   Either a single "DD/MM/YYYY" date (daily view) or a list of dates (monthly view)
  * @param average When true, divides each hour's total by the number of dates —
@@ -244,28 +247,28 @@ function toDepartmentTimeline(
 export function calculateHourlyForDept(
   parsed: ParseResult,
   dates: string | string[],
-  deptName?: string | null,
+  deptNames?: string[] | null,
   average = false,
 ): HourlyPoint[] {
   const dateArr = Array.isArray(dates) ? dates : [dates];
-  const active  = getActiveEntries(parsed, dateArr, deptName);
+  const active  = getActiveEntries(parsed, dateArr, deptNames);
   const counts  = computeHourlyCounts(active);
   const divisor = average ? Math.max(dateArr.length, 1) : 1;
   return toHourlyPoints(counts.map(v => Math.round(v / divisor)));
 }
 
 /**
- * Shift summary table scoped to one department (or all, when deptName is null/omitted).
+ * Shift summary table scoped to a set of departments (or all, when deptNames is null/omitted).
  * Staff counts are always totals (person-days when `dates` spans a month) —
  * percentages stay meaningful either way since they're relative to the same total.
  */
 export function calculateShiftSummaryForDept(
   parsed: ParseResult,
   dates: string | string[],
-  deptName?: string | null,
+  deptNames?: string[] | null,
 ): ShiftSummaryItem[] {
   const dateArr  = Array.isArray(dates) ? dates : [dates];
-  const active   = getActiveEntries(parsed, dateArr, deptName);
+  const active   = getActiveEntries(parsed, dateArr, deptNames);
   const registry = buildRangeRegistry(active);
   return toRangeSummary(active, registry);
 }

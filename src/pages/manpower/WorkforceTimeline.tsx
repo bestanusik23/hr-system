@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai } from "./workforce/api";
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary } from "./workforce/api";
+import { getDivisionForDept } from "./workforce/divisionMap";
 
 // ─── Static fallback data (shown before any import) ──────────────────────────
 // Same 3-block shape as before, just expressed as explicit time-period blocks
@@ -212,11 +213,13 @@ export default function WorkforceTimeline() {
   const [loading, setLoading]       = useState(false);
   const fileRef                     = useRef<HTMLInputElement>(null);
   const [tip, setTip]               = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
-  const [selectedDept, setSelectedDept] = useState<string>(""); // "" = all departments
+  const [selectedDivision, setSelectedDivision] = useState<string>(""); // "" = all divisions (ฝ่าย)
+  const [selectedDept, setSelectedDept] = useState<string>(""); // "" = all departments (แผนก) within the selected division
   const [deptView, setDeptView]         = useState<{ hourlyWorkforce: HourlyPoint[]; shiftSummary: ShiftSummaryItem[] } | null>(null);
   const [viewMode, setViewMode]         = useState<"daily" | "monthly">("daily");
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
+  const [showNowSnapshot, setShowNowSnapshot]   = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
@@ -247,14 +250,29 @@ export default function WorkforceTimeline() {
     ? (selectedMonth?.dates ?? [])
     : (targetDate ? [targetDate] : []);
 
-  // Recalculate hourly chart + shift summary when user filters by department (or switches mode/month/date)
-  useEffect(() => {
-    if (!parsed || activeDates.length === 0) { setDeptView(null); return; }
-    setDeptView(switchDeptView(parsed, activeDates, selectedDept || null));
-  }, [parsed, targetDate, viewMode, selectedMonth?.key, selectedDept]);
-
   // Department list driving the Gantt panel, search, ranking and dept dropdown
   const displayDepts = isMonthly ? monthlySummary!.departmentTimeline : depts;
+
+  // Cascading filter: dropdown 1 picks a ฝ่าย (division), dropdown 2 picks a แผนก within it
+  const divisionFilteredDepts = selectedDivision
+    ? displayDepts.filter(d => getDivisionForDept(d.name) === selectedDivision)
+    : displayDepts;
+  const availableDivisions = Array.from(new Set(displayDepts.map(d => getDivisionForDept(d.name))))
+    .sort((a, b) => a.localeCompare(b, "th"));
+
+  // Scope passed to the engine: one department if chosen, else every department in the
+  // selected division, else null (no filter — the whole hospital)
+  const deptScope: string[] | null = selectedDept
+    ? [selectedDept]
+    : selectedDivision
+      ? divisionFilteredDepts.map(d => d.name)
+      : null;
+
+  // Recalculate hourly chart + shift summary when user filters by division/department (or switches mode/month/date)
+  useEffect(() => {
+    if (!parsed || activeDates.length === 0) { setDeptView(null); return; }
+    setDeptView(switchDeptView(parsed, activeDates, deptScope));
+  }, [parsed, targetDate, viewMode, selectedMonth?.key, selectedDivision, selectedDept]);
 
   // ── Derive display values: monthly aggregate > daily import > static fallback ─
   const stats = computeStats(depts);
@@ -263,15 +281,27 @@ export default function WorkforceTimeline() {
   // the underlying totals (person-days) are still available for reports, just not the headline number.
   const toDisplayCount = (raw: number) => (isMonthly ? Math.round(raw / daysInRange) : raw);
 
-  const selectedDeptData     = selectedDept ? displayDepts.find(d => d.name === selectedDept) : null;
-  const selectedDeptRanking  = selectedDept && isMonthly ? monthlySummary!.departmentRanking.find(r => r.department === selectedDept) : null;
+  // c1 KPI total: scoped to the selected department/division, average/day in monthly mode.
+  // d.filled is already avg-per-day when isMonthly (see toDepartmentTimeline's divisor), so
+  // summing it across the scoped departments works uniformly for daily and monthly modes.
+  const scopedDepts = selectedDept
+    ? displayDepts.filter(d => d.name === selectedDept)
+    : selectedDivision
+      ? divisionFilteredDepts
+      : displayDepts;
+  const isScoped = !!(selectedDept || selectedDivision);
+  const scopedAvgPerDay = scopedDepts.reduce((s, d) => s + d.filled, 0);
+  const scopedTotalPersonDays = isMonthly
+    ? monthlySummary!.departmentRanking
+        .filter(r => scopedDepts.some(d => d.name === r.department))
+        .reduce((s, r) => s + r.staff, 0)
+    : scopedAvgPerDay;
 
-  // c1 KPI total: scoped to the selected department when one is chosen, average/day in monthly mode
-  const totalPersonDays = selectedDept
-    ? (isMonthly ? (selectedDeptRanking?.staff ?? 0) : (selectedDeptData?.filled ?? 0))
+  const totalPersonDays = isScoped
+    ? scopedTotalPersonDays
     : (isMonthly ? monthlySummary!.totalPersonDays : (dashData?.kpi.totalActiveStaff ?? stats.total));
   const T_TOTAL = isMonthly
-    ? (selectedDept ? (selectedDeptData?.filled ?? 0) : monthlySummary!.avgStaffPerDay) // already avg/day
+    ? (isScoped ? scopedAvgPerDay : monthlySummary!.avgStaffPerDay)
     : totalPersonDays;
 
   const PEAK_HOUR  = isMonthly ? monthlySummary!.peakHour        : dashData?.kpi.peakHour    ?? stats.peakHour;
@@ -294,11 +324,11 @@ export default function WorkforceTimeline() {
   const topRanges = shiftSummaryRows.slice(0, 3);
 
   const filtered = search.trim()
-    ? displayDepts.filter(d =>
+    ? divisionFilteredDepts.filter(d =>
         d.name.toLowerCase().includes(search.toLowerCase()) ||
         d.sub.toLowerCase().includes(search.toLowerCase())
       )
-    : displayDepts;
+    : divisionFilteredDepts;
 
   // Legend: every distinct time period currently visible in the Gantt, sorted by start time
   const legendItems = Array.from(
@@ -311,11 +341,28 @@ export default function WorkforceTimeline() {
   const nowPct   = toPct(now.min);
   const availDates = dashData?.metadata.availableDates ?? [];
 
-  // Ranking uses total person-days in monthly mode (report-appropriate), daily "filled" count otherwise
+  // Ranking uses total person-days in monthly mode (report-appropriate), daily "filled" count otherwise;
+  // scoped to the selected ฝ่าย when one is chosen
   const rankingList: { name: string; value: number }[] = isMonthly
-    ? monthlySummary!.departmentRanking.map(r => ({ name: r.department, value: r.staff }))
-    : displayDepts.map(d => ({ name: d.name, value: d.filled }));
+    ? monthlySummary!.departmentRanking
+        .filter(r => divisionFilteredDepts.some(d => d.name === r.department))
+        .map(r => ({ name: r.department, value: r.staff }))
+    : divisionFilteredDepts.map(d => ({ name: d.name, value: d.filled }));
   const maxRanking = Math.max(...rankingList.map(r => r.value), 1);
+
+  // Real-time snapshot: current staff-on-duty per department, computed by checking
+  // which of each department's blocks cover "now" (works for both daily and the
+  // typical-pattern shown in monthly mode)
+  function blockCoversNow(b: ShiftBlock, nowMin: number): boolean {
+    if (nowMin >= b.startMin && nowMin < b.endMin) return true;
+    const wrapped = nowMin + 1440;
+    return wrapped >= b.startMin && wrapped < b.endMin;
+  }
+  const nowSnapshot = divisionFilteredDepts
+    .map(d => ({ name: d.name, count: d.blocks.filter(b => blockCoversNow(b, now.min)).reduce((s, b) => s + b.count, 0) }))
+    .filter(d => d.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const nowSnapshotTotal = nowSnapshot.reduce((s, d) => s + d.count, 0);
 
   // ── Import handler ────────────────────────────────────────────────────────────
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -442,15 +489,17 @@ export default function WorkforceTimeline() {
       <div className="hrwt-kpis">
         <div className="hrwt-kpi c1">
           <div className="ic"><IcUsers/></div>
-          <div className="lbl">{isMonthly ? `เฉลี่ยบุคลากรต่อวัน${selectedDept ? ` — ${selectedDept}` : ""}` : "บุคลากรปฏิบัติงานวันนี้"}</div>
+          <div className="lbl">{isMonthly ? `เฉลี่ยบุคลากรต่อวัน${isScoped ? ` — ${selectedDept || selectedDivision}` : ""}` : "บุคลากรปฏิบัติงานวันนี้"}</div>
           <div className="val">{T_TOTAL}<small>คน{isMonthly ? "/วัน" : ""}</small></div>
           <div className="foot">{isMonthly ? <>รวม <b>{totalPersonDays}</b> คน-วันทั้งเดือน</> : <b>▲ ปฏิบัติงานจริง</b>}</div>
         </div>
         <div className="hrwt-kpi c2">
           <div className="ic"><IcBuilding/></div>
-          <div className="lbl">ฝ่ายที่เปิดให้บริการ</div>
-          <div className="val">{displayDepts.length}<small>ฝ่าย</small></div>
-          <div className="foot">{selectedDept ? `กำลังดู: ${selectedDept}` : "ครอบคลุมทุกฝ่าย"}</div>
+          <div className="lbl">แผนกที่เปิดให้บริการ</div>
+          <div className="val">{divisionFilteredDepts.length}<small>แผนก</small></div>
+          <div className="foot">
+            {selectedDept ? `กำลังดู: ${selectedDept}` : selectedDivision ? `ฝ่าย: ${selectedDivision}` : "ครอบคลุมทุกฝ่าย"}
+          </div>
         </div>
 
         {/* Top 3 actual time periods by headcount (averaged per day in monthly mode) — replaces the old fixed morning/afternoon/night split */}
@@ -494,7 +543,11 @@ export default function WorkforceTimeline() {
                 {HOURS.map(h => (
                   <div key={h} className="hrwt-tick">{String(h).padStart(2,"0")}:00</div>
                 ))}
-                <div style={{ position:"absolute", bottom:0, left:nowPct, transform:"translateX(-50%)", pointerEvents:"none", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center" }}>
+                <div
+                  onClick={() => setShowNowSnapshot(v => !v)}
+                  title="คลิกเพื่อดูจำนวนเจ้าหน้าที่ที่ปฏิบัติงานอยู่ ณ เวลานี้"
+                  style={{ position:"absolute", bottom:0, left:nowPct, transform:"translateX(-50%)", cursor:"pointer", zIndex:10, display:"flex", flexDirection:"column", alignItems:"center" }}
+                >
                   <span style={{ fontSize:9.5, fontWeight:700, color:"#ef4444", background:"#fff", border:"1.5px solid rgba(239,68,68,.3)", padding:"1px 6px", borderRadius:4, whiteSpace:"nowrap", marginBottom:1, lineHeight:1.6, boxShadow:"0 2px 5px rgba(239,68,68,.2)" }}>NOW {now.str}</span>
                   <div style={{ width:0, height:0, borderLeft:"4px solid transparent", borderRight:"4px solid transparent", borderTop:"5px solid #ef4444" }} />
                 </div>
@@ -537,7 +590,12 @@ export default function WorkforceTimeline() {
                         </div>
                       ));
                     })}
-                    <div className="hrwt-now-seg" style={{ left: nowPct }} />
+                    <div
+                      className="hrwt-now-seg"
+                      style={{ left: nowPct, cursor: "pointer", pointerEvents: "auto" }}
+                      onClick={() => setShowNowSnapshot(v => !v)}
+                      title="คลิกเพื่อดูจำนวนเจ้าหน้าที่ที่ปฏิบัติงานอยู่ ณ เวลานี้"
+                    />
                   </div>
                 </div>
               );
@@ -547,17 +605,54 @@ export default function WorkforceTimeline() {
         </div>
       </div>
 
-      {/* ── Department filter for Hourly Chart / Shift Summary ── */}
+      {/* ── Real-time snapshot panel — opens when the NOW line is clicked ── */}
+      {showNowSnapshot && (
+        <div className="hrwt-panel" style={{ padding: 16, marginBottom: 12 }}>
+          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 10 }}>
+            <h4 style={{ margin:0, fontSize:14, fontWeight:700, display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ width:8, height:8, borderRadius:"50%", background:"#ef4444", display:"inline-block" }} />
+              เจ้าหน้าที่ปฏิบัติงาน ณ เวลา {now.str} น. — รวม {nowSnapshotTotal} คน
+            </h4>
+            <button className="hrwt-btn hrwt-btn-outline" style={{ height:30, padding:"0 10px" }} onClick={() => setShowNowSnapshot(false)}>ปิด</button>
+          </div>
+          {nowSnapshot.length === 0 ? (
+            <div style={{ fontSize:13, color:"#94a3b8" }}>ไม่มีเจ้าหน้าที่ปฏิบัติงานอยู่ในช่วงเวลานี้</div>
+          ) : (
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(180px, 1fr))", gap:8 }}>
+              {nowSnapshot.map(d => (
+                <div key={d.name} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", background:"#fbfcfe", border:"1px solid #eaedf5", borderRadius:8, padding:"8px 12px" }}>
+                  <span style={{ fontSize:12.5, fontWeight:500 }}>{d.name}</span>
+                  <span style={{ fontSize:14, fontWeight:700, color:"#0038C6" }}>{d.count}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Cascading ฝ่าย → แผนก filter for Hourly Chart / Shift Summary / Gantt ── */}
       {parsed && (
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
-          <label style={{ fontSize:12.5, color:"#6b7794", fontWeight:600 }}>ดูข้อมูลรายแผนก:</label>
+        <div style={{ display:"flex", flexWrap:"wrap", alignItems:"center", gap:8, marginBottom:12 }}>
+          <label style={{ fontSize:12.5, color:"#6b7794", fontWeight:600 }}>ฝ่าย:</label>
+          <select
+            className="hrwt-date-sel"
+            value={selectedDivision}
+            onChange={e => { setSelectedDivision(e.target.value); setSelectedDept(""); }}
+          >
+            <option value="">ทั้งหมด (ทุกฝ่าย)</option>
+            {availableDivisions.map(div => (
+              <option key={div} value={div}>{div}</option>
+            ))}
+          </select>
+
+          <label style={{ fontSize:12.5, color:"#6b7794", fontWeight:600 }}>แผนก:</label>
           <select
             className="hrwt-date-sel"
             value={selectedDept}
             onChange={e => setSelectedDept(e.target.value)}
           >
             <option value="">ทั้งหมด (ทุกแผนก)</option>
-            {[...displayDepts].sort((a, b) => a.name.localeCompare(b.name, "th")).map(d => (
+            {[...divisionFilteredDepts].sort((a, b) => a.name.localeCompare(b.name, "th")).map(d => (
               <option key={d.name} value={d.name}>{d.name}</option>
             ))}
           </select>
