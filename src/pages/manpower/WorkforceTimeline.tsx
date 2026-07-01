@@ -258,7 +258,22 @@ export default function WorkforceTimeline() {
 
   // ── Derive display values: monthly aggregate > daily import > static fallback ─
   const stats = computeStats(depts);
-  const T_TOTAL    = isMonthly ? monthlySummary!.totalPersonDays : dashData?.kpi.totalActiveStaff ?? stats.total;
+  const daysInRange = monthlySummary?.daysInRange || 1;
+  // Monthly numbers are shown as a daily AVERAGE (credible, same scale as the daily view) —
+  // the underlying totals (person-days) are still available for reports, just not the headline number.
+  const toDisplayCount = (raw: number) => (isMonthly ? Math.round(raw / daysInRange) : raw);
+
+  const selectedDeptData     = selectedDept ? displayDepts.find(d => d.name === selectedDept) : null;
+  const selectedDeptRanking  = selectedDept && isMonthly ? monthlySummary!.departmentRanking.find(r => r.department === selectedDept) : null;
+
+  // c1 KPI total: scoped to the selected department when one is chosen, average/day in monthly mode
+  const totalPersonDays = selectedDept
+    ? (isMonthly ? (selectedDeptRanking?.staff ?? 0) : (selectedDeptData?.filled ?? 0))
+    : (isMonthly ? monthlySummary!.totalPersonDays : (dashData?.kpi.totalActiveStaff ?? stats.total));
+  const T_TOTAL = isMonthly
+    ? (selectedDept ? (selectedDeptData?.filled ?? 0) : monthlySummary!.avgStaffPerDay) // already avg/day
+    : totalPersonDays;
+
   const PEAK_HOUR  = isMonthly ? monthlySummary!.peakHour        : dashData?.kpi.peakHour    ?? stats.peakHour;
   const MAX_HOURLY = isMonthly ? monthlySummary!.peakWorkforce   : dashData?.kpi.peakWorkforce ?? stats.maxHourly;
 
@@ -270,9 +285,11 @@ export default function WorkforceTimeline() {
     : stats.hourly;
   const hourlyMaxLocal = Math.max(...HOURLY.map(([, v]) => v), 1);
 
-  // Shift summary is grouped by actual time period (not morning/afternoon/night) at every level
+  // Shift summary is grouped by actual time period (not morning/afternoon/night) at every level.
+  // Staff counts from the engine are totals (person-days in monthly mode) — displayed as a daily average.
   const aggregateShiftSummary = isMonthly ? monthlySummary!.shiftSummary : dashData?.shiftSummary;
-  const shiftSummaryRows: ShiftSummaryItem[] = deptView?.shiftSummary ?? aggregateShiftSummary ?? stats.shiftSummary;
+  const shiftSummaryRowsRaw: ShiftSummaryItem[] = deptView?.shiftSummary ?? aggregateShiftSummary ?? stats.shiftSummary;
+  const shiftSummaryRows = shiftSummaryRowsRaw.map(s => ({ ...s, staff: toDisplayCount(s.staff) }));
   const shiftSummaryTotal = shiftSummaryRows.reduce((s, x) => s + x.staff, 0) || T_TOTAL;
   const topRanges = shiftSummaryRows.slice(0, 3);
 
@@ -425,23 +442,23 @@ export default function WorkforceTimeline() {
       <div className="hrwt-kpis">
         <div className="hrwt-kpi c1">
           <div className="ic"><IcUsers/></div>
-          <div className="lbl">{isMonthly ? "ยอดรวมคน-วันทั้งเดือน" : "บุคลากรปฏิบัติงานวันนี้"}</div>
-          <div className="val">{T_TOTAL}<small>{isMonthly ? "คน-วัน" : "คน"}</small></div>
-          <div className="foot">{isMonthly ? <>เฉลี่ย <b>{monthlySummary!.avgStaffPerDay}</b> คน/วัน</> : <b>▲ ปฏิบัติงานจริง</b>}</div>
+          <div className="lbl">{isMonthly ? `เฉลี่ยบุคลากรต่อวัน${selectedDept ? ` — ${selectedDept}` : ""}` : "บุคลากรปฏิบัติงานวันนี้"}</div>
+          <div className="val">{T_TOTAL}<small>คน{isMonthly ? "/วัน" : ""}</small></div>
+          <div className="foot">{isMonthly ? <>รวม <b>{totalPersonDays}</b> คน-วันทั้งเดือน</> : <b>▲ ปฏิบัติงานจริง</b>}</div>
         </div>
         <div className="hrwt-kpi c2">
           <div className="ic"><IcBuilding/></div>
           <div className="lbl">ฝ่ายที่เปิดให้บริการ</div>
           <div className="val">{displayDepts.length}<small>ฝ่าย</small></div>
-          <div className="foot">ครอบคลุมทุกฝ่าย</div>
+          <div className="foot">{selectedDept ? `กำลังดู: ${selectedDept}` : "ครอบคลุมทุกฝ่าย"}</div>
         </div>
 
-        {/* Top 3 actual time periods by headcount — replaces the old fixed morning/afternoon/night split */}
+        {/* Top 3 actual time periods by headcount (averaged per day in monthly mode) — replaces the old fixed morning/afternoon/night split */}
         {topRanges.map((r, i) => (
           <div key={r.shift} className={`hrwt-kpi c${3 + i}`}>
             <div className="ic" style={{ background: `${r.color}22`, color: r.color }}><IcClock/></div>
             <div className="lbl">ช่วงเวลา {r.shift}</div>
-            <div className="val">{r.staff}<small>{isMonthly ? "คน-วัน" : "คน"}</small></div>
+            <div className="val">{r.staff}<small>คน{isMonthly ? "/วัน" : ""}</small></div>
             <div className="foot">{r.percentage}% ของทั้งหมด</div>
           </div>
         ))}
@@ -569,13 +586,13 @@ export default function WorkforceTimeline() {
 
         {/* Shift summary table — grouped by actual time period, not morning/afternoon/night */}
         <div className="hrwt-scard">
-          <h4>สรุปตามช่วงเวลาทำงาน{isMonthly ? ` (รวมทั้งเดือน — ${monthlySummary!.monthLabel})` : ""}{selectedDept && ` — ${selectedDept}`}</h4>
+          <h4>สรุปตามช่วงเวลาทำงาน{isMonthly ? ` (เฉลี่ย/วัน — ${monthlySummary!.monthLabel})` : ""}{selectedDept && ` — ${selectedDept}`}</h4>
           <div className="hrwt-tbl-wrap">
             <table className="hrwt-tbl">
               <thead>
                 <tr>
                   <th>ช่วงเวลา</th>
-                  <th style={{ textAlign:"right" }}>จำนวน (คน)</th>
+                  <th style={{ textAlign:"right" }}>{isMonthly ? "เฉลี่ย (คน/วัน)" : "จำนวน (คน)"}</th>
                   <th style={{ textAlign:"right" }}>ร้อยละ</th>
                 </tr>
               </thead>
@@ -628,7 +645,7 @@ export default function WorkforceTimeline() {
       <div style={{ marginTop:8, fontSize:11, color:"#94a3b8", textAlign:"right" }}>
         {importedAt
           ? isMonthly
-            ? `ข้อมูลจาก: รายงานประกาศกะ · นำเข้า ${importedAt} · เดือน ${dateStr} (${monthlySummary!.daysInRange} วัน, รอบ 26-25) · รวม ${T_TOTAL} คน-วัน`
+            ? `ข้อมูลจาก: รายงานประกาศกะ · นำเข้า ${importedAt} · เดือน ${dateStr} (${monthlySummary!.daysInRange} วัน, รอบ 26-25) · เฉลี่ย ${T_TOTAL} คน/วัน (รวม ${totalPersonDays} คน-วัน)`
             : `ข้อมูลจาก: รายงานประกาศกะ · นำเข้า ${importedAt} · วันที่ ${dateStr} · ${T_TOTAL} คน`
           : "ข้อมูล: แผนกำลังคน 2569 · อัปเดต มิ.ย. 2569 (กด นำเข้า Excel กะ เพื่อโหลดข้อมูลจริง)"}
       </div>
