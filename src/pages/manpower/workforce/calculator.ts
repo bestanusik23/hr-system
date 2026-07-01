@@ -52,28 +52,27 @@ function nowMinutes(): number {
   return d.getHours() * 60 + d.getMinutes();
 }
 
-// ─── Main calculation ─────────────────────────────────────────────────────────
+// ─── Shared active-entry extraction ───────────────────────────────────────────
+
+type ActiveEntry = {
+  deptCode: string;
+  deptName: string;
+  ranges: TimeRange[];
+  shiftClass: "night" | "morning" | "evening";
+};
 
 /**
- * Calculates all dashboard data for a specific date.
+ * Extracts employees actively working on targetDate, optionally scoped to
+ * one department. Shared by calculateDashboardData() and the per-department
+ * hourly/summary helpers below so filtering logic isn't duplicated.
  *
- * @param parsed     Output from parseWorkbook()
- * @param targetDate "DD/MM/YYYY" Thai BE date to calculate for
+ * @param deptName When provided, only entries whose deptName matches are returned.
  */
-export function calculateDashboardData(parsed: ParseResult, targetDate: string): DashboardData {
-  const { employees } = parsed;
-
-  // ── 1. Filter: employees who are actively working on targetDate ──────────────
-  type ActiveEntry = {
-    deptCode: string;
-    deptName: string;
-    ranges: TimeRange[];
-    shiftClass: "night" | "morning" | "evening";
-  };
-
+function getActiveEntries(parsed: ParseResult, targetDate: string, deptName?: string | null): ActiveEntry[] {
   const active: ActiveEntry[] = [];
 
-  for (const emp of employees) {
+  for (const emp of parsed.employees) {
+    if (deptName && emp.deptName !== deptName) continue;
     for (const rec of emp.records) {
       if (rec.date === targetDate && rec.isActive && rec.ranges.length > 0) {
         active.push({
@@ -86,11 +85,17 @@ export function calculateDashboardData(parsed: ParseResult, targetDate: string):
       }
     }
   }
+  return active;
+}
 
-  // ── 2. Hourly workforce (smart engine) ───────────────────────────────────────
-  // Count staff coverage for each hour 0–23
+/** Reorder 24 hourly counts for display: 06:00 → 23:00, then 00:00 → 05:00 */
+const DISPLAY_HOURS = [
+  ...Array.from({ length: 18 }, (_, i) => i + 6),  // 6..23
+  ...Array.from({ length: 6  }, (_, i) => i),       // 0..5
+];
+
+function computeHourlyCounts(active: ActiveEntry[]): number[] {
   const hourlyCounts = new Array<number>(24).fill(0);
-
   for (const entry of active) {
     for (const range of entry.ranges) {
       for (let h = 0; h < 24; h++) {
@@ -98,16 +103,64 @@ export function calculateDashboardData(parsed: ParseResult, targetDate: string):
       }
     }
   }
+  return hourlyCounts;
+}
 
-  // Reorder for display: 06:00 → 23:00, then 00:00 → 05:00
-  const displayHours = [
-    ...Array.from({ length: 18 }, (_, i) => i + 6),  // 6..23
-    ...Array.from({ length: 6  }, (_, i) => i),       // 0..5
-  ];
-  const hourlyWorkforce: HourlyPoint[] = displayHours.map(h => ({
+function toHourlyPoints(hourlyCounts: number[]): HourlyPoint[] {
+  return DISPLAY_HOURS.map(h => ({
     hour:  `${String(h).padStart(2, "0")}:00`,
     staff: hourlyCounts[h],
   }));
+}
+
+function toShiftSummary(active: ActiveEntry[]): ShiftSummaryItem[] {
+  const total   = active.length;
+  const morning = active.filter(a => a.shiftClass === "morning").length;
+  const evening = active.filter(a => a.shiftClass === "evening").length;
+  const night   = active.filter(a => a.shiftClass === "night").length;
+
+  return [
+    { shift: "เวรเช้า 06:00–16:00", staff: morning, percentage: total ? Math.round(morning / total * 100) : 0 },
+    { shift: "เวรบ่าย 16:00–24:00", staff: evening, percentage: total ? Math.round(evening / total * 100) : 0 },
+    { shift: "เวรดึก 00:00–06:00",  staff: night,   percentage: total ? Math.round(night   / total * 100) : 0 },
+  ];
+}
+
+// ─── Per-department views (for the dept filter in Hourly Chart / Shift Summary) ─
+
+/**
+ * Hourly workforce curve scoped to one department (or all, when deptName is null/omitted).
+ */
+export function calculateHourlyForDept(parsed: ParseResult, targetDate: string, deptName?: string | null): HourlyPoint[] {
+  const active = getActiveEntries(parsed, targetDate, deptName);
+  return toHourlyPoints(computeHourlyCounts(active));
+}
+
+/**
+ * Shift summary table scoped to one department (or all, when deptName is null/omitted).
+ */
+export function calculateShiftSummaryForDept(parsed: ParseResult, targetDate: string, deptName?: string | null): ShiftSummaryItem[] {
+  const active = getActiveEntries(parsed, targetDate, deptName);
+  return toShiftSummary(active);
+}
+
+// ─── Main calculation ─────────────────────────────────────────────────────────
+
+/**
+ * Calculates all dashboard data for a specific date.
+ *
+ * @param parsed     Output from parseWorkbook()
+ * @param targetDate "DD/MM/YYYY" Thai BE date to calculate for
+ */
+export function calculateDashboardData(parsed: ParseResult, targetDate: string): DashboardData {
+  const { employees } = parsed;
+
+  // ── 1. Filter: employees who are actively working on targetDate ──────────────
+  const active = getActiveEntries(parsed, targetDate);
+
+  // ── 2. Hourly workforce (smart engine) ───────────────────────────────────────
+  const hourlyCounts = computeHourlyCounts(active);
+  const hourlyWorkforce = toHourlyPoints(hourlyCounts);
 
   // ── 3. KPI values ────────────────────────────────────────────────────────────
   const total        = active.length;
@@ -165,11 +218,7 @@ export function calculateDashboardData(parsed: ParseResult, targetDate: string):
     .sort((a, b) => b.filled - a.filled);
 
   // ── 5. Shift summary table ───────────────────────────────────────────────────
-  const shiftSummary: ShiftSummaryItem[] = [
-    { shift: "เวรเช้า 06:00–16:00",  staff: morningShift, percentage: total ? Math.round(morningShift / total * 100) : 0 },
-    { shift: "เวรบ่าย 16:00–24:00",  staff: eveningShift, percentage: total ? Math.round(eveningShift / total * 100) : 0 },
-    { shift: "เวรดึก 00:00–06:00",   staff: nightShift,   percentage: total ? Math.round(nightShift   / total * 100) : 0 },
-  ];
+  const shiftSummary = toShiftSummary(active);
 
   // ── 6. Department ranking ────────────────────────────────────────────────────
   const departmentRanking = departmentTimeline.map(d => ({

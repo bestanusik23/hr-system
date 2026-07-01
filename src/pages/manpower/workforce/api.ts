@@ -5,7 +5,7 @@
  */
 
 import { parseWorkbook } from "./parser";
-import { calculateDashboardData } from "./calculator";
+import { calculateDashboardData, calculateHourlyForDept, calculateShiftSummaryForDept } from "./calculator";
 import type { ParseResult, DashboardData } from "./types";
 
 export type { ParseResult, DashboardData };
@@ -62,4 +62,15 @@ export async function importWorkforceFile(
 /** Recalculate dashboard when the user changes the target date */
 export function switchDate(parsed: ParseResult, targetDate: string): DashboardData {
   return calculateDashboardData(parsed, targetDate);
+}
+
+/**
+ * Recalculate the hourly workforce chart + shift summary table scoped to one
+ * department. Pass deptName = null (or omit) for the "all departments" aggregate.
+ */
+export function switchDeptView(parsed: ParseResult, targetDate: string, deptName: string | null) {
+  return {
+    hourlyWorkforce: calculateHourlyForDept(parsed, targetDate, deptName),
+    shiftSummary:    calculateShiftSummaryForDept(parsed, targetDate, deptName),
+  };
 }

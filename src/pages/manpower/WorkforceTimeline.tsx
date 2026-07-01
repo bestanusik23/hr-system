@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, formatThaiDate, todayThai } from "./workforce/api";
-import type { ParseResult, DashboardData, DeptTimelineItem } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, formatThaiDate, todayThai } from "./workforce/api";
+import type { ParseResult, DashboardData, DeptTimelineItem, HourlyPoint, ShiftSummaryItem } from "./workforce/api";
 
 // ─── Static fallback data (shown before any import) ──────────────────────────
 const INITIAL_DEPTS: DeptTimelineItem[] = [
@@ -182,6 +182,8 @@ export default function WorkforceTimeline() {
   const [loading, setLoading]       = useState(false);
   const fileRef                     = useRef<HTMLInputElement>(null);
   const [tip, setTip]               = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
+  const [selectedDept, setSelectedDept] = useState<string>(""); // "" = all departments
+  const [deptView, setDeptView]         = useState<{ hourlyWorkforce: HourlyPoint[]; shiftSummary: ShiftSummaryItem[] } | null>(null);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
@@ -196,6 +198,12 @@ export default function WorkforceTimeline() {
     setDepts(data.departmentTimeline);
   }, [parsed, targetDate]);
 
+  // Recalculate hourly chart + shift summary when user filters by department
+  useEffect(() => {
+    if (!parsed || !targetDate) { setDeptView(null); return; }
+    setDeptView(switchDeptView(parsed, targetDate, selectedDept || null));
+  }, [parsed, targetDate, selectedDept]);
+
   // ── Derive display values from dashData (real) or computeStats (fallback) ───
   const stats = computeStats(depts);
   const T_NIGHT   = dashData?.kpi.nightShift   ?? stats.night;
@@ -205,10 +213,15 @@ export default function WorkforceTimeline() {
   const PEAK_HOUR = dashData?.kpi.peakHour    ?? stats.peakHour;
   const MAX_HOURLY = dashData?.kpi.peakWorkforce ?? stats.maxHourly;
 
-  // Convert HourlyPoint[] → [string, number][] for chart
-  const HOURLY: [string, number][] = dashData
-    ? dashData.hourlyWorkforce.map(h => [h.hour, h.staff] as [string, number])
+  // Convert HourlyPoint[] → [string, number][] for chart (deptView takes priority when a department filter is active)
+  const hourlySource = deptView?.hourlyWorkforce ?? dashData?.hourlyWorkforce;
+  const HOURLY: [string, number][] = hourlySource
+    ? hourlySource.map(h => [h.hour, h.staff] as [string, number])
     : stats.hourly;
+  const hourlyMaxLocal = Math.max(...HOURLY.map(([, v]) => v), 1);
+
+  const shiftSummaryRows = deptView?.shiftSummary ?? dashData?.shiftSummary ?? null;
+  const shiftSummaryTotal = shiftSummaryRows ? shiftSummaryRows.reduce((s, x) => s + x.staff, 0) : T_TOTAL;
 
   const filtered = search.trim()
     ? depts.filter(d =>
@@ -410,19 +423,36 @@ export default function WorkforceTimeline() {
         </div>
       </div>
 
+      {/* ── Department filter for Hourly Chart / Shift Summary ── */}
+      {parsed && (
+        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
+          <label style={{ fontSize:12.5, color:"#6b7794", fontWeight:600 }}>ดูข้อมูลรายแผนก:</label>
+          <select
+            className="hrwt-date-sel"
+            value={selectedDept}
+            onChange={e => setSelectedDept(e.target.value)}
+          >
+            <option value="">ทั้งหมด (ทุกแผนก)</option>
+            {[...depts].sort((a, b) => a.name.localeCompare(b.name, "th")).map(d => (
+              <option key={d.name} value={d.name}>{d.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* ── Summary Row ── */}
       <div className="hrwt-summary">
 
         {/* Hourly bar chart */}
         <div className="hrwt-scard">
-          <h4>สรุปจำนวนบุคลากรตามช่วงเวลา</h4>
+          <h4>สรุปจำนวนบุคลากรตามช่วงเวลา{selectedDept && ` — ${selectedDept}`}</h4>
           <div className="hrwt-bars">
             {HOURLY.map(([t, v]) => {
-              const isPeak = v === MAX_HOURLY && MAX_HOURLY > 0;
+              const isPeak = v === hourlyMaxLocal && hourlyMaxLocal > 0;
               return (
                 <div key={t} className={`hrwt-bcol${isPeak ? " peak" : ""}`}>
                   {isPeak ? <div className="peak-tag">{v}</div> : <div className="bv">{v}</div>}
-                  <div className="bfill" style={{ height: `${MAX_HOURLY > 0 ? (v / MAX_HOURLY * 100).toFixed(1) : 0}%` }} />
+                  <div className="bfill" style={{ height: `${hourlyMaxLocal > 0 ? (v / hourlyMaxLocal * 100).toFixed(1) : 0}%` }} />
                   <div className="bx">{t}</div>
                 </div>
               );
@@ -432,7 +462,7 @@ export default function WorkforceTimeline() {
 
         {/* Shift summary table */}
         <div className="hrwt-scard">
-          <h4>สรุปตามกะการทำงาน</h4>
+          <h4>สรุปตามกะการทำงาน{selectedDept && ` — ${selectedDept}`}</h4>
           <table className="hrwt-tbl">
             <thead>
               <tr>
@@ -442,8 +472,8 @@ export default function WorkforceTimeline() {
               </tr>
             </thead>
             <tbody>
-              {dashData
-                ? dashData.shiftSummary.map(s => (
+              {shiftSummaryRows
+                ? shiftSummaryRows.map(s => (
                     <tr key={s.shift}>
                       <td><span className="sw" style={{ background: s.shift.includes("เช้า") ? SHIFT_INFO.morning.color : s.shift.includes("บ่าย") ? SHIFT_INFO.evening.color : SHIFT_INFO.night.color }} />{s.shift}</td>
                       <td className="num">{s.staff}</td>
@@ -464,7 +494,7 @@ export default function WorkforceTimeline() {
               }
               <tr className="total">
                 <td>รวมทั้งหมด</td>
-                <td className="num">{T_TOTAL}</td>
+                <td className="num">{shiftSummaryTotal}</td>
                 <td className="num">100%</td>
               </tr>
             </tbody>
