@@ -15,6 +15,7 @@ import SurveyPage from "./pages/SurveyPage";
 import WorkflowPage from "./pages/WorkflowPage";
 import ManpowerPage from "./pages/manpower/ManpowerPage";
 import WorkforceTimelinePage from "./pages/manpower/WorkforceTimelinePage";
+import OrderOutPage from "./pages/order/OrderOutPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/workflow" element={<RequireAuth><WorkflowPage /></RequireAuth>} />
           <Route path="/manpower" element={<RequireAuth><ManpowerPage /></RequireAuth>} />
           <Route path="/workforce-timeline" element={<RequireAuth><WorkforceTimelinePage /></RequireAuth>} />
+          <Route path="/order-out" element={<RequireAuth><OrderOutPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

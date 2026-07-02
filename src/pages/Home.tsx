@@ -71,6 +71,14 @@ const IcTimeline = () => (
     <line x1="3" y1="19" x2="21" y2="19"/>
   </svg>
 );
+const IcFileText = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+    <polyline points="14 2 14 8 20 8"/>
+    <line x1="8" y1="13" x2="16" y2="13"/>
+    <line x1="8" y1="17" x2="16" y2="17"/>
+  </svg>
+);
 
 /* ─── System definitions ─── */
 interface SystemCard {
@@ -138,6 +146,12 @@ const SYSTEMS: SystemCard[] = [
     title: "Workforce Timeline",
     desc: "ภาพรวมกำลังคนประจำเวร (ดึก / เช้า / บ่าย) แยกตามฝ่าย พร้อมตัวบ่งชี้เวลาปัจจุบันแบบ Real-time",
     roles: ["deputyHR","admin"],
+  },
+  {
+    key: "order-out", no: "11", icon: <IcFileText />,
+    title: "คำสั่งออกหน่วย",
+    desc: "กรอกข้อมูลกิจกรรม สถานที่ และรายชื่อผู้รับผิดชอบ ระบบประกอบเป็นคำสั่งมอบหมายปฏิบัติงานนอกสถานที่ พร้อมพิมพ์ได้ทันที",
+    roles: ["hr","deputyHR","admin"],
   },
 ];
 
