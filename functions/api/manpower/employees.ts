@@ -35,6 +35,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     sql += " AND e.department_id = ?"; params.push(user.scope_department_id);
   } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
+  } else if (divId === "none") {
+    sql += " AND e.division_id IS NULL";
   } else if (divId) {
     sql += " AND e.division_id = ?"; params.push(Number(divId));
   }

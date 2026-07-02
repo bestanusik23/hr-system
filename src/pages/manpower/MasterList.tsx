@@ -82,6 +82,7 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
         <select value={divId} onChange={e => setDivId(e.target.value)}
           style={{ padding: "8px 12px", borderRadius: 10, border: "1.5px solid #e2e8f0", fontSize: 13, fontFamily: "inherit", background: "#fff", cursor: "pointer" }}>
           <option value="">ทุกฝ่าย</option>
+          <option value="none" style={{ color: "#dc2626" }}>⚠ ไม่ระบุฝ่าย</option>
           {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
         </select>
         <div style={{ display: "flex", gap: 6 }}>
