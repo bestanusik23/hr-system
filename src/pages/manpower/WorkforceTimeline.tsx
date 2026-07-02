@@ -4,6 +4,7 @@ import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, ca
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry } from "./workforce/api";
 import { getDivisionForDept } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
+import { saveImport, loadImport } from "./workforce/persist";
 
 // ─── Static fallback data (shown before any import) ──────────────────────────
 // Same 3-block shape as before, just expressed as explicit time-period blocks
@@ -227,6 +228,21 @@ export default function WorkforceTimeline() {
     return () => clearInterval(id);
   }, []);
 
+  // Hydrate from the last imported file (localStorage) on mount, so the dashboard
+  // doesn't reset to the static example whenever this component remounts —
+  // e.g. navigating away and back, or the other page that also embeds this component.
+  useEffect(() => {
+    const stored = loadImport();
+    if (!stored) return;
+    setParsed(stored.parsed);
+    setImportedAt(stored.importedAt);
+    const today = todayThai();
+    const date = stored.parsed.availableDates.includes(today)
+      ? today
+      : stored.parsed.availableDates[stored.parsed.availableDates.length - 1] ?? today;
+    setTargetDate(date);
+  }, []);
+
   // Recalculate when user changes the target date
   useEffect(() => {
     if (!parsed || !targetDate) return;
@@ -372,11 +388,13 @@ export default function WorkforceTimeline() {
     setImportErr(null);
     try {
       const { parsed: p, data } = await importWorkforceFile(file);
+      const importedAtStr = new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
       setParsed(p);
       setTargetDate(data.metadata.targetDate);
       setDashData(data);
       setDepts(data.departmentTimeline);
-      setImportedAt(new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }));
+      setImportedAt(importedAtStr);
+      saveImport(p, importedAtStr);
     } catch (err) {
       setImportErr("อ่านไฟล์ไม่ได้ — กรุณาใช้ไฟล์รายงานประกาศกะ (.xls/.xlsx)");
       console.error(err);
