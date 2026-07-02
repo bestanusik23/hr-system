@@ -4,7 +4,8 @@ import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, ca
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry } from "./workforce/api";
 import { getDivisionForDept } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
-import { saveImport, loadImport } from "./workforce/persist";
+import { saveImportLocal, loadImportLocal, saveImportRemote, loadImportRemote } from "./workforce/persist";
+import type { StoredImport } from "./workforce/persist";
 
 // ─── Static fallback data (shown before any import) ──────────────────────────
 // Same 3-block shape as before, just expressed as explicit time-period blocks
@@ -228,12 +229,13 @@ export default function WorkforceTimeline() {
     return () => clearInterval(id);
   }, []);
 
-  // Hydrate from the last imported file (localStorage) on mount, so the dashboard
-  // doesn't reset to the static example whenever this component remounts —
-  // e.g. navigating away and back, or the other page that also embeds this component.
-  useEffect(() => {
-    const stored = loadImport();
-    if (!stored) return;
+  // Hydrate from the last imported file on mount, so the dashboard doesn't reset
+  // to the static example whenever this component remounts — e.g. navigating
+  // away and back, reloading the page, or the other page that also embeds this
+  // component. localStorage hydrates instantly (no flash); the server request
+  // (shared across every user/device) then overwrites it with the latest import
+  // if there is one, and refreshes the local cache to match.
+  const hydrate = (stored: StoredImport) => {
     setParsed(stored.parsed);
     setImportedAt(stored.importedAt);
     const today = todayThai();
@@ -241,6 +243,18 @@ export default function WorkforceTimeline() {
       ? today
       : stored.parsed.availableDates[stored.parsed.availableDates.length - 1] ?? today;
     setTargetDate(date);
+  };
+
+  useEffect(() => {
+    const local = loadImportLocal();
+    if (local) hydrate(local);
+
+    loadImportRemote().then(remote => {
+      if (!remote) return;
+      if (local && local.importedAt === remote.importedAt) return; // already showing this import
+      hydrate(remote);
+      saveImportLocal(remote.parsed, remote.importedAt);
+    });
   }, []);
 
   // Recalculate when user changes the target date
@@ -394,7 +408,8 @@ export default function WorkforceTimeline() {
       setDashData(data);
       setDepts(data.departmentTimeline);
       setImportedAt(importedAtStr);
-      saveImport(p, importedAtStr);
+      saveImportLocal(p, importedAtStr);
+      await saveImportRemote(p, importedAtStr);
     } catch (err) {
       setImportErr("อ่านไฟล์ไม่ได้ — กรุณาใช้ไฟล์รายงานประกาศกะ (.xls/.xlsx)");
       console.error(err);
