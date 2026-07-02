@@ -3,6 +3,15 @@ import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 
 interface Application { _row: string; [key: string]: string; }
+interface Appointment { appointment_date: string; note: string; }
+
+function formatApptDate(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  const months = ["", "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+  return `${d} ${months[m]} ${y + 543}`;
+}
 
 const STATUS_COLOR: Record<string, { bg: string; text: string; border: string }> = {
   "รอพิจารณา":              { bg: "#fef9c3", text: "#b45309", border: "#fde68a" },
@@ -73,6 +82,9 @@ export default function RecruitPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [detail, setDetail]             = useState<Application | null>(null);
   const [updating, setUpdating]         = useState<string | null>(null);
+  const [appointments, setAppointments] = useState<Record<string, Appointment>>({});
+  const [apptDraft, setApptDraft]       = useState<Appointment>({ appointment_date: "", note: "" });
+  const [savingAppt, setSavingAppt]     = useState(false);
 
   const isHR        = user && ["hr", "deputyHR", "admin"].includes(user.role);
   const isHead      = user?.role === "head";
@@ -101,7 +113,38 @@ export default function RecruitPage() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  async function loadAppointments() {
+    try {
+      const r = await fetch("/api/recruit/appointments");
+      const d = await r.json() as { ok: boolean; appointments: { row_idx: number; appointment_date: string; note: string }[] };
+      if (!d.ok) return;
+      const map: Record<string, Appointment> = {};
+      for (const a of d.appointments) map[String(a.row_idx)] = { appointment_date: a.appointment_date, note: a.note };
+      setAppointments(map);
+    } catch { /* non-fatal — appointment fields just show empty */ }
+  }
+
+  async function saveAppointment() {
+    if (!detail) return;
+    setSavingAppt(true);
+    try {
+      await fetch("/api/recruit/appointments", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row_idx: Number(detail._row), ...apptDraft }),
+      });
+      setAppointments(prev => ({ ...prev, [detail._row]: { ...apptDraft } }));
+    } finally {
+      setSavingAppt(false);
+    }
+  }
+
+  useEffect(() => { load(); loadAppointments(); }, []);
+
+  useEffect(() => {
+    if (!detail) return;
+    const existing = appointments[detail._row];
+    setApptDraft({ appointment_date: existing?.appointment_date ?? "", note: existing?.note ?? "" });
+  }, [detail]); // eslint-disable-line
 
   async function updateStatus(app: Application, value: string) {
     if (statusColIdx < 0) return;
@@ -277,6 +320,16 @@ export default function RecruitPage() {
                       📱 {app[phoneKey]}
                     </div>
                   )}
+                  {appointments[app._row]?.appointment_date && (
+                    <div style={{ fontSize: 12, color: "#c2410c", fontWeight: 700, marginTop: 4 }}>
+                      📅 นัด {formatApptDate(appointments[app._row].appointment_date)}
+                    </div>
+                  )}
+                  {appointments[app._row]?.note && (
+                    <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2, maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      📝 {appointments[app._row].note}
+                    </div>
+                  )}
                 </div>
 
                 {/* Action buttons */}
@@ -406,7 +459,15 @@ export default function RecruitPage() {
                     ) : null;
                   })()}
                 </div>
-                {statusKey && <StatusBadge val={detail[statusKey] ?? ""} />}
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  {statusKey && <StatusBadge val={detail[statusKey] ?? ""} />}
+                  {appointments[detail._row]?.appointment_date && (
+                    <span style={{ background: "#fff7ed", color: "#c2410c", border: "1.5px solid #fed7aa",
+                      borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
+                      📅 นัด {formatApptDate(appointments[detail._row].appointment_date)}
+                    </span>
+                  )}
+                </div>
               </div>
               <button onClick={() => setDetail(null)}
                 style={{ border: "none", background: "#f1f5f9", borderRadius: 10, width: 36, height: 36,
@@ -476,6 +537,39 @@ export default function RecruitPage() {
                       ส่งเข้ากระบวนการสัมภาษณ์
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* ── HR appointment scheduling (call to book application/interview) ── */}
+              {canUpdate && (
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: "2px solid #f1f5f9" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#334155" }}>📅 นัดหมาย</div>
+                    <span style={{ fontSize: 11, background: "#fef9c3", color: "#b45309", borderRadius: 8, padding: "2px 10px", fontWeight: 600 }}>HR</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                    <div style={{ flex: "0 0 auto" }}>
+                      <label style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, display: "block", marginBottom: 4 }}>วันที่นัด</label>
+                      <input type="date" value={apptDraft.appointment_date}
+                        onChange={e => setApptDraft(d => ({ ...d, appointment_date: e.target.value }))}
+                        style={{ padding: "8px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                          fontFamily: "inherit", fontSize: 13 }} />
+                    </div>
+                    <div style={{ flex: "1 1 220px" }}>
+                      <label style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, display: "block", marginBottom: 4 }}>หมายเหตุ / ข้อความเพิ่มเติม</label>
+                      <textarea value={apptDraft.note} rows={2}
+                        placeholder="เช่น นัดกรอกใบสมัคร 10:00 น. / โทรนัดสัมภาษณ์รอบ 2"
+                        onChange={e => setApptDraft(d => ({ ...d, note: e.target.value }))}
+                        style={{ width: "100%", padding: "8px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                          fontFamily: "inherit", fontSize: 13, resize: "vertical" }} />
+                    </div>
+                  </div>
+                  <button onClick={saveAppointment} disabled={savingAppt}
+                    style={{ marginTop: 10, padding: "9px 20px", borderRadius: 10, border: "none",
+                      background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer",
+                      fontFamily: "inherit", opacity: savingAppt ? 0.6 : 1 }}>
+                    {savingAppt ? "กำลังบันทึก..." : "บันทึกนัดหมาย"}
+                  </button>
                 </div>
               )}
 
