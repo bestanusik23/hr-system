@@ -213,6 +213,7 @@ export default function WorkforceTimeline() {
   const [search, setSearch]         = useState("");
   const [importedAt, setImportedAt] = useState<string | null>(null);
   const [importErr, setImportErr]   = useState<string | null>(null);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const [loading, setLoading]       = useState(false);
   const fileRef                     = useRef<HTMLInputElement>(null);
   const [tip, setTip]               = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
@@ -400,6 +401,7 @@ export default function WorkforceTimeline() {
     if (!file) return;
     setLoading(true);
     setImportErr(null);
+    setSyncWarning(null);
     try {
       const { parsed: p, data } = await importWorkforceFile(file);
       const importedAtStr = new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
@@ -408,8 +410,13 @@ export default function WorkforceTimeline() {
       setDashData(data);
       setDepts(data.departmentTimeline);
       setImportedAt(importedAtStr);
-      saveImportLocal(p, importedAtStr);
-      await saveImportRemote(p, importedAtStr);
+      const localOk  = saveImportLocal(p, importedAtStr);
+      const remoteOk = await saveImportRemote(p, importedAtStr);
+      if (!remoteOk) {
+        setSyncWarning("บันทึกไปยังเซิร์ฟเวอร์ไม่สำเร็จ — ข้อมูลนี้จะเห็นเฉพาะเบราว์เซอร์นี้ (ดู Console เพื่อดูรายละเอียด)");
+      } else if (!localOk) {
+        setSyncWarning("บันทึกสำเร็จบนเซิร์ฟเวอร์ แต่แคชในเครื่องนี้ล้มเหลว");
+      }
     } catch (err) {
       setImportErr("อ่านไฟล์ไม่ได้ — กรุณาใช้ไฟล์รายงานประกาศกะ (.xls/.xlsx)");
       console.error(err);
@@ -514,6 +521,12 @@ export default function WorkforceTimeline() {
           <span className="hrwt-import-err">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             {importErr}
+          </span>
+        )}
+        {syncWarning && (
+          <span className="hrwt-import-err">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 9v4M12 17h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+            {syncWarning}
           </span>
         )}
       </div>

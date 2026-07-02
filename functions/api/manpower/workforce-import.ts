@@ -37,13 +37,17 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!body?.parsed || !body.importedAt)
     return Response.json({ ok: false, error: "Missing parsed/importedAt" }, { status: 400 });
 
-  await ctx.env.HR_DB.prepare(`
-    INSERT INTO workforce_imports (dataset_key, data, imported_at, imported_by, updated_at)
-    VALUES (?, ?, ?, ?, datetime('now'))
-    ON CONFLICT(dataset_key) DO UPDATE SET
-      data=excluded.data, imported_at=excluded.imported_at,
-      imported_by=excluded.imported_by, updated_at=datetime('now')
-  `).bind(DATASET_KEY, JSON.stringify(body.parsed), body.importedAt, user.full_name).run();
+  try {
+    await ctx.env.HR_DB.prepare(`
+      INSERT INTO workforce_imports (dataset_key, data, imported_at, imported_by, updated_at)
+      VALUES (?, ?, ?, ?, datetime('now'))
+      ON CONFLICT(dataset_key) DO UPDATE SET
+        data=excluded.data, imported_at=excluded.imported_at,
+        imported_by=excluded.imported_by, updated_at=datetime('now')
+    `).bind(DATASET_KEY, JSON.stringify(body.parsed), body.importedAt, user.full_name ?? user.username ?? "").run();
+  } catch (err) {
+    return Response.json({ ok: false, error: `D1 write failed: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+  }
 
   return Response.json({ ok: true });
 };
