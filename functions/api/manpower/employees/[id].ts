@@ -83,7 +83,9 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   return Response.json({ ok: true });
 };
 
-// PATCH /api/manpower/employees/:id — quick edit: name, position, division, dept, remark only
+// PATCH /api/manpower/employees/:id — partial update: only fields present in the body are
+// changed, everything else in the row is left untouched (safe for e.g. "just set division_id"
+// bulk operations without needing to resend the whole record).
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -91,27 +93,31 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const b = await ctx.request.json() as Record<string, unknown>;
-  const { full_name, position, division_id, department_id, remark, emp_status,
-          license_number, license_expiry, car_plate_1, car_plate_2, moto_plate_1, moto_plate_2 } = b;
 
-  if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
+  if ("full_name" in b && !b.full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
 
   const ALLOWED_STATUSES = ["probation", "passed", "transferred"];
-  const newStatus = ALLOWED_STATUSES.includes(emp_status as string) ? (emp_status as string) : null;
+  const SETTABLE_FIELDS = [
+    "full_name", "position", "division_id", "department_id", "remark",
+    "license_number", "license_expiry", "car_plate_1", "car_plate_2", "moto_plate_1", "moto_plate_2",
+  ];
 
-  await ctx.env.HR_DB.prepare(`
-    UPDATE employees SET full_name=?, position=?, division_id=?, department_id=?, remark=?,
-      license_number=?, license_expiry=?, car_plate_1=?, car_plate_2=?, moto_plate_1=?, moto_plate_2=?,
-      ${newStatus ? "emp_status=?," : ""}
-      updated_at=datetime('now')
-    WHERE id=?
-  `).bind(
-    String(full_name), position ?? null, division_id ?? null, department_id ?? null, remark ?? null,
-    license_number ?? null, license_expiry ?? null,
-    car_plate_1 ?? null, car_plate_2 ?? null, moto_plate_1 ?? null, moto_plate_2 ?? null,
-    ...(newStatus ? [newStatus] : []),
-    id,
-  ).run();
+  const fields: Record<string, unknown> = {};
+  for (const key of SETTABLE_FIELDS) {
+    if (key in b) fields[key] = b[key] ?? null;
+  }
+  if ("emp_status" in b && ALLOWED_STATUSES.includes(b.emp_status as string)) {
+    fields.emp_status = b.emp_status;
+  }
+
+  if (Object.keys(fields).length === 0) {
+    return Response.json({ ok: false, error: "ไม่มีข้อมูลที่จะอัปเดต" }, { status: 400 });
+  }
+
+  const setClause = Object.keys(fields).map(k => `${k}=?`).join(", ");
+  await ctx.env.HR_DB.prepare(
+    `UPDATE employees SET ${setClause}, updated_at=datetime('now') WHERE id=?`
+  ).bind(...Object.values(fields), id).run();
 
   try {
     await ctx.env.HR_DB.prepare(

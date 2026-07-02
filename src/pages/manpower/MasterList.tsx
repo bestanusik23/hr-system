@@ -5,6 +5,35 @@ import MasterEmployeeForm, { type MasterEmployee } from "./MasterEmployeeForm";
 
 interface Division { id: number; name: string; }
 
+// Keyword → candidate substrings to look for in the real division names (fetched live from
+// /api/eval/org, not hardcoded IDs — the actual division list/IDs can differ from any static
+// assumption, e.g. "ฝ่ายบัญชี" and "ศูนย์มะเร็ง" turned out to be their own divisions rather
+// than folded into "ฝ่ายการเงิน"/"ฝ่ายเทคนิคบริการ"). First matching hint wins.
+const POSITION_DIVISION_HINTS: [RegExp, string[]][] = [
+  [/ผู้ป่วยใน|ห้องผ่าตัด|ห้องคลอด|ผู้ป่วยหนัก|ผู้ป่วยเด็ก|จ่ายกลาง|เครื่องมือแพทย์/, ["บริการส่วนใน", "บริการ"]],
+  [/ผู้ป่วยนอก|อุบัติเหตุ|ฉุกเฉิน|ศูนย์สุขภาพ|sleep|คลินิก|บริการส่วนหน้า/i, ["พยาบาลส่วนหน้า", "บริการส่วนหน้า"]],
+  [/เภสัช|รังสี|เทคนิคการแพทย์|กายภาพ/, ["เทคนิคบริการ"]],
+  [/มะเร็ง|เคมีบำบัด/, ["มะเร็ง", "เทคนิคบริการ"]],
+  [/บัญชี|สินทรัพย์/, ["บัญชี"]],
+  [/การเงิน|จัดซื้อ|พัสดุ|คลังยา/, ["การเงิน"]],
+  [/ทรัพยากรบุคคล|พัฒนาคุณภาพ/, ["ค่าตอบแทน", "บุคคล"]],
+  [/การตลาด|ประชาสัมพันธ์|ขายและ|ต้อนรับ/, ["พัฒนาองค์กร", "การตลาด"]],
+  [/ซ่อมบำรุง|อาคารสถานที่|แม่บ้าน|โภชนาการ|ซักฟอก|ยานยนต์|เวรเปล/, ["สนับสนุน"]],
+  [/เลขานุการ|ธุรการ|ประสานสิทธิ|เวชระเบียน|เวชสถิติ|สารสนเทศ|ประสานงานแพทย์|ทบทวนการใช้ทรัพยากร|^UR/i, ["ผู้อำนวยการ", "สำนักงาน"]],
+  [/แพทย์(?!ฉุกเฉิน)/, ["การแพทย์"]],
+];
+
+function suggestDivisionId(position: string, divisions: Division[]): number | "" {
+  for (const [re, hints] of POSITION_DIVISION_HINTS) {
+    if (!re.test(position)) continue;
+    for (const hint of hints) {
+      const match = divisions.find(d => d.name.includes(hint));
+      if (match) return match.id;
+    }
+  }
+  return "";
+}
+
 const STATUS_FILTERS: [string, string][] = [
   ["", "ทั้งหมด"],
   ["active", "Active"],
@@ -32,6 +61,11 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
   const [delErr, setDelErr]   = useState("");
   const [deleting, setDeleting] = useState(false);
   const [loadErr, setLoadErr] = useState("");
+  const [autoAssignOpen, setAutoAssignOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<Record<number, number | "">>({});
+  const [savingBulk, setSavingBulk] = useState(false);
+  const [bulkErr, setBulkErr] = useState("");
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
 
   const canEdit = user && ["hr", "admin"].includes(user.role);
 
@@ -69,6 +103,40 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
     setConfirmDel(null); load(); onChanged();
   }
 
+  function openAutoAssign() {
+    const initial: Record<number, number | ""> = {};
+    for (const e of rows) initial[e.id] = suggestDivisionId(e.position ?? "", divisions);
+    setSuggestions(initial);
+    setBulkErr("");
+    setAutoAssignOpen(true);
+  }
+
+  async function saveAutoAssign() {
+    const entries = Object.entries(suggestions).filter(([, v]) => v !== "");
+    if (entries.length === 0) { setBulkErr("ยังไม่ได้เลือกฝ่ายให้ใครเลย"); return; }
+    setSavingBulk(true); setBulkErr("");
+    setBulkProgress({ done: 0, total: entries.length });
+    let failed = 0;
+    for (let i = 0; i < entries.length; i++) {
+      const [empId, division_id] = entries[i];
+      try {
+        const r = await fetch(`/api/manpower/employees/${empId}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ division_id }),
+        });
+        const d = await r.json() as { ok: boolean };
+        if (!d.ok) failed++;
+      } catch {
+        failed++;
+      }
+      setBulkProgress({ done: i + 1, total: entries.length });
+    }
+    setSavingBulk(false);
+    if (failed > 0) { setBulkErr(`บันทึกไม่สำเร็จ ${failed} รายการ จากทั้งหมด ${entries.length} รายการ`); }
+    else { setAutoAssignOpen(false); }
+    load(); onChanged();
+  }
+
   const th: React.CSSProperties = { padding: "10px 12px", textAlign: "left", fontWeight: 700,
     color: "#475569", borderBottom: "2px solid #e2e8f0", fontSize: 11.5, whiteSpace: "nowrap" };
   const td: React.CSSProperties = { padding: "10px 12px", fontSize: 12.5, color: "#1e293b", whiteSpace: "nowrap" };
@@ -96,6 +164,13 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
             }}>{v}</button>
           ))}
         </div>
+        {canEdit && divId === "none" && rows.length > 0 && (
+          <button onClick={openAutoAssign}
+            style={{ padding: "8px 16px", borderRadius: 10, border: "none", background: "#7c3aed",
+              color: "#fff", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
+            🪄 เดาฝ่ายจากตำแหน่งอัตโนมัติ
+          </button>
+        )}
         <span style={{ fontSize: 13, color: "#94a3b8", marginLeft: "auto" }}>{rows.length} คน</span>
       </div>
 
@@ -200,6 +275,74 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
                   background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 14,
                   cursor: deleting ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: deleting ? 0.7 : 1 }}>
                 {deleting ? "กำลังลบ…" : "ยืนยันลบ"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {autoAssignOpen && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: "24px 28px", maxWidth: 640, width: "100%",
+            maxHeight: "85vh", display: "flex", flexDirection: "column",
+            boxShadow: "0 24px 64px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>🪄 เดาฝ่ายจากตำแหน่งอัตโนมัติ</div>
+            <div style={{ fontSize: 12.5, color: "#64748b", marginBottom: 16 }}>
+              ตรวจสอบและแก้ไขฝ่ายที่ระบบเดาให้ก่อนบันทึก ({rows.length} คน)
+            </div>
+
+            <div style={{ overflowY: "auto", flex: 1, border: "1px solid #e2e8f0", borderRadius: 10 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", position: "sticky", top: 0 }}>
+                    <th style={th}>ชื่อ</th>
+                    <th style={th}>ตำแหน่ง</th>
+                    <th style={th}>ฝ่ายที่เลือก</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(e => (
+                    <tr key={e.id} style={{ borderTop: "1px solid #f1f5f9" }}>
+                      <td style={td}>{e.full_name}</td>
+                      <td style={td}>{e.position || "-"}</td>
+                      <td style={{ ...td, whiteSpace: "normal" }}>
+                        <select value={suggestions[e.id] ?? ""}
+                          onChange={ev => setSuggestions(prev => ({ ...prev, [e.id]: ev.target.value ? Number(ev.target.value) : "" }))}
+                          style={{ padding: "6px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                            fontSize: 12.5, fontFamily: "inherit", background: "#fff", cursor: "pointer", width: "100%" }}>
+                          <option value="">-- เลือก --</option>
+                          {divisions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {bulkErr && (
+              <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8,
+                padding: "10px 14px", fontSize: 13, color: "#dc2626", marginTop: 14 }}>{bulkErr}</div>
+            )}
+            {bulkProgress && savingBulk && (
+              <div style={{ fontSize: 12.5, color: "#64748b", marginTop: 10 }}>
+                กำลังบันทึก {bulkProgress.done} / {bulkProgress.total}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <button onClick={() => setAutoAssignOpen(false)} disabled={savingBulk}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "1.5px solid #e2e8f0",
+                  background: "#fff", color: "#64748b", fontWeight: 700, fontSize: 14,
+                  cursor: savingBulk ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                ยกเลิก
+              </button>
+              <button onClick={saveAutoAssign} disabled={savingBulk}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 9, border: "none",
+                  background: "#7c3aed", color: "#fff", fontWeight: 700, fontSize: 14,
+                  cursor: savingBulk ? "not-allowed" : "pointer", fontFamily: "inherit", opacity: savingBulk ? 0.7 : 1 }}>
+                {savingBulk ? "กำลังบันทึก…" : "บันทึกทั้งหมด"}
               </button>
             </div>
           </div>
