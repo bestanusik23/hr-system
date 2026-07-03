@@ -304,6 +304,9 @@ export default function ManpowerTable() {
   // Name editing (manual emp assignment)
   const [editingNameIdx, setEditingNameIdx] = useState<number | null>(null);
   const [nameEditVal,    setNameEditVal]    = useState("");
+  // Position title editing (the plan slot's own ตำแหน่ง label)
+  const [editingPosIdx, setEditingPosIdx] = useState<number | null>(null);
+  const [posEditVal,    setPosEditVal]    = useState("");
 
   // Fetch plan from DB (hydrates on top of static fallback)
   useEffect(() => {
@@ -346,6 +349,23 @@ export default function ManpowerTable() {
     await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name: stored }),
+    }).catch(() => { /* silent */ });
+  }
+
+  async function savePlanPos(rowIdx: number, val: string) {
+    const trimmed = val.trim();
+    const row = planRows[rowIdx];
+    if (!trimmed || !row) { setEditingPosIdx(null); return; }
+    setEditingPosIdx(null);
+    // Keep the display name in sync when it was just mirroring the position label
+    // (an out-of-sync name would otherwise be misread as a manually-assigned employee).
+    const syncName = row.name.trim() === row.pos.trim();
+    setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, pos: trimmed, name: syncName ? trimmed : r.name } : r));
+    const body: { pos: string; name?: string } = { pos: trimmed };
+    if (syncName) body.name = trimmed;
+    await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     }).catch(() => { /* silent */ });
   }
 
@@ -716,17 +736,38 @@ export default function ManpowerTable() {
                         borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ ...td, textAlign: "center", color: "#94a3b8", fontSize: 11 }}>{slotNum}</td>
                         <td style={{ ...td, fontWeight: r.pos ? 500 : 400 }}>
-                          {r.pos || <span style={{ color: "#cbd5e1" }}>—</span>}
-                          {r.isOverflow && !r.isUnknownPos && (
-                            <span style={{ marginLeft: 6, fontSize: 9, color: "#0891b2",
-                              background: "#e0f2fe", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
-                              +เพิ่มอัตโนมัติ
-                            </span>
-                          )}
-                          {r.isUnknownPos && (
-                            <span style={{ marginLeft: 6, fontSize: 9, color: "#b45309",
-                              background: "#fef3c7", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
-                              ไม่มีในแผน
+                          {editingPosIdx === r._rowIdx && r._rowIdx >= 0 ? (
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <input autoFocus value={posEditVal}
+                                onChange={e => setPosEditVal(e.target.value)}
+                                onKeyDown={e => { if (e.key === "Enter") savePlanPos(r._rowIdx, posEditVal); if (e.key === "Escape") setEditingPosIdx(null); }}
+                                placeholder="ชื่อตำแหน่ง"
+                                style={{ fontSize: 12, padding: "2px 6px", border: "1px solid #93c5fd", borderRadius: 4, width: 220 }} />
+                              <button onClick={() => savePlanPos(r._rowIdx, posEditVal)}
+                                style={{ fontSize: 10, padding: "2px 7px", background: "#0038C6", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>บันทึก</button>
+                              <button onClick={() => setEditingPosIdx(null)}
+                                style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>ยกเลิก</button>
+                            </div>
+                          ) : (
+                            <span style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {r.pos || <span style={{ color: "#cbd5e1" }}>—</span>}
+                              {r.isOverflow && !r.isUnknownPos && (
+                                <span style={{ fontSize: 9, color: "#0891b2",
+                                  background: "#e0f2fe", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
+                                  +เพิ่มอัตโนมัติ
+                                </span>
+                              )}
+                              {r.isUnknownPos && (
+                                <span style={{ fontSize: 9, color: "#b45309",
+                                  background: "#fef3c7", borderRadius: 8, padding: "1px 6px", fontWeight: 700 }}>
+                                  ไม่มีในแผน
+                                </span>
+                              )}
+                              {canEdit && r._rowIdx >= 0 && (
+                                <button onClick={() => { setEditingPosIdx(r._rowIdx); setPosEditVal(r.pos); }}
+                                  title="แก้ไขชื่อตำแหน่ง"
+                                  style={{ background: "none", border: "none", cursor: "pointer", color: "#94a3b8", fontSize: 11, padding: "0 2px" }}>✏️</button>
+                              )}
                             </span>
                           )}
                         </td>

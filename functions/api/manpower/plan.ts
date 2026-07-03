@@ -25,7 +25,7 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const rowIdx = parseInt(url.searchParams.get("row_idx") ?? "");
   if (isNaN(rowIdx)) return Response.json({ ok: false, error: "row_idx required" }, { status: 400 });
 
-  const body = await ctx.request.json() as { plan_qty?: number; note?: string; name?: string };
+  const body = await ctx.request.json() as { plan_qty?: number; note?: string; name?: string; pos?: string };
 
   const sets: string[] = ["updated_at = datetime('now')", "updated_by = ?"];
   const vals: (string | number)[] = [user.full_name ?? user.username ?? ""];
@@ -33,6 +33,7 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   if (typeof body.plan_qty === "number") { sets.push("plan_qty = ?"); vals.push(Math.max(0, body.plan_qty)); }
   if (typeof body.note   === "string")  { sets.push("note = ?");     vals.push(body.note); }
   if (typeof body.name   === "string")  { sets.push("name = ?");     vals.push(body.name); }
+  if (typeof body.pos    === "string" && body.pos.trim()) { sets.push("pos = ?"); vals.push(body.pos.trim()); }
 
   if (sets.length === 2) return Response.json({ ok: false, error: "Nothing to update" }, { status: 400 });
 
