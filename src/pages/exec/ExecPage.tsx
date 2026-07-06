@@ -21,6 +21,16 @@ interface Summary {
   recent_activity: { actor_name: string; module: string; action: string; created_at: string }[];
 }
 
+interface KpiSummary {
+  ok: boolean;
+  period_label: string;
+  turnover:       { pct: number; resigned: number; headcount: number };
+  staffing:       { pct: number; filled: number; plan: number };
+  orientation:    { pct: number | null; passed: number; total: number };
+  satisfaction:   { pct: number | null; responses: number };
+  probation_pass: { pct: number | null; passed: number; total: number };
+}
+
 type AlertLevel = "green" | "yellow" | "red";
 
 const ALERT_COLORS: Record<AlertLevel, { bg: string; border: string; text: string; icon: string }> = {
@@ -99,6 +109,40 @@ function buildAISummary(d: Summary): string[] {
   return lines;
 }
 
+function pctColorHigh(pct: number | null): string {
+  if (pct === null) return "#94a3b8";
+  if (pct >= 90) return "#16a34a";
+  if (pct >= 75) return "#0891b2";
+  if (pct >= 60) return "#d97706";
+  return "#dc2626";
+}
+function pctColorLow(pct: number): string {
+  if (pct <= 2)  return "#16a34a";
+  if (pct <= 5)  return "#0891b2";
+  if (pct <= 10) return "#d97706";
+  return "#dc2626";
+}
+
+function KpiCard({ label, icon, pct, sub, color }: { label: string; icon: string; pct: number | null; sub: string; color: string }) {
+  return (
+    <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px",
+      border: "1px solid #dce4f5", borderTop: `4px solid ${color}` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</span>
+        <span style={{ fontSize: 16 }}>{icon}</span>
+      </div>
+      <div style={{ fontSize: 30, fontWeight: 900, color }}>{pct === null ? "—" : `${pct}%`}</div>
+      <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>{sub}</div>
+      {pct !== null && (
+        <div style={{ marginTop: 10, height: 6, background: "#e8eeff", borderRadius: 3 }}>
+          <div style={{ height: 6, background: color, borderRadius: 3,
+            width: `${Math.min(100, pct)}%`, transition: "width .4s" }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KPI({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
   return (
     <div style={{ background: "#fff", borderRadius: 8, padding: "16px 20px",
@@ -144,11 +188,24 @@ function RowStat({ label, value, color }: { label: string; value: string | numbe
   );
 }
 
+function currentYM(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export default function ExecPage() {
   const [data, setData]           = useState<Summary | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
+
+  // HR KPI section (5 core metrics, selectable period)
+  const [kpiPeriodType, setKpiPeriodType] = useState<"month" | "year">("month");
+  const [kpiMonth, setKpiMonth]           = useState(currentYM);
+  const [kpiYear, setKpiYear]             = useState(() => String(new Date().getFullYear()));
+  const [kpiData, setKpiData]             = useState<KpiSummary | null>(null);
+  const [kpiLoading, setKpiLoading]       = useState(true);
+  const kpiValue = kpiPeriodType === "month" ? kpiMonth : kpiYear;
 
   function load() {
     setLoading(true);
@@ -161,6 +218,15 @@ export default function ExecPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    setKpiLoading(true);
+    fetch(`/api/exec/kpi?period=${kpiPeriodType}&value=${kpiValue}`).then(r => r.json())
+      .then((d: { ok: boolean } & KpiSummary) => { if (d.ok) setKpiData(d); })
+      .finally(() => setKpiLoading(false));
+  }, [kpiPeriodType, kpiValue]);
+
+  const yearOptions = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
   if (loading) return (
     <PageLayout title="Executive Dashboard">
@@ -214,6 +280,64 @@ export default function ExecPage() {
           ))}
         </div>
       </div>
+
+      {/* 5 ตัวชี้วัด HR KPI */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+        flexWrap: "wrap", gap: 10, marginBottom: 12, marginTop: 6 }}>
+        <SectionTitle icon="🎯">5 ตัวชี้วัด HR KPI{kpiData ? ` — ${kpiData.period_label}` : ""}</SectionTitle>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
+            {(["month", "year"] as const).map(t => (
+              <button key={t} onClick={() => setKpiPeriodType(t)}
+                style={{ padding: "6px 14px", borderRadius: 6, border: "none", fontFamily: "inherit",
+                  fontSize: 12, fontWeight: kpiPeriodType === t ? 700 : 400, cursor: "pointer",
+                  background: kpiPeriodType === t ? "#0038C6" : "transparent",
+                  color: kpiPeriodType === t ? "#fff" : "#64748b" }}>
+                {t === "month" ? "รายเดือน" : "รายปี"}
+              </button>
+            ))}
+          </div>
+          {kpiPeriodType === "month" ? (
+            <input type="month" value={kpiMonth} onChange={e => setKpiMonth(e.target.value)}
+              style={{ padding: "7px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
+                fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff" }} />
+          ) : (
+            <select value={kpiYear} onChange={e => setKpiYear(e.target.value)}
+              style={{ padding: "7px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
+                fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff", cursor: "pointer" }}>
+              {yearOptions.map(y => <option key={y} value={y}>{Number(y) + 543}</option>)}
+            </select>
+          )}
+        </div>
+      </div>
+      {kpiLoading || !kpiData ? (
+        <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด KPI…</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+          gap: 14, marginBottom: 28 }}>
+          <KpiCard label="ร้อยละพนักงานลาออก" icon="📉"
+            pct={kpiData.turnover.pct} color={pctColorLow(kpiData.turnover.pct)}
+            sub={`ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`} />
+          <KpiCard label="ร้อยละบุคลากรที่บรรจุตามแผน" icon="👥"
+            pct={kpiData.staffing.pct} color={pctColorHigh(kpiData.staffing.pct)}
+            sub={`บรรจุ ${kpiData.staffing.filled} / แผน ${kpiData.staffing.plan} อัตรา`} />
+          <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ" icon="🧑‍🏫"
+            pct={kpiData.orientation.pct} color={pctColorHigh(kpiData.orientation.pct)}
+            sub={kpiData.orientation.total > 0
+              ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน`
+              : "ไม่มีพนักงานใหม่ในช่วงนี้"} />
+          <KpiCard label="ร้อยละความพึงพอใจของผู้ได้รับการอบรม" icon="⭐"
+            pct={kpiData.satisfaction.pct} color={pctColorHigh(kpiData.satisfaction.pct)}
+            sub={kpiData.satisfaction.responses > 0
+              ? `จาก ${kpiData.satisfaction.responses} คำตอบ`
+              : "ยังไม่มีการตอบแบบสอบถาม"} />
+          <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน" icon="📝"
+            pct={kpiData.probation_pass.pct} color={pctColorHigh(kpiData.probation_pass.pct)}
+            sub={kpiData.probation_pass.total > 0
+              ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน`
+              : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้"} />
+        </div>
+      )}
 
       {/* KPI Alert Bar */}
       <SectionTitle icon="⚡">KPI Alert — สถานะระบบ</SectionTitle>
