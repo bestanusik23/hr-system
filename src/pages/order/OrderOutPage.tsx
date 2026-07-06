@@ -284,6 +284,7 @@ function openPrintWindow(d: OrderData): string {
 
 export default function OrderOutPage() {
   const [view, setView] = useState<"form" | "history">("form");
+  const [isEditing, setIsEditing] = useState(false);
 
   const [orderNo, setOrderNo]     = useState("");
   const [activity, setActivity]   = useState("");
@@ -343,6 +344,38 @@ export default function OrderOutPage() {
     }
   }
 
+  async function editFromHistory(id: number) {
+    setReprintingId(id); setHistErr("");
+    try {
+      const r = await fetch(`/api/order-out/${id}`);
+      const d = await r.json() as { ok: boolean; error?: string; order?: {
+        orderNo: string; activity: string; placeName: string; address: string;
+        eventDate: string; orderDate: string; staff: StaffRow[];
+      } };
+      if (!d.ok || !d.order) { setHistErr(d.error ?? "ไม่พบคำสั่งนี้"); return; }
+      setOrderNo(d.order.orderNo);
+      setActivity(d.order.activity);
+      setPlaceName(d.order.placeName);
+      setAddress(d.order.address);
+      setEventDate(d.order.eventDate);
+      setOrderDate(d.order.orderDate);
+      setStaff(d.order.staff.length > 0 ? d.order.staff : [{ name: "", position: "" }]);
+      setPopupErr("");
+      setIsEditing(true);
+      setView("form");
+    } catch {
+      setHistErr("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setReprintingId(null);
+    }
+  }
+
+  function startNewOrder() {
+    setOrderNo(""); setActivity(""); setPlaceName(""); setAddress("");
+    setEventDate(""); setOrderDate(""); setStaff([{ name: "", position: "" }]);
+    setIsEditing(false); setPopupErr(""); setView("form");
+  }
+
   function addRow() { setStaff(s => [...s, { name: "", position: "" }]); }
   function removeRow(i: number) { setStaff(s => s.filter((_, idx) => idx !== i)); }
   function updateRow(i: number, field: keyof StaffRow, value: string) {
@@ -381,7 +414,7 @@ export default function OrderOutPage() {
         background: "#fff", borderRadius: 8, padding: 4, width: "fit-content",
         boxShadow: "0 1px 4px rgba(0,56,198,0.08)", border: "1px solid #dce4f5" }}>
         {([["form", "📝 สร้างคำสั่งใหม่"], ["history", "🕘 ประวัติคำสั่งย้อนหลัง"]] as const).map(([key, label]) => (
-          <button key={key} onClick={() => setView(key)} style={{
+          <button key={key} onClick={() => key === "form" ? startNewOrder() : setView(key)} style={{
             padding: "9px 18px", borderRadius: 6, border: "none", fontFamily: "inherit",
             fontSize: 13, fontWeight: view === key ? 700 : 400, cursor: "pointer",
             background: view === key ? "#0038C6" : "transparent",
@@ -432,13 +465,20 @@ export default function OrderOutPage() {
                       <td style={{ padding: "10px 14px", fontSize: 12.5, color: "#64748b" }}>{o.place_name || "—"}</td>
                       <td style={{ padding: "10px 14px", fontSize: 12.5, color: "#64748b", whiteSpace: "nowrap" }}>{o.event_date ? thaiDate(o.event_date) : "—"}</td>
                       <td style={{ padding: "10px 14px", fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>{o.created_by || "—"}</td>
-                      <td style={{ padding: "10px 14px" }}>
+                      <td style={{ padding: "10px 14px", display: "flex", gap: 6, flexWrap: "wrap" }}>
                         <button onClick={() => reprint(o.id)} disabled={reprintingId === o.id}
                           style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid #c4cfee",
                             background: "#eff6ff", color: "#0038C6", fontWeight: 700, fontSize: 12,
                             cursor: reprintingId === o.id ? "not-allowed" : "pointer", fontFamily: "inherit",
                             whiteSpace: "nowrap", opacity: reprintingId === o.id ? 0.6 : 1 }}>
                           {reprintingId === o.id ? "กำลังเปิด…" : "🖨️ ดู / พิมพ์ซ้ำ"}
+                        </button>
+                        <button onClick={() => editFromHistory(o.id)} disabled={reprintingId === o.id}
+                          style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid #fde68a",
+                            background: "#fffbeb", color: "#b45309", fontWeight: 700, fontSize: 12,
+                            cursor: reprintingId === o.id ? "not-allowed" : "pointer", fontFamily: "inherit",
+                            whiteSpace: "nowrap", opacity: reprintingId === o.id ? 0.6 : 1 }}>
+                          ✏️ แก้ไข
                         </button>
                       </td>
                     </tr>
@@ -451,12 +491,19 @@ export default function OrderOutPage() {
       ) : (
       <div style={{ display: "grid", gap: 20, maxWidth: 760 }}>
 
-        <div style={{ background: "#eff6ff", border: "1.5px solid #c4cfee", borderRadius: 10,
-          padding: "12px 16px", fontSize: 12.5, color: "#334155", lineHeight: 1.7 }}>
-          กรอกข้อมูลด้านล่าง ระบบจะประกอบเป็นคำสั่งมอบหมายปฏิบัติงานนอกสถานที่ตามแบบฟอร์มมาตรฐาน
-          แล้วเปิดหน้าต่างสำหรับดูตัวอย่างและพิมพ์ได้ทันที (ช่องที่ยังไม่กรอกจะแสดงเป็นเส้นประในเอกสาร)
-          คำสั่งที่พิมพ์แล้วจะถูกบันทึกไว้ในแท็บ "ประวัติคำสั่งย้อนหลัง" ให้เรียกดู/พิมพ์ซ้ำได้ภายหลัง
-        </div>
+        {isEditing ? (
+          <div style={{ background: "#fffbeb", border: "1.5px solid #fde68a", borderRadius: 10,
+            padding: "12px 16px", fontSize: 12.5, color: "#92400e", lineHeight: 1.7 }}>
+            ✏️ กำลังแก้ไขคำสั่งเลขที่ <b>{orderNo || "(ไม่มีเลขที่)"}</b> — แก้ไขข้อมูลแล้วกด "พิมพ์คำสั่ง" เพื่อบันทึกทับรายการเดิม
+          </div>
+        ) : (
+          <div style={{ background: "#eff6ff", border: "1.5px solid #c4cfee", borderRadius: 10,
+            padding: "12px 16px", fontSize: 12.5, color: "#334155", lineHeight: 1.7 }}>
+            กรอกข้อมูลด้านล่าง ระบบจะประกอบเป็นคำสั่งมอบหมายปฏิบัติงานนอกสถานที่ตามแบบฟอร์มมาตรฐาน
+            แล้วเปิดหน้าต่างสำหรับดูตัวอย่างและพิมพ์ได้ทันที (ช่องที่ยังไม่กรอกจะแสดงเป็นเส้นประในเอกสาร)
+            คำสั่งที่พิมพ์แล้วจะถูกบันทึกไว้ในแท็บ "ประวัติคำสั่งย้อนหลัง" ให้เรียกดู/แก้ไข/พิมพ์ซ้ำได้ภายหลัง
+          </div>
+        )}
 
         {/* ── Order info card ── */}
         <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #dce4f5",
@@ -542,7 +589,7 @@ export default function OrderOutPage() {
             color: "#fff", fontWeight: 800, fontSize: 14, cursor: "pointer", fontFamily: "inherit",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
             boxShadow: "0 4px 14px rgba(0,56,198,.3)" }}>
-          🖨️ ดูตัวอย่าง / พิมพ์คำสั่ง
+          {isEditing ? "🖨️ พิมพ์ / บันทึกการแก้ไข" : "🖨️ ดูตัวอย่าง / พิมพ์คำสั่ง"}
         </button>
       </div>
       )}
