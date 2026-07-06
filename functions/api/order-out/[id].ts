@@ -15,6 +15,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   ).bind(id).first<{
     id: number; order_no: string; activity: string; place_name: string; address: string;
     event_date: string | null; order_date: string | null; staff_json: string;
+    signer_name: string; signer_title: string; signer_dept: string;
     created_by: string; created_at: string;
   }>();
   if (!row) return Response.json({ ok: false, error: "ไม่พบคำสั่งนี้" }, { status: 404 });
@@ -28,7 +29,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       id: row.id, orderNo: row.order_no, activity: row.activity,
       placeName: row.place_name, address: row.address,
       eventDate: row.event_date ?? "", orderDate: row.order_date ?? "",
-      staff, createdBy: row.created_by, createdAt: row.created_at,
+      staff,
+      signerName: row.signer_name ?? "", signerTitle: row.signer_title ?? "", signerDept: row.signer_dept ?? "",
+      createdBy: row.created_by, createdAt: row.created_at,
     },
   });
 };

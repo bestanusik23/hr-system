@@ -20,7 +20,16 @@ interface OrderData {
   eventDate: string;
   orderDate: string;
   staff: StaffRow[];
+  signerName: string;
+  signerTitle: string;
+  signerDept: string;
 }
+
+const DEFAULT_SIGNER = {
+  name: "อนุสิกข์  ทองแผ่น",
+  title: "รักษาการ รองผู้อำนวยการ",
+  dept: "ฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ",
+};
 
 // ─── Small inline icons (currentColor, reused across the letterhead/section headings) ─
 const ICON = {
@@ -232,9 +241,9 @@ function generateOrderHTML(d: OrderData): string {
     <!-- Signature block -->
     <div class="signature-block">
       <p>ลงชื่อ ……………………………………………………</p>
-      <p class="bold" style="margin-top:8px">(อนุสิกข์&nbsp;&nbsp;ทองแผ่น)</p>
-      <p>รักษาการ รองผู้อำนวยการ</p>
-      <p>ฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ</p>
+      <p class="bold" style="margin-top:8px">(${d.signerName || DEFAULT_SIGNER.name})</p>
+      <p>${d.signerTitle || DEFAULT_SIGNER.title}</p>
+      <p>${d.signerDept || DEFAULT_SIGNER.dept}</p>
     </div>
 
   </div>
@@ -293,6 +302,9 @@ export default function OrderOutPage() {
   const [eventDate, setEventDate] = useState("");
   const [orderDate, setOrderDate] = useState("");
   const [staff, setStaff] = useState<StaffRow[]>([{ name: "", position: "" }]);
+  const [signerName, setSignerName]   = useState(DEFAULT_SIGNER.name);
+  const [signerTitle, setSignerTitle] = useState(DEFAULT_SIGNER.title);
+  const [signerDept, setSignerDept]   = useState(DEFAULT_SIGNER.dept);
   const [popupErr, setPopupErr] = useState("");
 
   // History (reprint) tab
@@ -328,6 +340,7 @@ export default function OrderOutPage() {
       const d = await r.json() as { ok: boolean; error?: string; order?: {
         orderNo: string; activity: string; placeName: string; address: string;
         eventDate: string; orderDate: string; staff: StaffRow[];
+        signerName: string; signerTitle: string; signerDept: string;
       } };
       if (!d.ok || !d.order) { setHistErr(d.error ?? "ไม่พบคำสั่งนี้"); return; }
       const err = openPrintWindow({
@@ -335,6 +348,9 @@ export default function OrderOutPage() {
         placeName: d.order.placeName, address: d.order.address,
         eventDate: thaiDate(d.order.eventDate), orderDate: thaiDate(d.order.orderDate),
         staff: d.order.staff,
+        signerName: d.order.signerName || DEFAULT_SIGNER.name,
+        signerTitle: d.order.signerTitle || DEFAULT_SIGNER.title,
+        signerDept: d.order.signerDept || DEFAULT_SIGNER.dept,
       });
       if (err) setHistErr(err);
     } catch {
@@ -351,6 +367,7 @@ export default function OrderOutPage() {
       const d = await r.json() as { ok: boolean; error?: string; order?: {
         orderNo: string; activity: string; placeName: string; address: string;
         eventDate: string; orderDate: string; staff: StaffRow[];
+        signerName: string; signerTitle: string; signerDept: string;
       } };
       if (!d.ok || !d.order) { setHistErr(d.error ?? "ไม่พบคำสั่งนี้"); return; }
       setOrderNo(d.order.orderNo);
@@ -360,6 +377,9 @@ export default function OrderOutPage() {
       setEventDate(d.order.eventDate);
       setOrderDate(d.order.orderDate);
       setStaff(d.order.staff.length > 0 ? d.order.staff : [{ name: "", position: "" }]);
+      setSignerName(d.order.signerName || DEFAULT_SIGNER.name);
+      setSignerTitle(d.order.signerTitle || DEFAULT_SIGNER.title);
+      setSignerDept(d.order.signerDept || DEFAULT_SIGNER.dept);
       setPopupErr("");
       setIsEditing(true);
       setView("form");
@@ -373,6 +393,7 @@ export default function OrderOutPage() {
   function startNewOrder() {
     setOrderNo(""); setActivity(""); setPlaceName(""); setAddress("");
     setEventDate(""); setOrderDate(""); setStaff([{ name: "", position: "" }]);
+    setSignerName(DEFAULT_SIGNER.name); setSignerTitle(DEFAULT_SIGNER.title); setSignerDept(DEFAULT_SIGNER.dept);
     setIsEditing(false); setPopupErr(""); setView("form");
   }
 
@@ -388,14 +409,14 @@ export default function OrderOutPage() {
       orderNo, activity, placeName, address,
       eventDate: thaiDate(eventDate),
       orderDate: thaiDate(orderDate),
-      staff,
+      staff, signerName, signerTitle, signerDept,
     });
     if (err) { setPopupErr(err); return; }
     // Save to history — non-blocking, printing already happened above.
     try {
       await fetch("/api/order-out", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderNo, activity, placeName, address, eventDate, orderDate, staff }),
+        body: JSON.stringify({ orderNo, activity, placeName, address, eventDate, orderDate, staff, signerName, signerTitle, signerDept }),
       });
     } catch { /* history save is best-effort */ }
   }
@@ -574,6 +595,31 @@ export default function OrderOutPage() {
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* ── Signer card ── */}
+        <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #dce4f5",
+          boxShadow: "0 2px 10px rgba(0,56,198,.05)", padding: "20px 22px" }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: "#0a1628", marginBottom: 16 }}>ผู้มีอำนาจลงนาม</div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>ชื่อ-นามสกุลผู้ลงนาม</label>
+            <input style={inputStyle} placeholder="เช่น อนุสิกข์ ทองแผ่น" value={signerName}
+              onChange={e => setSignerName(e.target.value)} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div>
+              <label style={labelStyle}>ตำแหน่ง</label>
+              <input style={inputStyle} placeholder="เช่น รักษาการ รองผู้อำนวยการ" value={signerTitle}
+                onChange={e => setSignerTitle(e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>ฝ่าย/สังกัด</label>
+              <input style={inputStyle} placeholder="เช่น ฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ" value={signerDept}
+                onChange={e => setSignerDept(e.target.value)} />
+            </div>
           </div>
         </div>
 

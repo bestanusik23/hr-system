@@ -37,6 +37,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const body = await ctx.request.json().catch(() => null) as {
     orderNo?: string; activity?: string; placeName?: string; address?: string;
     eventDate?: string; orderDate?: string; staff?: { name: string; position: string }[];
+    signerName?: string; signerTitle?: string; signerDept?: string;
   } | null;
   if (!body) return Response.json({ ok: false, error: "Invalid body" }, { status: 400 });
 
@@ -51,20 +52,24 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (existing) {
     await ctx.env.HR_DB.prepare(`
       UPDATE duty_orders
-      SET activity=?, place_name=?, address=?, event_date=?, order_date=?, staff_json=?, created_by=?
+      SET activity=?, place_name=?, address=?, event_date=?, order_date=?, staff_json=?, created_by=?,
+          signer_name=?, signer_title=?, signer_dept=?
       WHERE id=?
     `).bind(
       body.activity ?? "", body.placeName ?? "", body.address ?? "",
-      body.eventDate || null, body.orderDate || null, staffJson, actor, existing.id,
+      body.eventDate || null, body.orderDate || null, staffJson, actor,
+      body.signerName ?? "", body.signerTitle ?? "", body.signerDept ?? "", existing.id,
     ).run();
     id = existing.id;
   } else {
     const result = await ctx.env.HR_DB.prepare(`
-      INSERT INTO duty_orders (order_no, activity, place_name, address, event_date, order_date, staff_json, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO duty_orders (order_no, activity, place_name, address, event_date, order_date, staff_json, created_by,
+                                signer_name, signer_title, signer_dept)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       orderNo, body.activity ?? "", body.placeName ?? "", body.address ?? "",
       body.eventDate || null, body.orderDate || null, staffJson, actor,
+      body.signerName ?? "", body.signerTitle ?? "", body.signerDept ?? "",
     ).run();
     id = result.meta.last_row_id as number;
   }
