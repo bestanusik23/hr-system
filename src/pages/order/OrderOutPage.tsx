@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import PageLayout from "../../components/PageLayout";
 
 interface StaffRow { name: string; position: string; }
@@ -34,14 +34,17 @@ const ICON = {
 };
 
 function generateOrderHTML(d: OrderData): string {
-  const staffRows = d.staff
-    .filter(s => s.name.trim() || s.position.trim())
+  const filledStaff = d.staff.filter(s => s.name.trim() || s.position.trim());
+  const staffRows = filledStaff
     .map((s, i) => `
       <tr>
         <td class="idx">${i + 1}</td>
         <td class="fill">${s.name || "……………………………"}</td>
         <td class="fill">${s.position || "……………………………"}</td>
       </tr>`).join("");
+
+  // Shrink type density as the staff list grows, so the document reliably fits one A4 page.
+  const density = filledStaff.length > 20 ? "density-ultra" : filledStaff.length > 12 ? "density-compact" : "";
 
   return `<!DOCTYPE html>
 <html lang="th">
@@ -69,14 +72,48 @@ function generateOrderHTML(d: OrderData): string {
     .btn-close { background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.4);
       border-radius: 6px; padding: 8px 16px; font-size: 11pt; font-family: 'Sarabun', sans-serif; cursor: pointer; }
     .page-wrap { max-width: 230mm; margin: 20px auto; padding: 0 16px; }
-    .paper { position: relative; background: #fff; width: 210mm; min-height: 297mm; margin: 0 auto 20px;
+    .paper { position: relative; background: #fff; width: 210mm; height: 297mm; margin: 0 auto 20px;
       box-shadow: 0 4px 20px rgba(0,0,0,.18); overflow: hidden; }
+    .overflow-warn { background: #fef2f2; color: #dc2626; border-bottom: 2px solid #fecaca;
+      padding: 10px 20px; font-family: 'Sarabun', Arial, sans-serif; font-size: 12px; font-weight: 700;
+      text-align: center; position: sticky; top: 44px; z-index: 99; }
   }
   @media print {
-    .print-bar { display: none !important; }
-    .paper { position: relative; box-shadow: none; min-height: 273mm; overflow: hidden; }
+    .print-bar, .overflow-warn { display: none !important; }
+    /* Fixed height + hidden overflow guarantees the order never spills onto a second printed page. */
+    .paper { position: relative; box-shadow: none; height: 273mm; overflow: hidden; }
     body { background: #fff; }
   }
+
+  /* ── Density tiers — keep everything on one A4 page as the staff list grows ── */
+  body.density-compact .content { padding: 14px 26px 18px; }
+  body.density-compact .doc-header { padding: 14px 26px 10px; }
+  body.density-compact .header-logo { width: 100px; }
+  body.density-compact .hosp-name { font-size: 13pt; margin-bottom: 5px; }
+  body.density-compact .hosp-contact { font-size: 8.5pt; }
+  body.density-compact .title-row h1 { font-size: 14pt; }
+  body.density-compact .thin-rule { margin: 0 auto 10px; }
+  body.density-compact .body-text { line-height: 1.5; margin-bottom: 12px; }
+  body.density-compact .staff-table td, body.density-compact .staff-table th { padding: 6px 12px; font-size: 10.5pt; }
+  body.density-compact .staff-table { margin-bottom: 14px; }
+  body.density-compact .order-date-pill { margin: 4px 0 24px; }
+  body.density-compact .signature-block { margin-top: 2px; }
+
+  body.density-ultra .content { padding: 10px 20px 14px; }
+  body.density-ultra .doc-header { padding: 8px 20px 6px; }
+  body.density-ultra .header-logo { width: 78px; }
+  body.density-ultra .hosp-name { font-size: 11.5pt; margin-bottom: 3px; }
+  body.density-ultra .hosp-contact { font-size: 7.5pt; gap: 2px 14px; }
+  body.density-ultra .title-row h1 { font-size: 12.5pt; }
+  body.density-ultra p.center.bold, body.density-ultra p.center.location { margin-bottom: 3px; }
+  body.density-ultra .thin-rule { margin: 0 auto 6px; }
+  body.density-ultra .body-text { font-size: 10.5pt; line-height: 1.35; margin-bottom: 6px; text-indent: 1.5em; }
+  body.density-ultra .section-heading { margin-bottom: 4px; font-size: 11pt; }
+  body.density-ultra .staff-table td, body.density-ultra .staff-table th { padding: 3px 10px; font-size: 9.5pt; }
+  body.density-ultra .staff-table { margin-bottom: 8px; }
+  body.density-ultra .order-date-pill { margin: 2px 0 10px; padding: 5px 14px; }
+  body.density-ultra .signature-block { margin-top: 0; }
+  body.density-ultra .signature-block p { margin-bottom: 2px; }
 
   .content { padding: 22px 26px 32px; }
 
@@ -132,7 +169,7 @@ function generateOrderHTML(d: OrderData): string {
   .signature-block p { margin-bottom: 4px; }
 </style>
 </head>
-<body>
+<body class="${density}">
 
 <div class="print-bar">
   <span>คำสั่งมอบหมายปฏิบัติงานนอกสถานที่ ${d.orderNo || "(ยังไม่ระบุเลขที่)"}</span>
@@ -208,11 +245,50 @@ function generateOrderHTML(d: OrderData): string {
 
 </div>
 </div>
+
+<script>
+  function mmToPx(mm) {
+    var d = document.createElement('div');
+    d.style.cssText = 'height:' + mm + 'mm;position:absolute;visibility:hidden;';
+    document.body.appendChild(d);
+    var px = d.offsetHeight;
+    document.body.removeChild(d);
+    return px;
+  }
+  window.addEventListener('load', function () {
+    var paper = document.querySelector('.paper');
+    var pageWrap = document.querySelector('.page-wrap');
+    if (!paper || !pageWrap) return;
+    if (paper.scrollHeight > mmToPx(297) + 2) {
+      var warn = document.createElement('div');
+      warn.className = 'overflow-warn';
+      warn.textContent = '⚠ เนื้อหายาวเกินหนึ่งหน้ากระดาษ A4 — ส่วนที่เกินจะถูกตัดออกตอนพิมพ์ กรุณาลดจำนวนรายชื่อหรือย่อข้อความ';
+      document.body.insertBefore(warn, pageWrap);
+    }
+  });
+</script>
 </body>
 </html>`;
 }
 
+interface OrderListItem {
+  id: number; order_no: string; activity: string; place_name: string; address: string;
+  event_date: string | null; order_date: string | null; created_by: string; created_at: string;
+}
+
+function openPrintWindow(d: OrderData): string {
+  const html = generateOrderHTML(d);
+  const win = window.open("", "_blank", "width=900,height=1100,scrollbars=yes");
+  if (!win) return "ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาต popup สำหรับเว็บไซต์นี้";
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  return "";
+}
+
 export default function OrderOutPage() {
+  const [view, setView] = useState<"form" | "history">("form");
+
   const [orderNo, setOrderNo]     = useState("");
   const [activity, setActivity]   = useState("");
   const [placeName, setPlaceName] = useState("");
@@ -222,25 +298,77 @@ export default function OrderOutPage() {
   const [staff, setStaff] = useState<StaffRow[]>([{ name: "", position: "" }]);
   const [popupErr, setPopupErr] = useState("");
 
+  // History (reprint) tab
+  const [history, setHistory]         = useState<OrderListItem[]>([]);
+  const [historyLoading, setHistLoad] = useState(false);
+  const [historyErr, setHistErr]      = useState("");
+  const [historyQ, setHistoryQ]       = useState("");
+  const [reprintingId, setReprintingId] = useState<number | null>(null);
+
+  function loadHistory() {
+    setHistLoad(true); setHistErr("");
+    const params = new URLSearchParams();
+    if (historyQ.trim()) params.set("q", historyQ.trim());
+    fetch(`/api/order-out?${params}`).then(r => r.json())
+      .then((d: { ok: boolean; orders?: OrderListItem[]; error?: string }) => {
+        if (!d.ok) { setHistErr(d.error ?? "โหลดประวัติไม่สำเร็จ"); return; }
+        setHistory(d.orders ?? []);
+      })
+      .catch(() => setHistErr("เกิดข้อผิดพลาดในการเชื่อมต่อ"))
+      .finally(() => setHistLoad(false));
+  }
+
+  useEffect(() => {
+    if (view !== "history") return;
+    const t = setTimeout(loadHistory, 250);
+    return () => clearTimeout(t);
+  }, [view, historyQ]);
+
+  async function reprint(id: number) {
+    setReprintingId(id); setHistErr("");
+    try {
+      const r = await fetch(`/api/order-out/${id}`);
+      const d = await r.json() as { ok: boolean; error?: string; order?: {
+        orderNo: string; activity: string; placeName: string; address: string;
+        eventDate: string; orderDate: string; staff: StaffRow[];
+      } };
+      if (!d.ok || !d.order) { setHistErr(d.error ?? "ไม่พบคำสั่งนี้"); return; }
+      const err = openPrintWindow({
+        orderNo: d.order.orderNo, activity: d.order.activity,
+        placeName: d.order.placeName, address: d.order.address,
+        eventDate: thaiDate(d.order.eventDate), orderDate: thaiDate(d.order.orderDate),
+        staff: d.order.staff,
+      });
+      if (err) setHistErr(err);
+    } catch {
+      setHistErr("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setReprintingId(null);
+    }
+  }
+
   function addRow() { setStaff(s => [...s, { name: "", position: "" }]); }
   function removeRow(i: number) { setStaff(s => s.filter((_, idx) => idx !== i)); }
   function updateRow(i: number, field: keyof StaffRow, value: string) {
     setStaff(s => s.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
   }
 
-  function handlePrint() {
+  async function handlePrint() {
     setPopupErr("");
-    const html = generateOrderHTML({
+    const err = openPrintWindow({
       orderNo, activity, placeName, address,
       eventDate: thaiDate(eventDate),
       orderDate: thaiDate(orderDate),
       staff,
     });
-    const win = window.open("", "_blank", "width=900,height=1100,scrollbars=yes");
-    if (!win) { setPopupErr("ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาต popup สำหรับเว็บไซต์นี้"); return; }
-    win.document.open();
-    win.document.write(html);
-    win.document.close();
+    if (err) { setPopupErr(err); return; }
+    // Save to history — non-blocking, printing already happened above.
+    try {
+      await fetch("/api/order-out", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNo, activity, placeName, address, eventDate, orderDate, staff }),
+      });
+    } catch { /* history save is best-effort */ }
   }
 
   const inputStyle: React.CSSProperties = {
@@ -253,12 +381,85 @@ export default function OrderOutPage() {
 
   return (
     <PageLayout title="คำสั่งออกหน่วย" accent="#0038C6">
+      <div style={{ display: "flex", gap: 2, marginBottom: 20, flexWrap: "wrap",
+        background: "#fff", borderRadius: 8, padding: 4, width: "fit-content",
+        boxShadow: "0 1px 4px rgba(0,56,198,0.08)", border: "1px solid #dce4f5" }}>
+        {([["form", "📝 สร้างคำสั่งใหม่"], ["history", "🕘 ประวัติคำสั่งย้อนหลัง"]] as const).map(([key, label]) => (
+          <button key={key} onClick={() => setView(key)} style={{
+            padding: "9px 18px", borderRadius: 6, border: "none", fontFamily: "inherit",
+            fontSize: 13, fontWeight: view === key ? 700 : 400, cursor: "pointer",
+            background: view === key ? "#0038C6" : "transparent",
+            color: view === key ? "#fff" : "#64748b", transition: "all .15s",
+          }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "history" ? (
+        <div style={{ display: "grid", gap: 16, maxWidth: 900 }}>
+          <input value={historyQ} onChange={e => setHistoryQ(e.target.value)}
+            placeholder="🔍 ค้นหาเลขที่คำสั่ง / กิจกรรม / สถานที่…"
+            style={{ padding: "9px 14px", borderRadius: 9, border: "1.5px solid #dce4f5",
+              fontSize: 13, fontFamily: "inherit", width: 320, outline: "none" }} />
+
+          {historyErr && (
+            <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 8,
+              padding: "10px 14px", fontSize: 12.5, color: "#dc2626" }}>
+              {historyErr}
+            </div>
+          )}
+
+          <div style={{ background: "#fff", borderRadius: 14, border: "1px solid #dce4f5",
+            boxShadow: "0 2px 10px rgba(0,56,198,.05)", overflow: "hidden" }}>
+            {historyLoading ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>
+            ) : history.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 40, color: "#94a3b8", fontSize: 13 }}>
+                ยังไม่มีประวัติคำสั่งออกหน่วย
+              </div>
+            ) : (
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc" }}>
+                    {["เลขที่คำสั่ง", "กิจกรรม", "สถานที่", "วันปฏิบัติงาน", "บันทึกโดย", ""].map(h => (
+                      <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11.5,
+                        fontWeight: 700, color: "#475569", borderBottom: "2px solid #e2e8f0", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((o, i) => (
+                    <tr key={o.id} style={{ background: i % 2 === 0 ? "#fff" : "#fafbff", borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "10px 14px", fontSize: 12.5, fontWeight: 700, color: "#0038C6", whiteSpace: "nowrap" }}>{o.order_no || "—"}</td>
+                      <td style={{ padding: "10px 14px", fontSize: 12.5, color: "#334155" }}>{o.activity || "—"}</td>
+                      <td style={{ padding: "10px 14px", fontSize: 12.5, color: "#64748b" }}>{o.place_name || "—"}</td>
+                      <td style={{ padding: "10px 14px", fontSize: 12.5, color: "#64748b", whiteSpace: "nowrap" }}>{o.event_date ? thaiDate(o.event_date) : "—"}</td>
+                      <td style={{ padding: "10px 14px", fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>{o.created_by || "—"}</td>
+                      <td style={{ padding: "10px 14px" }}>
+                        <button onClick={() => reprint(o.id)} disabled={reprintingId === o.id}
+                          style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid #c4cfee",
+                            background: "#eff6ff", color: "#0038C6", fontWeight: 700, fontSize: 12,
+                            cursor: reprintingId === o.id ? "not-allowed" : "pointer", fontFamily: "inherit",
+                            whiteSpace: "nowrap", opacity: reprintingId === o.id ? 0.6 : 1 }}>
+                          {reprintingId === o.id ? "กำลังเปิด…" : "🖨️ ดู / พิมพ์ซ้ำ"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      ) : (
       <div style={{ display: "grid", gap: 20, maxWidth: 760 }}>
 
         <div style={{ background: "#eff6ff", border: "1.5px solid #c4cfee", borderRadius: 10,
           padding: "12px 16px", fontSize: 12.5, color: "#334155", lineHeight: 1.7 }}>
           กรอกข้อมูลด้านล่าง ระบบจะประกอบเป็นคำสั่งมอบหมายปฏิบัติงานนอกสถานที่ตามแบบฟอร์มมาตรฐาน
           แล้วเปิดหน้าต่างสำหรับดูตัวอย่างและพิมพ์ได้ทันที (ช่องที่ยังไม่กรอกจะแสดงเป็นเส้นประในเอกสาร)
+          คำสั่งที่พิมพ์แล้วจะถูกบันทึกไว้ในแท็บ "ประวัติคำสั่งย้อนหลัง" ให้เรียกดู/พิมพ์ซ้ำได้ภายหลัง
         </div>
 
         {/* ── Order info card ── */}
@@ -348,6 +549,7 @@ export default function OrderOutPage() {
           🖨️ ดูตัวอย่าง / พิมพ์คำสั่ง
         </button>
       </div>
+      )}
     </PageLayout>
   );
 }
