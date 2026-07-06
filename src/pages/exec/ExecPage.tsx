@@ -25,7 +25,7 @@ interface KpiSummary {
   ok: boolean;
   period_label: string;
   turnover:       { pct: number; resigned: number; headcount: number };
-  staffing:       { pct: number; filled: number; plan: number };
+  eval_coverage:  { pct: number | null; received: number; total: number };
   orientation:    { pct: number | null; passed: number; total: number };
   satisfaction:   { pct: number | null; responses: number };
   probation_pass: { pct: number | null; passed: number; total: number };
@@ -318,9 +318,11 @@ export default function ExecPage() {
           <KpiCard label="ร้อยละพนักงานลาออก" icon="📉"
             pct={kpiData.turnover.pct} color={pctColorLow(kpiData.turnover.pct)}
             sub={`ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`} />
-          <KpiCard label="ร้อยละบุคลากรที่บรรจุตามแผน" icon="👥"
-            pct={kpiData.staffing.pct} color={pctColorHigh(kpiData.staffing.pct)}
-            sub={`บรรจุ ${kpiData.staffing.filled} / แผน ${kpiData.staffing.plan} อัตรา`} />
+          <KpiCard label="ร้อยละพนักงานใหม่ที่ได้รับการประเมิน" icon="📋"
+            pct={kpiData.eval_coverage.pct} color={pctColorHigh(kpiData.eval_coverage.pct)}
+            sub={kpiData.eval_coverage.total > 0
+              ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน`
+              : "ไม่มีพนักงานใหม่ในช่วงนี้"} />
           <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ" icon="🧑‍🏫"
             pct={kpiData.orientation.pct} color={pctColorHigh(kpiData.orientation.pct)}
             sub={kpiData.orientation.total > 0

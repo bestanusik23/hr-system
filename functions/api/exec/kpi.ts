@@ -20,27 +20,31 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const db = ctx.env.HR_DB;
 
-  // 1) ร้อยละพนักงานลาออก — resigned in period / headcount as of period end
+  // 1) ร้อยละพนักงานลาออก — resigned in period / current total headcount (matches Manpower dashboard's formula)
   const resigned = await db.prepare(
     "SELECT COUNT(*) AS n FROM employees WHERE resign_date >= ? AND resign_date <= ?"
   ).bind(pStart, pEnd).first<{ n: number }>();
-  const headcountEnd = await db.prepare(
-    "SELECT COUNT(*) AS n FROM employees WHERE start_date <= ? AND (resign_date IS NULL OR resign_date > ?)"
-  ).bind(pEnd, pEnd).first<{ n: number }>();
-  const hcEnd = headcountEnd?.n ?? 0;
-  const turnoverPct = hcEnd > 0 ? round1((resigned?.n ?? 0) / hcEnd * 100) : 0;
-
-  // 2) ร้อยละบุคลากรที่บรรจุตามแผน — headcount as of period end / total plan_qty
-  const planTotal = await db.prepare(
-    "SELECT COALESCE(SUM(plan_qty),0) AS n FROM manpower_plan WHERE type='slot' AND is_active=1"
+  const headcountNow = await db.prepare(
+    "SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned'"
   ).first<{ n: number }>();
-  const plan = planTotal?.n ?? 0;
-  const staffingPct = plan > 0 ? round1(hcEnd / plan * 100) : 0;
+  const hcNow = headcountNow?.n ?? 0;
+  const turnoverPct = hcNow > 0 ? round1((resigned?.n ?? 0) / hcNow * 100) : 0;
 
-  // 3) ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ — new hires in period who completed a course named "ปฐมนิเทศ"
+  // 2) ร้อยละพนักงานใหม่ที่ได้รับการประเมิน — new hires in period with at least one evaluation record (any round/status)
   const newHires = await db.prepare(
     "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
   ).bind(pStart, pEnd).first<{ n: number }>();
+  const newHireN = newHires?.n ?? 0;
+  const evalReceived = await db.prepare(`
+    SELECT COUNT(DISTINCT e.id) AS n
+    FROM employees e
+    JOIN evaluations ev ON ev.employee_id = e.id
+    WHERE e.start_date >= ? AND e.start_date <= ?
+  `).bind(pStart, pEnd).first<{ n: number }>();
+  const evalReceivedN   = evalReceived?.n ?? 0;
+  const evalCoveragePct = newHireN > 0 ? round1(evalReceivedN / newHireN * 100) : null;
+
+  // 3) ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ — new hires in period who completed a course named "ปฐมนิเทศ"
   const oriented = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) AS n
     FROM employees e
@@ -51,7 +55,6 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       AND COALESCE(tc.is_cancelled,0) = 0
       AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
   `).bind(pStart, pEnd).first<{ n: number }>();
-  const newHireN   = newHires?.n ?? 0;
   const orientedN  = oriented?.n ?? 0;
   const orientationPct = newHireN > 0 ? round1(orientedN / newHireN * 100) : null;
 
@@ -76,8 +79,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({
     ok: true,
     period_label: label,
-    turnover:       { pct: turnoverPct, resigned: resigned?.n ?? 0, headcount: hcEnd },
-    staffing:       { pct: staffingPct, filled: hcEnd, plan },
+    turnover:       { pct: turnoverPct, resigned: resigned?.n ?? 0, headcount: hcNow },
+    eval_coverage:  { pct: evalCoveragePct, received: evalReceivedN, total: newHireN },
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },
     probation_pass: { pct: probationPassPct, passed: evalPassedN, total: evalTotalN },
