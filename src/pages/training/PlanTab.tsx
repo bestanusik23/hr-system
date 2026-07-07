@@ -39,9 +39,10 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const REPORT_DOC_CODE = "FM-HRD-02-08 REV 01";
-const REPORT_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
-// Same acknowledger used for off-site duty order approval (see DEFAULT_SIGNER in OrderOutPage.tsx)
-const REPORT_ACKNOWLEDGER = { name: "อนุสิกข์  ทองแผ่น", title: "รักษาการ รองผู้อำนวยการ" };
+// Defaults only — all three are editable before printing (see the print dialog below)
+const DEFAULT_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
+// Same default acknowledger used for off-site duty order approval (see DEFAULT_SIGNER in OrderOutPage.tsx)
+const DEFAULT_ACKNOWLEDGER = { name: "อนุสิกข์  ทองแผ่น", title: "รักษาการ รองผู้อำนวยการ" };
 
 interface Props { canEdit: boolean; onNavigate: (t: Tab, courseId?: number) => void; }
 
@@ -63,6 +64,21 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   const [confirmCancel, setConfirmCancel] = useState<Course | null>(null);
   const [cancelReason, setCancelReason]   = useState("");
   const [cancelling, setCancelling]       = useState(false);
+
+  // Monthly report print dialog — editable signer name/title, defaults pre-filled
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [preparerName, setPreparerName] = useState("");
+  const [preparerTitle, setPreparerTitle] = useState("");
+  const [ackName, setAckName]     = useState(DEFAULT_ACKNOWLEDGER.name);
+  const [ackTitle, setAckTitle]   = useState(DEFAULT_ACKNOWLEDGER.title);
+  const [approverName, setApproverName]   = useState(DEFAULT_APPROVER.name);
+  const [approverTitle, setApproverTitle] = useState(DEFAULT_APPROVER.title);
+
+  function openPrintDialog() {
+    setPreparerName(user?.full_name ?? "");
+    setPreparerTitle(user?.role_title ?? "");
+    setShowPrintDialog(true);
+  }
 
   async function load() {
     setLoading(true);
@@ -140,7 +156,8 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
     const doneM        = monthCourses.filter(c => c.status === "done").length;
     const pctM         = totalTargetM > 0 ? Math.round(totalActualM / totalTargetM * 100) : 0;
     const monthTitle   = `${MONTHS_TH[calMonth]} ${calYear + 543}`;
-    const preparerName = user?.full_name || "……………………………";
+
+    setShowPrintDialog(false);
 
     const win = window.open("", "_blank", "width=1200,height=800");
     if (!win) return;
@@ -215,9 +232,9 @@ ${monthCourses.length === 0
   </tr>`).join("")}
 </tbody></table>
 <div class="sigrow">
-  <div class="sigbox"><div class="sigline"></div><div class="signame">${preparerName}</div><div class="sigtitle">ผู้จัดทำ</div></div>
-  <div class="sigbox"><div class="sigline"></div><div class="signame">${REPORT_ACKNOWLEDGER.name}</div><div class="sigtitle">${REPORT_ACKNOWLEDGER.title} (ผู้รับทราบ)</div></div>
-  <div class="sigbox"><div class="sigline"></div><div class="signame">${REPORT_APPROVER.name}</div><div class="sigtitle">${REPORT_APPROVER.title} (ผู้อนุมัติ)</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${preparerName || "……………………………"}</div><div class="sigtitle">${preparerTitle ? preparerTitle + " " : ""}(ผู้จัดทำ)</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${ackName || "……………………………"}</div><div class="sigtitle">${ackTitle} (ผู้รับทราบ)</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${approverName || "……………………………"}</div><div class="sigtitle">${approverTitle} (ผู้อนุมัติ)</div></div>
 </div>
 <div class="foot">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
 <div class="noprint" style="margin-top:16px;text-align:center">
@@ -470,7 +487,7 @@ ${monthCourses.length === 0
               else setCalMonth(m => m + 1);
             }} style={navBtn}>→</button>
 
-            <button onClick={printMonthlyReport}
+            <button onClick={openPrintDialog}
               style={{ padding: "7px 14px", borderRadius: 6, border: "1.5px solid #0038C6",
                 background: "#0038C6", color: "#fff", fontSize: 12, fontWeight: 700,
                 cursor: "pointer", fontFamily: "inherit" }}>
@@ -680,6 +697,58 @@ ${monthCourses.length === 0
         <CourseForm course={null} onClose={() => setShowNew(false)}
           onSaved={() => { setShowNew(false); load(); }} canEdit={canEdit} />
       )}
+
+      {showPrintDialog && (() => {
+        const rowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 };
+        const inp: React.CSSProperties = { width: "100%", padding: "8px 11px", borderRadius: 7,
+          border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
+        const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+          textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 12 };
+        return (
+          <div onClick={e => { if (e.target === e.currentTarget) setShowPrintDialog(false); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)",
+              display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 12, padding: 28, maxWidth: 480, width: "100%",
+              maxHeight: "88vh", overflowY: "auto", border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628", marginBottom: 4 }}>
+                🖨️ พิมพ์รายงานแผนอบรม — {MONTHS_TH[calMonth]} {calYear + 543}
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>
+                แก้ไขชื่อหรือตำแหน่งผู้ลงนามแต่ละช่องได้ตามต้องการก่อนพิมพ์
+              </div>
+
+              <label style={lbl}>ผู้จัดทำ</label>
+              <div style={rowStyle}>
+                <input style={inp} placeholder="ชื่อ-นามสกุล" value={preparerName} onChange={e => setPreparerName(e.target.value)} />
+                <input style={inp} placeholder="ตำแหน่ง" value={preparerTitle} onChange={e => setPreparerTitle(e.target.value)} />
+              </div>
+
+              <label style={lbl}>ผู้รับทราบ</label>
+              <div style={rowStyle}>
+                <input style={inp} placeholder="ชื่อ-นามสกุล" value={ackName} onChange={e => setAckName(e.target.value)} />
+                <input style={inp} placeholder="ตำแหน่ง" value={ackTitle} onChange={e => setAckTitle(e.target.value)} />
+              </div>
+
+              <label style={lbl}>ผู้อนุมัติ</label>
+              <div style={rowStyle}>
+                <input style={inp} placeholder="ชื่อ-นามสกุล" value={approverName} onChange={e => setApproverName(e.target.value)} />
+                <input style={inp} placeholder="ตำแหน่ง" value={approverTitle} onChange={e => setApproverTitle(e.target.value)} />
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+                <button onClick={() => setShowPrintDialog(false)}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+                    background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
+                <button onClick={printMonthlyReport}
+                  style={{ flex: 2, padding: "10px 0", borderRadius: 7, border: "none",
+                    background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  🖨️ พิมพ์รายงาน
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
