@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import CourseForm from "./CourseForm";
 import CourseDetailModal from "./CourseDetailModal";
+import { useAuth } from "../../context/AuthContext";
 
 interface Course {
   id: number; course_code: string; course: string; course_type: string;
@@ -37,9 +38,16 @@ const TYPE_LABEL: Record<string, string> = {
   Mandatory: "Mandatory Training", Continuing: "Continuing Education",
 };
 
+const REPORT_DOC_CODE = "FM-HRD-02-08 REV 01";
+const REPORT_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
+const HR_DEPT_HINTS = ["ทรัพยากรบุคคล", "บุคคล"];
+
+interface HRStaffOption { id: number; full_name: string; }
+
 interface Props { canEdit: boolean; onNavigate: (t: Tab, courseId?: number) => void; }
 
 export default function PlanTab({ canEdit, onNavigate }: Props) {
+  const { user } = useAuth();
   const [courses, setCourses]     = useState<Course[]>([]);
   const [loading, setLoading]     = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
@@ -56,6 +64,12 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   const [confirmCancel, setConfirmCancel] = useState<Course | null>(null);
   const [cancelReason, setCancelReason]   = useState("");
   const [cancelling, setCancelling]       = useState(false);
+
+  // Monthly report print dialog
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [hrStaff, setHrStaff]     = useState<HRStaffOption[]>([]);
+  const [hrStaffLoading, setHrStaffLoading] = useState(false);
+  const [ackId, setAckId]         = useState<number | "">("");
 
   async function load() {
     setLoading(true);
@@ -122,6 +136,24 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
     load();
   }
 
+  function loadHRStaff() {
+    setHrStaffLoading(true);
+    Promise.all([
+      fetch("/api/eval/org").then(r => r.json()) as Promise<{ departments: { id: number; name: string }[] }>,
+      fetch("/api/manpower/employees?status=active").then(r => r.json()) as Promise<{ employees: { id: number; full_name: string; department_id: number | null }[] }>,
+    ]).then(([org, emp]) => {
+      const hrDeptIds = new Set((org.departments ?? []).filter(d => HR_DEPT_HINTS.some(h => d.name.includes(h))).map(d => d.id));
+      const staff = (emp.employees ?? []).filter(e => e.department_id != null && hrDeptIds.has(e.department_id));
+      setHrStaff(staff.map(e => ({ id: e.id, full_name: e.full_name })));
+    }).finally(() => setHrStaffLoading(false));
+  }
+
+  function openPrintDialog() {
+    setAckId("");
+    loadHRStaff();
+    setShowPrintDialog(true);
+  }
+
   function printMonthlyReport() {
     const monthPrefix  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
     const monthCourses = courses
@@ -133,36 +165,57 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
     const doneM        = monthCourses.filter(c => c.status === "done").length;
     const pctM         = totalTargetM > 0 ? Math.round(totalActualM / totalTargetM * 100) : 0;
     const monthTitle   = `${MONTHS_TH[calMonth]} ${calYear + 543}`;
+    const preparerName = user?.full_name || "……………………………";
+    const ackName       = hrStaff.find(s => s.id === ackId)?.full_name || "……………………………";
 
-    const win = window.open("", "_blank", "width=1000,height=750");
+    setShowPrintDialog(false);
+
+    const win = window.open("", "_blank", "width=1200,height=800");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
 <title>รายงานแผนอบรมประจำเดือน ${monthTitle}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  @page{size:A4;margin:16mm}
-  body{font-family:Sarabun,Arial,sans-serif;font-size:11pt;color:#111;margin:0}
-  .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0038C6;padding-bottom:12px;margin-bottom:16px}
-  .logo{width:44px;height:44px;background:#0038C6;border-radius:8px;color:#fff;font-weight:900;font-size:10pt;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;flex-shrink:0}
-  h1{font-size:15pt;color:#0038C6;margin:0 0 2px}
+  @page{size:A4 landscape;margin:12mm 14mm}
+  *{box-sizing:border-box}
+  body{font-family:'Sarabun',Arial,sans-serif;font-size:11pt;color:#222;margin:0}
+  .hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+    border-bottom:3px solid #0038C6;padding-bottom:12px;margin-bottom:16px}
+  .hdr-left{display:flex;align-items:center;gap:14px}
+  .logo{width:46px;height:46px;background:linear-gradient(135deg,#0038C6,#26A9E0);border-radius:10px;color:#fff;
+    font-weight:900;font-size:10pt;display:flex;align-items:center;justify-content:center;text-align:center;
+    line-height:1.2;flex-shrink:0}
+  h1{font-size:16pt;color:#0038C6;margin:0 0 2px;font-weight:800}
   .sub{font-size:9pt;color:#64748b}
-  .kpis{display:flex;gap:14px;margin-bottom:16px}
-  .kpi{flex:1;background:#f0f5ff;border:1px solid #dce4f5;border-radius:6px;padding:10px 14px;text-align:center}
-  .kpi b{display:block;font-size:16pt;color:#0038C6}
+  .doccode{border:1.5px solid #c4cfee;background:#F4F7FB;border-radius:8px;padding:8px 14px;
+    text-align:center;font-size:8.5pt;color:#0038C6;font-weight:700;white-space:nowrap}
+  .kpis{display:flex;gap:14px;margin-bottom:18px}
+  .kpi{flex:1;background:#F4F7FB;border:1px solid #dce4f5;border-radius:8px;padding:10px 14px;text-align:center}
+  .kpi b{display:block;font-size:17pt;color:#0038C6}
   .kpi span{font-size:9pt;color:#64748b}
-  table{width:100%;border-collapse:collapse;font-size:9.5pt}
-  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:6px 8px;text-align:left}
-  td{border:1px solid #dce4f5;padding:5px 8px;vertical-align:middle}
-  tr:nth-child(even) td{background:#f8faff}
+  table{width:100%;border-collapse:collapse;font-size:9.5pt;border-radius:8px;overflow:hidden}
+  th{background:#0038C6;color:#fff;padding:7px 8px;text-align:left;font-weight:700}
+  td{border-bottom:1px solid #eef2fb;padding:6px 8px;vertical-align:middle}
+  tr:nth-child(even) td{background:#F4F7FB}
   .st{padding:1px 7px;border-radius:4px;font-size:8.5pt;font-weight:700}
-  .foot{margin-top:16px;font-size:8pt;color:#94a3b8;text-align:right}
+  .sigrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:34px}
+  .sigbox{text-align:center;font-size:9.5pt}
+  .sigline{border-top:1px solid #94a3b8;margin:40px 10px 8px}
+  .signame{font-weight:700;color:#111}
+  .sigtitle{color:#64748b;font-size:8.5pt;margin-top:1px}
+  .foot{margin-top:14px;font-size:8pt;color:#94a3b8;text-align:right}
   @media print{.noprint{display:none}}
 </style></head><body>
 <div class="hdr">
-  <div class="logo">RAM+</div>
-  <div>
-    <div class="sub">โรงพยาบาลเชียงราย ราม · Human Resource Development</div>
-    <h1>รายงานแผนการฝึกอบรมประจำเดือน ${monthTitle}</h1>
+  <div class="hdr-left">
+    <div class="logo">RAM+</div>
+    <div>
+      <div class="sub">โรงพยาบาลเชียงราย ราม · Human Resource Development</div>
+      <h1>รายงานแผนการฝึกอบรมประจำเดือน ${monthTitle}</h1>
+    </div>
   </div>
+  <div class="doccode">รหัสเอกสาร<br>${REPORT_DOC_CODE}</div>
 </div>
 <div class="kpis">
   <div class="kpi"><b>${monthCourses.length}</b><span>หลักสูตรทั้งหมด</span></div>
@@ -189,6 +242,11 @@ ${monthCourses.length === 0
     <td><span class="st" style="background:${STATUS_COLOR[c.status]}20;color:${STATUS_COLOR[c.status]}">${STATUS_LABEL[c.status] ?? c.status}</span></td>
   </tr>`).join("")}
 </tbody></table>
+<div class="sigrow">
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${preparerName}</div><div class="sigtitle">ผู้จัดทำ</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${ackName}</div><div class="sigtitle">ผู้รับทราบ</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${REPORT_APPROVER.name}</div><div class="sigtitle">${REPORT_APPROVER.title} (ผู้อนุมัติ)</div></div>
+</div>
 <div class="foot">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
 <div class="noprint" style="margin-top:16px;text-align:center">
   <button onclick="window.print()" style="padding:9px 24px;background:#0038C6;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12pt">🖨️ พิมพ์รายงาน</button>
@@ -440,7 +498,7 @@ ${monthCourses.length === 0
               else setCalMonth(m => m + 1);
             }} style={navBtn}>→</button>
 
-            <button onClick={printMonthlyReport}
+            <button onClick={openPrintDialog}
               style={{ padding: "7px 14px", borderRadius: 6, border: "1.5px solid #0038C6",
                 background: "#0038C6", color: "#fff", fontSize: 12, fontWeight: 700,
                 cursor: "pointer", fontFamily: "inherit" }}>
@@ -649,6 +707,50 @@ ${monthCourses.length === 0
       {showNew && (
         <CourseForm course={null} onClose={() => setShowNew(false)}
           onSaved={() => { setShowNew(false); load(); }} canEdit={canEdit} />
+      )}
+
+      {showPrintDialog && (
+        <div onClick={e => { if (e.target === e.currentTarget) setShowPrintDialog(false); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 28, maxWidth: 440, width: "100%",
+            border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628", marginBottom: 4 }}>
+              🖨️ พิมพ์รายงานแผนอบรม — {MONTHS_TH[calMonth]} {calYear + 543}
+            </div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 18 }}>
+              ผู้จัดทำ: <b style={{ color: "#475569" }}>{user?.full_name || "—"}</b> (ผู้ใช้งานที่ล็อกอิน)
+            </div>
+
+            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+              textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+              ผู้รับทราบ (เลือกรายชื่อในแผนก HR)
+            </label>
+            <select value={ackId} onChange={e => setAckId(e.target.value ? Number(e.target.value) : "")}
+              disabled={hrStaffLoading}
+              style={{ width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
+                fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff", marginBottom: 16 }}>
+              <option value="">{hrStaffLoading ? "กำลังโหลด…" : "-- เลือกผู้รับทราบ --"}</option>
+              {hrStaff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+            </select>
+
+            <div style={{ background: "#f0f5ff", border: "1px solid #dce4f5", borderRadius: 8,
+              padding: "10px 14px", fontSize: 12, color: "#475569", marginBottom: 20, lineHeight: 1.6 }}>
+              ผู้อนุมัติ: <b>{REPORT_APPROVER.name}</b> ({REPORT_APPROVER.title})
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setShowPrintDialog(false)}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+                  background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
+              <button onClick={printMonthlyReport}
+                style={{ flex: 2, padding: "10px 0", borderRadius: 7, border: "none",
+                  background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                🖨️ พิมพ์รายงาน
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
