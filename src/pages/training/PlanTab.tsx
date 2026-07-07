@@ -122,6 +122,82 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
     load();
   }
 
+  function printMonthlyReport() {
+    const monthPrefix  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+    const monthCourses = courses
+      .filter(c => c.course_date?.startsWith(monthPrefix))
+      .sort((a, b) => (a.course_date ?? "") < (b.course_date ?? "") ? -1 : 1);
+
+    const totalTargetM = monthCourses.reduce((a, c) => a + c.target, 0);
+    const totalActualM = monthCourses.reduce((a, c) => a + c.actual, 0);
+    const doneM        = monthCourses.filter(c => c.status === "done").length;
+    const pctM         = totalTargetM > 0 ? Math.round(totalActualM / totalTargetM * 100) : 0;
+    const monthTitle   = `${MONTHS_TH[calMonth]} ${calYear + 543}`;
+
+    const win = window.open("", "_blank", "width=1000,height=750");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+<title>รายงานแผนอบรมประจำเดือน ${monthTitle}</title>
+<style>
+  @page{size:A4;margin:16mm}
+  body{font-family:Sarabun,Arial,sans-serif;font-size:11pt;color:#111;margin:0}
+  .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0038C6;padding-bottom:12px;margin-bottom:16px}
+  .logo{width:44px;height:44px;background:#0038C6;border-radius:8px;color:#fff;font-weight:900;font-size:10pt;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;flex-shrink:0}
+  h1{font-size:15pt;color:#0038C6;margin:0 0 2px}
+  .sub{font-size:9pt;color:#64748b}
+  .kpis{display:flex;gap:14px;margin-bottom:16px}
+  .kpi{flex:1;background:#f0f5ff;border:1px solid #dce4f5;border-radius:6px;padding:10px 14px;text-align:center}
+  .kpi b{display:block;font-size:16pt;color:#0038C6}
+  .kpi span{font-size:9pt;color:#64748b}
+  table{width:100%;border-collapse:collapse;font-size:9.5pt}
+  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:6px 8px;text-align:left}
+  td{border:1px solid #dce4f5;padding:5px 8px;vertical-align:middle}
+  tr:nth-child(even) td{background:#f8faff}
+  .st{padding:1px 7px;border-radius:4px;font-size:8.5pt;font-weight:700}
+  .foot{margin-top:16px;font-size:8pt;color:#94a3b8;text-align:right}
+  @media print{.noprint{display:none}}
+</style></head><body>
+<div class="hdr">
+  <div class="logo">RAM+</div>
+  <div>
+    <div class="sub">โรงพยาบาลเชียงราย ราม · Human Resource Development</div>
+    <h1>รายงานแผนการฝึกอบรมประจำเดือน ${monthTitle}</h1>
+  </div>
+</div>
+<div class="kpis">
+  <div class="kpi"><b>${monthCourses.length}</b><span>หลักสูตรทั้งหมด</span></div>
+  <div class="kpi"><b>${totalTargetM}</b><span>เป้าหมายผู้เข้าอบรม</span></div>
+  <div class="kpi"><b>${doneM}</b><span>จัดอบรมแล้ว</span></div>
+  <div class="kpi"><b>${pctM}%</b><span>% Completion</span></div>
+</div>
+<table>
+<thead><tr><th>#</th><th>รหัส</th><th>ชื่อหลักสูตร</th><th>ประเภท</th><th>วันที่</th><th>เวลา</th><th>สถานที่</th><th>วิทยากร</th><th>เป้า</th><th>จริง</th><th>สถานะ</th></tr></thead>
+<tbody>
+${monthCourses.length === 0
+  ? `<tr><td colspan="11" style="text-align:center;color:#94a3b8;padding:20px">ไม่มีหลักสูตรในเดือนนี้</td></tr>`
+  : monthCourses.map((c, i) => `<tr>
+    <td>${i + 1}</td>
+    <td style="font-family:monospace;font-size:8.5pt">${c.course_code}</td>
+    <td><strong>${c.course}</strong>${c.is_cancelled ? ` <span style="color:#dc2626">(ยกเลิก)</span>` : ""}</td>
+    <td>${TYPE_LABEL[c.course_type] ?? c.course_type}</td>
+    <td>${c.course_date ?? "—"}</td>
+    <td>${c.start_time ? `${fmtTime(c.start_time)}–${fmtTime(c.end_time)}` : "—"}</td>
+    <td>${c.location ?? "—"}</td>
+    <td>${c.trainer ?? "—"}</td>
+    <td style="text-align:center">${c.target}</td>
+    <td style="text-align:center">${c.actual}</td>
+    <td><span class="st" style="background:${STATUS_COLOR[c.status]}20;color:${STATUS_COLOR[c.status]}">${STATUS_LABEL[c.status] ?? c.status}</span></td>
+  </tr>`).join("")}
+</tbody></table>
+<div class="foot">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
+<div class="noprint" style="margin-top:16px;text-align:center">
+  <button onclick="window.print()" style="padding:9px 24px;background:#0038C6;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12pt">🖨️ พิมพ์รายงาน</button>
+</div>
+</body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 400);
+  }
+
   const totalTarget = courses.reduce((a, c) => a + c.target, 0);
   const totalActual = courses.reduce((a, c) => a + c.actual, 0);
   const done        = courses.filter(c => c.status === "done").length;
@@ -363,6 +439,13 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
               if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
               else setCalMonth(m => m + 1);
             }} style={navBtn}>→</button>
+
+            <button onClick={printMonthlyReport}
+              style={{ padding: "7px 14px", borderRadius: 6, border: "1.5px solid #0038C6",
+                background: "#0038C6", color: "#fff", fontSize: 12, fontWeight: 700,
+                cursor: "pointer", fontFamily: "inherit" }}>
+              🖨️ พิมพ์รายงานเดือนนี้
+            </button>
 
             <div style={{ marginLeft: "auto", display: "flex", gap: 3,
               background: "#e8eeff", borderRadius: 6, padding: 2 }}>
