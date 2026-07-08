@@ -274,6 +274,10 @@ export default function ExecPage() {
         detail: kpiData.probation_pass.total > 0 ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน` : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้" },
     ];
 
+    // Shrink type density as content grows, so the report reliably fits one landscape A4 page.
+    const totalRows = hires.length + resigns.length;
+    const density = totalRows > 16 ? "density-ultra" : totalRows > 8 ? "density-compact" : "";
+
     const win = window.open("", "_blank", "width=1200,height=800");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
@@ -282,8 +286,9 @@ export default function ExecPage() {
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   @page{size:A4 landscape;margin:12mm 14mm}
-  *{box-sizing:border-box}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
   body{font-family:'Sarabun',Arial,sans-serif;font-size:10.5pt;color:#222;margin:0}
+  .paper{height:186mm;overflow:hidden}
   .hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
     border-bottom:3px solid #0038C6;padding-bottom:10px;margin-bottom:14px}
   .hdr-left{display:flex;align-items:center;gap:14px}
@@ -308,7 +313,26 @@ export default function ExecPage() {
   .sigtitle{color:#64748b;font-size:8pt;margin-top:1px}
   .foot{margin-top:12px;font-size:7.5pt;color:#94a3b8;text-align:right}
   @media print{.noprint{display:none}}
-</style></head><body>
+
+  body.density-compact .sect{font-size:10pt;margin:9px 0 5px}
+  body.density-compact table{font-size:8pt}
+  body.density-compact th,body.density-compact td{padding:4px 6px}
+  body.density-compact .sigrow{margin-top:14px}
+  body.density-compact .sigline{margin:18px 10px 6px}
+
+  body.density-ultra .hdr{padding-bottom:6px;margin-bottom:8px}
+  body.density-ultra h1{font-size:13pt}
+  body.density-ultra .sub{font-size:7.5pt}
+  body.density-ultra .sect{font-size:9pt;margin:6px 0 4px}
+  body.density-ultra table{font-size:7.5pt}
+  body.density-ultra th,body.density-ultra td{padding:3px 5px}
+  body.density-ultra .sigrow{margin-top:8px}
+  body.density-ultra .sigline{margin:10px 10px 4px}
+  body.density-ultra .sigbox{font-size:8pt}
+  body.density-ultra .sigtitle{font-size:7pt}
+  body.density-ultra .foot{margin-top:5px}
+</style></head><body class="${density}">
+<div class="paper">
 <div class="hdr">
   <div class="hdr-left">
     <div class="logo">RAM+</div>
@@ -359,6 +383,7 @@ export default function ExecPage() {
   <div class="sigbox"><div class="sigline"></div><div class="signame">${REPORT_DOC_APPROVER.name}</div><div class="sigtitle">${REPORT_DOC_APPROVER.title} (ผู้อนุมัติ)</div></div>
 </div>
 <div class="foot">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
+</div>
 <div class="noprint" style="margin-top:14px;text-align:center">
   <button onclick="window.print()" style="padding:9px 24px;background:#0038C6;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12pt">🖨️ พิมพ์รายงาน</button>
 </div>
