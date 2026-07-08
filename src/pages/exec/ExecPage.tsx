@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import PageLayout from "../../components/PageLayout";
+import { useAuth } from "../../context/AuthContext";
 
 interface Summary {
   employees: { total: number; probation: number; passed: number; resigned: number; due_eval: number };
@@ -29,6 +30,18 @@ interface KpiSummary {
   orientation:    { pct: number | null; passed: number; total: number };
   satisfaction:   { pct: number | null; responses: number };
   probation_pass: { pct: number | null; passed: number; total: number };
+  new_hire_list: { full_name: string; position: string | null; start_date: string }[];
+  resign_list: { full_name: string; position: string | null; resign_date: string; resign_reason: string | null }[];
+}
+
+const REPORT_DOC_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
+const DEFAULT_ACK = { name: "อนุสิกข์  ทองแผ่น", title: "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ" };
+
+function fmtShortDate(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  const MT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  return `${d} ${MT[m - 1]} ${y + 543}`;
 }
 
 type AlertLevel = "green" | "yellow" | "red";
@@ -194,6 +207,7 @@ function currentYM(): string {
 }
 
 export default function ExecPage() {
+  const { user } = useAuth();
   const [data, setData]           = useState<Summary | null>(null);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState("");
@@ -206,6 +220,19 @@ export default function ExecPage() {
   const [kpiData, setKpiData]             = useState<KpiSummary | null>(null);
   const [kpiLoading, setKpiLoading]       = useState(true);
   const kpiValue = kpiPeriodType === "month" ? kpiMonth : kpiYear;
+
+  // Monthly report print dialog
+  const [showPrintDialog, setShowPrintDialog] = useState(false);
+  const [preparerName, setPreparerName] = useState("");
+  const [preparerTitle, setPreparerTitle] = useState("");
+  const [ackName, setAckName]   = useState(DEFAULT_ACK.name);
+  const [ackTitle, setAckTitle] = useState(DEFAULT_ACK.title);
+
+  function openPrintDialog() {
+    setPreparerName(user?.full_name ?? "");
+    setPreparerTitle(user?.role_title ?? "");
+    setShowPrintDialog(true);
+  }
 
   function load() {
     setLoading(true);
@@ -227,6 +254,118 @@ export default function ExecPage() {
   }, [kpiPeriodType, kpiValue]);
 
   const yearOptions = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
+
+  function printMonthlyExecReport() {
+    if (!kpiData) return;
+    setShowPrintDialog(false);
+
+    const hires   = kpiData.new_hire_list;
+    const resigns = kpiData.resign_list;
+    const kpiRows: { label: string; pct: number | null; detail: string }[] = [
+      { label: "ร้อยละพนักงานลาออก", pct: kpiData.turnover.pct,
+        detail: `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน` },
+      { label: "ร้อยละพนักงานใหม่ที่ได้รับการประเมิน", pct: kpiData.eval_coverage.pct,
+        detail: kpiData.eval_coverage.total > 0 ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้" },
+      { label: "ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ", pct: kpiData.orientation.pct,
+        detail: kpiData.orientation.total > 0 ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้" },
+      { label: "ร้อยละความพึงพอใจของผู้ได้รับการอบรม", pct: kpiData.satisfaction.pct,
+        detail: kpiData.satisfaction.responses > 0 ? `จาก ${kpiData.satisfaction.responses} คำตอบ` : "ยังไม่มีการตอบแบบสอบถาม" },
+      { label: "ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน", pct: kpiData.probation_pass.pct,
+        detail: kpiData.probation_pass.total > 0 ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน` : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้" },
+    ];
+
+    const win = window.open("", "_blank", "width=1200,height=800");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
+<title>สรุปผลการทำงานประจำเดือน ${kpiData.period_label}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page{size:A4 landscape;margin:12mm 14mm}
+  *{box-sizing:border-box}
+  body{font-family:'Sarabun',Arial,sans-serif;font-size:10.5pt;color:#222;margin:0}
+  .hdr{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;
+    border-bottom:3px solid #0038C6;padding-bottom:10px;margin-bottom:14px}
+  .hdr-left{display:flex;align-items:center;gap:14px}
+  .logo{width:44px;height:44px;background:#0038C6;border-radius:10px;color:#fff;
+    font-weight:900;font-size:9.5pt;display:flex;align-items:center;justify-content:center;text-align:center;
+    line-height:1.2;flex-shrink:0}
+  h1{font-size:15pt;color:#0038C6;margin:0 0 2px;font-weight:800}
+  .sub{font-size:8.5pt;color:#64748b}
+  .doccode{border:1.5px solid #c4cfee;background:#F4F7FB;border-radius:8px;padding:7px 12px;
+    text-align:center;font-size:8pt;color:#0038C6;font-weight:700;white-space:nowrap}
+  .sect{font-size:11pt;font-weight:800;color:#0038C6;margin:14px 0 6px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  table{width:100%;border-collapse:collapse;font-size:9pt}
+  th{background:#0038C6;color:#fff;padding:6px 7px;text-align:left;font-weight:700}
+  td{border-bottom:1px solid #eef2fb;padding:5px 7px;vertical-align:middle}
+  tr:nth-child(even) td{background:#F4F7FB}
+  .kpi-table td.pct{font-weight:800;color:#0038C6;text-align:center;width:70px}
+  .sigrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;margin-top:26px}
+  .sigbox{text-align:center;font-size:9pt}
+  .sigline{border-top:1px solid #94a3b8;margin:32px 10px 8px}
+  .signame{font-weight:700;color:#111}
+  .sigtitle{color:#64748b;font-size:8pt;margin-top:1px}
+  .foot{margin-top:12px;font-size:7.5pt;color:#94a3b8;text-align:right}
+  @media print{.noprint{display:none}}
+</style></head><body>
+<div class="hdr">
+  <div class="hdr-left">
+    <div class="logo">RAM+</div>
+    <div>
+      <div class="sub">โรงพยาบาลเชียงราย ราม · Human Resource Development</div>
+      <h1>สรุปผลการทำงานประจำเดือน ${kpiData.period_label}</h1>
+    </div>
+  </div>
+  <div class="doccode">รหัสเอกสาร<br>FM-HRD-02-08 REV 01</div>
+</div>
+
+<div class="cols">
+  <div>
+    <div class="sect">พนักงานเริ่มงานใหม่ประจำเดือน ${kpiData.period_label}</div>
+    <table>
+      <thead><tr><th style="width:34px">ลำดับที่</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่งงาน</th><th style="width:110px">วันที่เริ่มงาน</th></tr></thead>
+      <tbody>
+        ${hires.length === 0
+          ? `<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:14px">ไม่มีพนักงานเริ่มงานใหม่ในช่วงนี้</td></tr>`
+          : hires.map((h, i) => `<tr><td style="text-align:center">${i + 1}</td><td>${h.full_name}</td><td>${h.position ?? "—"}</td><td>${fmtShortDate(h.start_date)}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+  <div>
+    <div class="sect">พนักงานลาออกประจำเดือน ${kpiData.period_label}</div>
+    <table>
+      <thead><tr><th style="width:34px">ลำดับที่</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่งงาน</th><th style="width:110px">วันที่ทำงานวันสุดท้าย</th><th>หมายเหตุ</th></tr></thead>
+      <tbody>
+        ${resigns.length === 0
+          ? `<tr><td colspan="5" style="text-align:center;color:#94a3b8;padding:14px">ไม่มีพนักงานลาออกในช่วงนี้</td></tr>`
+          : resigns.map((r, i) => `<tr><td style="text-align:center">${i + 1}</td><td>${r.full_name}</td><td>${r.position ?? "—"}</td><td>${fmtShortDate(r.resign_date)}</td><td>${r.resign_reason ?? ""}</td></tr>`).join("")}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="sect">รายงาน KPI ของ HR ประจำเดือน ${kpiData.period_label}</div>
+<table class="kpi-table">
+  <thead><tr><th>ตัวชี้วัด</th><th style="width:70px">ร้อยละ</th><th>รายละเอียด</th></tr></thead>
+  <tbody>
+    ${kpiRows.map(k => `<tr><td>${k.label}</td><td class="pct">${k.pct === null ? "—" : k.pct + "%"}</td><td>${k.detail}</td></tr>`).join("")}
+  </tbody>
+</table>
+
+<div class="sigrow">
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${preparerName || "……………………………"}</div><div class="sigtitle">${preparerTitle ? preparerTitle + " " : ""}(ผู้จัดทำ)</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${ackName || "……………………………"}</div><div class="sigtitle">${ackTitle} (ผู้รับทราบ)</div></div>
+  <div class="sigbox"><div class="sigline"></div><div class="signame">${REPORT_DOC_APPROVER.name}</div><div class="sigtitle">${REPORT_DOC_APPROVER.title} (ผู้อนุมัติ)</div></div>
+</div>
+<div class="foot">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
+<div class="noprint" style="margin-top:14px;text-align:center">
+  <button onclick="window.print()" style="padding:9px 24px;background:#0038C6;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12pt">🖨️ พิมพ์รายงาน</button>
+</div>
+</body></html>`);
+    win.document.close();
+    setTimeout(() => win.print(), 400);
+  }
 
   if (loading) return (
     <PageLayout title="Executive Dashboard">
@@ -308,6 +447,12 @@ export default function ExecPage() {
               {yearOptions.map(y => <option key={y} value={y}>{Number(y) + 543}</option>)}
             </select>
           )}
+          <button onClick={openPrintDialog} disabled={!kpiData}
+            style={{ padding: "7px 16px", borderRadius: 7, border: "none",
+              background: kpiData ? "#0038C6" : "#c4cfee", color: "#fff", fontWeight: 700, fontSize: 12,
+              cursor: kpiData ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+            🖨️ พิมพ์รายงานประจำเดือน
+          </button>
         </div>
       </div>
       {kpiLoading || !kpiData ? (
@@ -599,6 +744,58 @@ export default function ExecPage() {
           </div>
         ))}
       </div>
+
+      {showPrintDialog && (() => {
+        const rowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 };
+        const inp: React.CSSProperties = { width: "100%", padding: "8px 11px", borderRadius: 7,
+          border: "1.5px solid #c4cfee", fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
+        const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
+          textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, marginTop: 12 };
+        return (
+          <div onClick={e => { if (e.target === e.currentTarget) setShowPrintDialog(false); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)",
+              display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 12, padding: 28, maxWidth: 480, width: "100%",
+              maxHeight: "88vh", overflowY: "auto", border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628", marginBottom: 4 }}>
+                🖨️ พิมพ์รายงานประจำเดือน — {kpiData?.period_label}
+              </div>
+              <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6 }}>
+                แก้ไขชื่อหรือตำแหน่งผู้จัดทำ/ผู้รับทราบได้ก่อนพิมพ์ · ผู้อนุมัติกำหนดตายตัว
+              </div>
+
+              <label style={lbl}>ผู้จัดทำ</label>
+              <div style={rowStyle}>
+                <input style={inp} placeholder="ชื่อ-นามสกุล" value={preparerName} onChange={e => setPreparerName(e.target.value)} />
+                <input style={inp} placeholder="ตำแหน่ง" value={preparerTitle} onChange={e => setPreparerTitle(e.target.value)} />
+              </div>
+
+              <label style={lbl}>ผู้รับทราบ</label>
+              <div style={rowStyle}>
+                <input style={inp} placeholder="ชื่อ-นามสกุล" value={ackName} onChange={e => setAckName(e.target.value)} />
+                <input style={inp} placeholder="ตำแหน่ง" value={ackTitle} onChange={e => setAckTitle(e.target.value)} />
+              </div>
+
+              <label style={lbl}>ผู้อนุมัติ (ตายตัว)</label>
+              <div style={{ background: "#f0f5ff", border: "1px solid #dce4f5", borderRadius: 8,
+                padding: "10px 14px", fontSize: 13, color: "#475569" }}>
+                <b>{REPORT_DOC_APPROVER.name}</b> — {REPORT_DOC_APPROVER.title}
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button onClick={() => setShowPrintDialog(false)}
+                  style={{ flex: 1, padding: "10px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+                    background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
+                <button onClick={printMonthlyExecReport}
+                  style={{ flex: 2, padding: "10px 0", borderRadius: 7, border: "none",
+                    background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                  🖨️ พิมพ์รายงาน
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </PageLayout>
   );
 }

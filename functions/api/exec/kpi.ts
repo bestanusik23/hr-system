@@ -76,6 +76,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const evalPassedN = evalPassed?.n ?? 0;
   const probationPassPct = evalTotalN > 0 ? round1(evalPassedN / evalTotalN * 100) : null;
 
+  // Lists — new hires / resignations in period, for the printable monthly report
+  const newHireList = await db.prepare(
+    "SELECT full_name, position, start_date FROM employees WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC"
+  ).bind(pStart, pEnd).all<{ full_name: string; position: string | null; start_date: string }>();
+  const resignList = await db.prepare(
+    "SELECT full_name, position, resign_date, resign_reason FROM employees WHERE resign_date >= ? AND resign_date <= ? ORDER BY resign_date ASC"
+  ).bind(pStart, pEnd).all<{ full_name: string; position: string | null; resign_date: string; resign_reason: string | null }>();
+
   return Response.json({
     ok: true,
     period_label: label,
@@ -84,6 +92,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },
     probation_pass: { pct: probationPassPct, passed: evalPassedN, total: evalTotalN },
+    new_hire_list: newHireList.results ?? [],
+    resign_list: resignList.results ?? [],
   });
 };
 
