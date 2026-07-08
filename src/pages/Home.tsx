@@ -121,7 +121,7 @@ const SYSTEMS: SystemCard[] = [
     key: "exec", no: "06", icon: <IcChart />,
     title: "Executive Dashboard",
     desc: "ภาพรวมตัวชี้วัดทุกระบบสำหรับผู้บริหาร อัตรากำลัง การประเมิน และการอบรม",
-    roles: ["deputyHR","admin"],
+    roles: ["hr","deputyHR","admin"],
   },
   {
     key: "admin", no: "07", icon: <IcUserCog />,
