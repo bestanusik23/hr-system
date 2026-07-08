@@ -1,6 +1,13 @@
 import type { Env } from "../../../lib/types";
 import { getTokenFromCookie, getSessionUser, hasRole } from "../../../lib/auth";
 
+// Grade is always derived from total_score server-side (never trust a client-sent grade) so it
+// can never drift out of sync with the score, e.g. from a stale value computed before a later edit.
+function gradeFromScore(s: number): string {
+  if (s >= 90) return "A"; if (s >= 80) return "B"; if (s >= 70) return "C";
+  if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
+}
+
 // GET /api/eval/evaluations/:id
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
@@ -173,6 +180,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
     await saveScores();
     const total = scores ? Object.values(scores).reduce((a, b) => a + b, 0) : null;
+    const computedGrade = total !== null ? gradeFromScore(total) : (grade ?? null);
 
     if (ev.status === "pending_head" || deputyInPending) {
       await ctx.env.HR_DB.prepare(`
@@ -181,7 +189,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
           signer_employee=COALESCE(?,signer_employee),
           signer_head=COALESCE(?,signer_head),
           updated_at=datetime('now') WHERE id=?
-      `).bind(suggestion ?? null, decision ?? null, grade ?? null, total,
+      `).bind(suggestion ?? null, decision ?? null, computedGrade, total,
                signerEmp ?? null, signerHead ?? null, id).run();
     } else {
       await ctx.env.HR_DB.prepare(`
@@ -206,7 +214,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
         signer_employee=COALESCE(?,signer_employee),
         signer_head=COALESCE(?,signer_head),
         updated_at=datetime('now') WHERE id=?
-    `).bind(suggestion ?? null, decision ?? null, grade ?? null, total, user.id,
+    `).bind(suggestion ?? null, decision ?? null, gradeFromScore(total), total, user.id,
              signerEmp ?? null, signerHead ?? null, id).run();
 
     await ctx.env.HR_DB.prepare(
@@ -233,7 +241,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
         signer_employee=COALESCE(?,signer_employee),
         signer_head=COALESCE(?,signer_head),
         updated_at=datetime('now') WHERE id=?
-    `).bind(suggestion ?? null, decision ?? null, grade ?? null, total, user.id,
+    `).bind(suggestion ?? null, decision ?? null, gradeFromScore(total), total, user.id,
              signerEmp ?? null, signerHead ?? null, id).run();
 
     await ctx.env.HR_DB.prepare(
@@ -295,9 +303,9 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
     await ctx.env.HR_DB.prepare(`
       UPDATE evaluations SET status='pending_final', hr_user_id=?,
-        signer_hr=COALESCE(?,signer_hr), total_score=?,
+        signer_hr=COALESCE(?,signer_hr), total_score=?, grade=?,
         updated_at=datetime('now') WHERE id=?
-    `).bind(user.id, signerHR ?? null, total, id).run();
+    `).bind(user.id, signerHR ?? null, total, gradeFromScore(total), id).run();
     await ctx.env.HR_DB.prepare(
       "INSERT INTO evaluation_approvals (evaluation_id, step, approver_user_id, status, note) VALUES (?,?,?,?,?)"
     ).bind(id, "hr", user.id, "approved", note ?? null).run();

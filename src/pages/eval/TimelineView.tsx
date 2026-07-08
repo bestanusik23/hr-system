@@ -14,23 +14,34 @@ const ACTION_META: Record<string, { icon: string; label: string; color: string }
   save_eval:    { icon: "💾", label: "บันทึกร่าง",        color: "#94a3b8" },
 };
 
+// created_at is stored as naive UTC (SQLite's datetime('now')) — normalize to a real UTC
+// instant before formatting, otherwise the browser reads it as already-local and displays
+// times 7 hours behind actual Bangkok time.
+function toUtcDate(iso: string): Date {
+  const s = iso.includes("T") ? iso : iso.replace(" ", "T");
+  return new Date(/Z$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
+}
+function bangkokDayKey(iso: string): string {
+  return toUtcDate(iso).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
+}
+
 function groupByDate(events: TimelineEvent[]): [string, TimelineEvent[]][] {
   const map = new Map<string, TimelineEvent[]>();
   events.forEach(ev => {
-    const day = ev.created_at.slice(0, 10);
+    const day = bangkokDayKey(ev.created_at);
     if (!map.has(day)) map.set(day, []);
     map.get(day)!.push(ev);
   });
   return [...map.entries()];
 }
 
-function thaiDate(iso: string) {
-  return new Date(iso).toLocaleDateString("th-TH", {
+function thaiDate(dayKey: string) {
+  return new Date(`${dayKey}T00:00:00`).toLocaleDateString("th-TH", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
   });
 }
 function thaiTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+  return toUtcDate(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok" });
 }
 
 export default function TimelineView() {
