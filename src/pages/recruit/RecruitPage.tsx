@@ -14,10 +14,11 @@ function formatApptDate(iso: string): string {
 }
 
 const STATUS_COLOR: Record<string, { bg: string; text: string; border: string }> = {
-  "รอพิจารณา":              { bg: "#fef9c3", text: "#b45309", border: "#fde68a" },
-  "กรอกใบสมัครและสัมภาษณ์": { bg: "#ede9fe", text: "#7c3aed", border: "#ddd6fe" },
-  "ไม่ผ่านการพิจารณา":      { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
-  "ผ่านการพิจารณา":         { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" },
+  "รอพิจารณา":                 { bg: "#fef9c3", text: "#b45309", border: "#fde68a" },
+  "กรอกใบสมัครและสัมภาษณ์":    { bg: "#ede9fe", text: "#7c3aed", border: "#ddd6fe" },
+  "ไม่ผ่านการพิจารณา":         { bg: "#fee2e2", text: "#dc2626", border: "#fecaca" },
+  "ผ่านการพิจารณา":            { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0" },
+  "ผู้สมัครยกเลิกการสัมภาษณ์": { bg: "#e2e8f0", text: "#475569", border: "#cbd5e1" },
 };
 
 const HIDDEN_COLS = new Set(["_row"]);
@@ -353,6 +354,13 @@ export default function RecruitPage() {
                       fontFamily: "inherit", color: "#dc2626", fontWeight: 600,
                       opacity: updating === app._row ? 0.6 : 1 }}>
                     ✗ ไม่ผ่านการพิจารณา
+                  </button>
+                  <button onClick={() => updateStatus(app, "ผู้สมัครยกเลิกการสัมภาษณ์")} disabled={updating === app._row}
+                    style={{ padding: "7px 14px", borderRadius: 9, border: "1.5px solid #cbd5e1",
+                      background: "#fff", fontSize: 12, cursor: "pointer",
+                      fontFamily: "inherit", color: "#475569", fontWeight: 600,
+                      opacity: updating === app._row ? 0.6 : 1 }}>
+                    🚫 ผู้สมัครยกเลิกการสัมภาษณ์
                   </button>
                 </div>
               </div>
