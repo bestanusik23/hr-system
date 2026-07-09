@@ -1,5 +1,5 @@
 // ใบประกาศนียบัตร (training completion) — thin adapter over the shared certificate template.
-import CertificateTemplate, { CERT_COLORS } from "../../components/certificate/CertificateTemplate";
+import CertificateTemplate from "../../components/certificate/CertificateTemplate";
 
 interface CertData {
   cert_id: string; full_name: string; position: string | null;
@@ -21,6 +21,12 @@ function thDate(iso: string | null): string {
 export default function CertificateView({ cert, onClose }: Props) {
   const qrUrl = `${window.location.origin}/cert/verify?token=${cert.qr_token}`;
 
+  const bodyText = [
+    `ได้เข้าร่วมการอบรม **${cert.course_name}**`,
+    cert.course_date ? `วันที่ ${thDate(cert.course_date)}` : "",
+    "ณ โรงพยาบาลเชียงราย ราม โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ",
+  ].filter(Boolean).join("\n");
+
   return (
     <CertificateTemplate
       domId="cert-print-area"
@@ -31,16 +37,7 @@ export default function CertificateView({ cert, onClose }: Props) {
       eyebrow="ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า"
       nameMaxSize={85}
       nameMinSize={32}
-      bodyText={
-        <>
-          ได้เข้าร่วมการอบรม <span style={{ fontWeight: 700 }}>{cert.course_name}</span>
-          {cert.course_date && <><br />วันที่ {thDate(cert.course_date)}</>}
-          <br />
-          <span style={{ color: CERT_COLORS.blue }}>
-            ณ โรงพยาบาลเชียงราย ราม<br />โดยบรรลุวัตถุประสงค์ของโครงการทุกประการ
-          </span>
-        </>
-      }
+      bodyText={bodyText}
       issuedOnText={`ให้ ณ วันที่ ${thDate(cert.course_date)}`}
       onClose={onClose}
     />

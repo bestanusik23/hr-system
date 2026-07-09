@@ -20,6 +20,13 @@ function thDate(iso: string | null): string {
 export default function InternCertificateView({ cert, onClose }: Props) {
   const qrUrl = `${window.location.origin}/intern/cert/verify?token=${cert.qr_token}`;
 
+  const bodyText = [
+    `ขอรับรองว่า **${cert.full_name}** นักศึกษาจาก **${cert.institution_name ?? "—"}**`
+      + ` ได้เข้ารับการฝึกประสบการณ์วิชาชีพ ณ โรงพยาบาลเชียงราย ราม${cert.department_name ? ` แผนก${cert.department_name}` : ""}`,
+    `ตั้งแต่วันที่ **${thDate(cert.start_date)}** ถึงวันที่ **${thDate(cert.end_date)}**`
+      + ` และได้ปฏิบัติหน้าที่ตามระยะเวลาที่กำหนดเรียบร้อยแล้ว`,
+  ].join("\n");
+
   return (
     <CertificateTemplate
       domId="intern-cert-print-area"
@@ -30,17 +37,7 @@ export default function InternCertificateView({ cert, onClose }: Props) {
       eyebrow="ใบรับรองการฝึกประสบการณ์วิชาชีพ / ฝึกงาน"
       nameMaxSize={70}
       nameMinSize={28}
-      bodyText={
-        <>
-          ขอรับรองว่า <span style={{ fontWeight: 700 }}>{cert.full_name}</span> นักศึกษาจาก{" "}
-          <span style={{ fontWeight: 700 }}>{cert.institution_name ?? "—"}</span>
-          {" "}ได้เข้ารับการฝึกประสบการณ์วิชาชีพ ณ โรงพยาบาลเชียงราย ราม
-          {cert.department_name && <> แผนก{cert.department_name}</>}
-          <br />ตั้งแต่วันที่ <span style={{ fontWeight: 700 }}>{thDate(cert.start_date)}</span> ถึงวันที่{" "}
-          <span style={{ fontWeight: 700 }}>{thDate(cert.end_date)}</span>
-          {" "}และได้ปฏิบัติหน้าที่ตามระยะเวลาที่กำหนดเรียบร้อยแล้ว
-        </>
-      }
+      bodyText={bodyText}
       issuedOnText={`ให้ไว้ ณ วันที่ ${thDate(cert.issued_at.slice(0, 10))}`}
       onClose={onClose}
     />

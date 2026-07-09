@@ -2,7 +2,7 @@
 // certificate in the system (training completion, intern completion, and any future type).
 // Uses the site's global font (IBM Plex Sans Thai, declared in index.html / src/index.css)
 // instead of introducing a separate typeface for printed documents.
-import { useRef, useLayoutEffect, useState, type ReactNode } from "react";
+import { useRef, useLayoutEffect, useEffect, useState } from "react";
 
 export interface CertificateSigner { name: string; title: string; }
 
@@ -91,6 +91,23 @@ function LuxDivider() {
   );
 }
 
+// Lightweight markup so the certificate body can be a plain, HR-editable string: "\n" is a
+// manual line break, "**word**" is bold. This is what makes the "edit text before printing"
+// panel below possible — a textarea can round-trip this format losslessly.
+function renderRichText(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line, i) => (
+    <span key={i}>
+      {line.split(/(\*\*[^*]+\*\*)/g).map((seg, j) =>
+        seg.startsWith("**") && seg.endsWith("**")
+          ? <b key={j}>{seg.slice(2, -2)}</b>
+          : <span key={j}>{seg}</span>
+      )}
+      {i < lines.length - 1 && <br />}
+    </span>
+  ));
+}
+
 export interface CertificateTemplateProps {
   /** Unique DOM id for the printable area — must be unique per certificate type on the page. */
   domId: string;
@@ -100,8 +117,8 @@ export interface CertificateTemplateProps {
   recipientName: string;
   /** Small line above the recipient name (e.g. "ขอมอบเกียรติบัตรฉบับนี้ไว้เพื่อแสดงว่า"). */
   eyebrow: string;
-  /** Descriptive paragraph(s) — caller composes wording/line breaks for its certificate type. */
-  bodyText: ReactNode;
+  /** Descriptive paragraph(s) — plain text; use "\n" for a manual line break and "**word**" for bold. */
+  bodyText: string;
   issuedOnText: string;
   signers?: CertificateSigner[];
   onClose?: () => void;
@@ -120,6 +137,18 @@ export default function CertificateTemplate({
   const bodyRef       = useRef<HTMLDivElement>(null);
   const bodyTextRef   = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+
+  // Editable copy of the text fields — starts as the caller's default and can be adjusted
+  // before printing (e.g. fixing an awkward line break) without touching the underlying data.
+  const [showEditor, setShowEditor] = useState(false);
+  const [editName, setEditName]     = useState(recipientName);
+  const [editBody, setEditBody]     = useState(bodyText);
+  const [editIssued, setEditIssued] = useState(issuedOnText);
+  useEffect(() => setEditName(recipientName), [recipientName]);
+  useEffect(() => setEditBody(bodyText), [bodyText]);
+  useEffect(() => setEditIssued(issuedOnText), [issuedOnText]);
+
+  function resetEdits() { setEditName(recipientName); setEditBody(bodyText); setEditIssued(issuedOnText); }
 
   // Scale certificate to fit available width — no horizontal scrollbar.
   useLayoutEffect(() => {
@@ -140,7 +169,7 @@ export default function CertificateTemplate({
     let sz = nameMaxSize;
     el.style.fontSize = sz + "px";
     while (el.scrollWidth > maxW && sz > nameMinSize) { sz--; el.style.fontSize = sz + "px"; }
-  }, [recipientName, scale, nameMaxSize, nameMinSize]);
+  }, [editName, scale, nameMaxSize, nameMinSize]);
 
   // Shrink the body paragraph if a long institution/department name pushes it past its
   // row's height budget, so the layout never overflows into the signature row.
@@ -150,7 +179,7 @@ export default function CertificateTemplate({
     let sz = 19;
     el.style.fontSize = sz + "px";
     while (el.scrollHeight > 160 && sz > 13) { sz--; el.style.fontSize = sz + "px"; }
-  }, [bodyText, scale]);
+  }, [editBody, scale]);
 
   return (
     <div>
@@ -161,6 +190,11 @@ export default function CertificateTemplate({
           background: CERT_COLORS.blue, color: "#fff", fontWeight: 700, fontSize: 13,
           cursor: "pointer", fontFamily: "inherit",
         }}>🖨️ พิมพ์ / บันทึก PDF</button>
+        <button onClick={() => setShowEditor(v => !v)} style={{
+          padding: "9px 18px", borderRadius: 7, border: `1.5px solid ${showEditor ? CERT_COLORS.blue : "#c4cfee"}`,
+          background: showEditor ? "#eff6ff" : "#fff", color: CERT_COLORS.blue, fontWeight: 700, fontSize: 13,
+          cursor: "pointer", fontFamily: "inherit",
+        }}>✏️ แก้ไขข้อความก่อนพิมพ์</button>
         {onClose && (
           <button onClick={onClose} style={{
             padding: "9px 18px", borderRadius: 7, border: "1.5px solid #c4cfee",
@@ -168,6 +202,31 @@ export default function CertificateTemplate({
           }}>← กลับ</button>
         )}
       </div>
+
+      {showEditor && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 10,
+          padding: "16px 18px", marginBottom: 16, maxWidth: 700 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 10 }}>
+            แก้ไขข้อความในใบประกาศก่อนพิมพ์ — ขึ้นบรรทัดใหม่: กด Enter · ตัวหนา: ครอบด้วย **ข้อความ**
+          </div>
+          <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>ชื่อผู้รับ</label>
+          <input value={editName} onChange={e => setEditName(e.target.value)}
+            style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1.5px solid #e2e8f0",
+              fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 10 }} />
+          <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>ข้อความรายละเอียด</label>
+          <textarea value={editBody} onChange={e => setEditBody(e.target.value)} rows={4}
+            style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1.5px solid #e2e8f0",
+              fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 10, resize: "vertical" }} />
+          <label style={{ display: "block", fontSize: 11.5, fontWeight: 700, color: "#64748b", marginBottom: 4 }}>บรรทัดวันที่ออกให้</label>
+          <input value={editIssued} onChange={e => setEditIssued(e.target.value)}
+            style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1.5px solid #e2e8f0",
+              fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
+          <button onClick={resetEdits} style={{
+            padding: "7px 14px", borderRadius: 6, border: "1.5px solid #e2e8f0", background: "#fff",
+            color: "#64748b", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+          }}>↺ คืนค่าเดิม</button>
+        </div>
+      )}
 
       <div ref={wrapRef} style={{ width: "100%", overflow: "hidden", height: Math.round(CERT_H * scale) + 8 }}>
         <div style={{ transformOrigin: "top left", transform: `scale(${scale})`, width: CERT_W }}>
@@ -215,16 +274,16 @@ export default function CertificateTemplate({
                 </div>
                 <div ref={nameRef} style={{ fontSize: nameMaxSize, fontWeight: 700, color: CERT_COLORS.navy,
                   lineHeight: 1.15, marginTop: 12, whiteSpace: "nowrap", letterSpacing: "-0.01em", maxWidth: "100%" }}>
-                  {recipientName}
+                  {editName}
                 </div>
 
                 <LuxDivider />
 
                 <div ref={bodyTextRef} style={{ fontSize: 19, color: CERT_COLORS.dark, lineHeight: 1.85, maxWidth: 860 }}>
-                  {bodyText}
+                  {renderRichText(editBody)}
                 </div>
                 <div style={{ fontSize: 15.5, fontWeight: 600, color: CERT_COLORS.dark, marginTop: 12 }}>
-                  {issuedOnText}
+                  {editIssued}
                 </div>
               </div>
 
