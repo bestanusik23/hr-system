@@ -125,6 +125,9 @@ function generateOrderHTML(d: OrderData): string {
 
   .content { padding: 22px 26px 32px; }
 
+  /* ── Scale-to-fit wrapper — JS shrinks this proportionally if content still overflows one page ── */
+  .scale-wrap { width: 100%; }
+
   /* ── Header / letterhead ── */
   .doc-header { position: relative; padding: 20px 26px 14px; overflow: hidden; }
   .corner-accent { position: absolute; top: -50px; right: -70px; width: 240px; height: 170px;
@@ -185,6 +188,7 @@ function generateOrderHTML(d: OrderData): string {
 
 <div class="page-wrap">
 <div class="paper">
+<div class="scale-wrap" id="scaleWrap">
 
   <!-- Letterhead -->
   <div class="doc-header">
@@ -250,6 +254,7 @@ function generateOrderHTML(d: OrderData): string {
 
 </div>
 </div>
+</div>
 
 <script>
   function mmToPx(mm) {
@@ -260,17 +265,40 @@ function generateOrderHTML(d: OrderData): string {
     document.body.removeChild(d);
     return px;
   }
-  window.addEventListener('load', function () {
-    var paper = document.querySelector('.paper');
+  // Scale the whole document proportionally (letterhead + body) to fit the printable
+  // area, on top of the staff-count density tiers — catches overflow from long text
+  // fields (address/activity/etc.) that the density tiers alone don't account for.
+  function fitToPage() {
+    var wrap = document.getElementById('scaleWrap');
     var pageWrap = document.querySelector('.page-wrap');
-    if (!paper || !pageWrap) return;
-    if (paper.scrollHeight > mmToPx(297) + 2) {
+    if (!wrap) return false;
+    wrap.style.transform = 'none';
+    wrap.style.width = '100%';
+    var budget = mmToPx(273) - 4;
+    var natural = wrap.scrollHeight;
+    var fits = true;
+    if (natural > budget) {
+      var scale = Math.max(0.55, budget / natural);
+      wrap.style.transformOrigin = 'top left';
+      wrap.style.width = (100 / scale) + '%';
+      wrap.style.transform = 'scale(' + scale + ')';
+      fits = wrap.scrollHeight * scale <= budget + 6;
+    }
+    var existingWarn = document.querySelector('.overflow-warn');
+    if (existingWarn) existingWarn.remove();
+    if (!fits && pageWrap) {
       var warn = document.createElement('div');
       warn.className = 'overflow-warn';
-      warn.textContent = '⚠ เนื้อหายาวเกินหนึ่งหน้ากระดาษ A4 — ส่วนที่เกินจะถูกตัดออกตอนพิมพ์ กรุณาลดจำนวนรายชื่อหรือย่อข้อความ';
+      warn.textContent = '⚠ เนื้อหายาวเกินหนึ่งหน้ากระดาษ A4 แม้ปรับขนาดตัวอักษรลงแล้ว — ส่วนที่เกินจะถูกตัดออกตอนพิมพ์ กรุณาลดจำนวนรายชื่อหรือย่อข้อความ';
       document.body.insertBefore(warn, pageWrap);
     }
-  });
+    return fits;
+  }
+  window.addEventListener('load', fitToPage);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(fitToPage);
+  }
+  window.addEventListener('beforeprint', fitToPage);
 </script>
 </body>
 </html>`;
