@@ -221,10 +221,16 @@ export default function CertificateTemplate({
           <input value={editIssued} onChange={e => setEditIssued(e.target.value)}
             style={{ width: "100%", padding: "8px 10px", borderRadius: 6, border: "1.5px solid #e2e8f0",
               fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box", marginBottom: 12 }} />
-          <button onClick={resetEdits} style={{
-            padding: "7px 14px", borderRadius: 6, border: "1.5px solid #e2e8f0", background: "#fff",
-            color: "#64748b", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-          }}>↺ คืนค่าเดิม</button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowEditor(false)} style={{
+              padding: "8px 18px", borderRadius: 6, border: "none", background: CERT_COLORS.blue,
+              color: "#fff", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit",
+            }}>✅ บันทึกและดูตัวอย่าง</button>
+            <button onClick={resetEdits} style={{
+              padding: "8px 14px", borderRadius: 6, border: "1.5px solid #e2e8f0", background: "#fff",
+              color: "#64748b", fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+            }}>↺ คืนค่าเดิม</button>
+          </div>
         </div>
       )}
 
