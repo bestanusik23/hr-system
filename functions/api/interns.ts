@@ -69,25 +69,29 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   sql += " ORDER BY start_date DESC";
 
-  const rows = await db.prepare(sql).bind(...params).all<InternRow>();
-  const interns = rows.results ?? [];
+  try {
+    const rows = await db.prepare(sql).bind(...params).all<InternRow>();
+    const interns = rows.results ?? [];
 
-  // Summary counts — computed from ALL non-filtered interns (cards always reflect the whole set).
-  const summaryRows = await db.prepare(`
-    SELECT ${STATUS_SQL} AS status, i.institution_id, i.department_id
-    FROM interns i WHERE 1=1
-  `).all<{ status: string; institution_id: number | null; department_id: number | null }>();
-  const all = summaryRows.results ?? [];
-  const summary = {
-    total: all.length,
-    active: all.filter(r => r.status === "active" || r.status === "ending_soon").length,
-    upcoming: all.filter(r => r.status === "upcoming").length,
-    completed: all.filter(r => r.status === "completed").length,
-    institutions: new Set(all.filter(r => r.institution_id != null).map(r => r.institution_id)).size,
-    departments: new Set(all.filter(r => r.department_id != null).map(r => r.department_id)).size,
-  };
+    // Summary counts — computed from ALL non-filtered interns (cards always reflect the whole set).
+    const summaryRows = await db.prepare(`
+      SELECT ${STATUS_SQL} AS status, i.institution_id, i.department_id
+      FROM interns i WHERE 1=1
+    `).all<{ status: string; institution_id: number | null; department_id: number | null }>();
+    const all = summaryRows.results ?? [];
+    const summary = {
+      total: all.length,
+      active: all.filter(r => r.status === "active" || r.status === "ending_soon").length,
+      upcoming: all.filter(r => r.status === "upcoming").length,
+      completed: all.filter(r => r.status === "completed").length,
+      institutions: new Set(all.filter(r => r.institution_id != null).map(r => r.institution_id)).size,
+      departments: new Set(all.filter(r => r.department_id != null).map(r => r.department_id)).size,
+    };
 
-  return Response.json({ ok: true, interns, summary });
+    return Response.json({ ok: true, interns, summary });
+  } catch (err) {
+    return Response.json({ ok: false, error: `โหลดข้อมูลไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+  }
 };
 
 function genInternCode(existingCount: number): string {
@@ -109,32 +113,39 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const db = ctx.env.HR_DB;
   const year = new Date().getFullYear();
-  const countRow = await db.prepare(
-    "SELECT COUNT(*) AS n FROM interns WHERE intern_code LIKE ?"
-  ).bind(`INT-${year}-%`).first<{ n: number }>();
-  const internCode = genInternCode(countRow?.n ?? 0);
 
-  const result = await db.prepare(`
-    INSERT INTO interns (
-      intern_code, prefix, first_name, last_name, education_level, faculty, major, year_level, phone, photo_url,
-      institution_id, advisor_name, advisor_phone, advisor_email, referral_letter_url,
-      start_date, end_date, department_id, division_id, supervisor_name, supervisor_position,
-      training_type, work_hours, note, created_by
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-  `).bind(
-    internCode,
-    (b.prefix as string) || null, b.first_name as string, b.last_name as string,
-    (b.education_level as string) || null, (b.faculty as string) || null, (b.major as string) || null,
-    (b.year_level as string) || null, (b.phone as string) || null, (b.photo_url as string) || null,
-    (b.institution_id as number) || null, (b.advisor_name as string) || null, (b.advisor_phone as string) || null,
-    (b.advisor_email as string) || null, (b.referral_letter_url as string) || null,
-    b.start_date as string, b.end_date as string, (b.department_id as number) || null, (b.division_id as number) || null,
-    (b.supervisor_name as string) || null, (b.supervisor_position as string) || null,
-    (b.training_type as string) || null, (b.work_hours as string) || null, (b.note as string) || null,
-    user.full_name ?? user.username ?? "",
-  ).run();
+  let id: number | undefined;
+  let internCode = "";
+  try {
+    const countRow = await db.prepare(
+      "SELECT COUNT(*) AS n FROM interns WHERE intern_code LIKE ?"
+    ).bind(`INT-${year}-%`).first<{ n: number }>();
+    internCode = genInternCode(countRow?.n ?? 0);
 
-  const id = result.meta.last_row_id;
+    const result = await db.prepare(`
+      INSERT INTO interns (
+        intern_code, prefix, first_name, last_name, education_level, faculty, major, year_level, phone, photo_url,
+        institution_id, advisor_name, advisor_phone, advisor_email, referral_letter_url,
+        start_date, end_date, department_id, division_id, supervisor_name, supervisor_position,
+        training_type, work_hours, note, created_by
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+    `).bind(
+      internCode,
+      (b.prefix as string) || null, b.first_name as string, b.last_name as string,
+      (b.education_level as string) || null, (b.faculty as string) || null, (b.major as string) || null,
+      (b.year_level as string) || null, (b.phone as string) || null, (b.photo_url as string) || null,
+      (b.institution_id as number) || null, (b.advisor_name as string) || null, (b.advisor_phone as string) || null,
+      (b.advisor_email as string) || null, (b.referral_letter_url as string) || null,
+      b.start_date as string, b.end_date as string, (b.department_id as number) || null, (b.division_id as number) || null,
+      (b.supervisor_name as string) || null, (b.supervisor_position as string) || null,
+      (b.training_type as string) || null, (b.work_hours as string) || null, (b.note as string) || null,
+      user.full_name ?? user.username ?? "",
+    ).run();
+    id = result.meta.last_row_id;
+  } catch (err) {
+    return Response.json({ ok: false, error: `บันทึกไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+  }
+
   try {
     await db.prepare(
       "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'intern','create','intern',?)"

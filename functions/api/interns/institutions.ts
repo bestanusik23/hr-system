@@ -15,8 +15,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (q) { sql += " WHERE name LIKE ?"; params.push(`%${q}%`); }
   sql += " ORDER BY name ASC";
 
-  const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
-  return Response.json({ ok: true, institutions: rows.results ?? [] });
+  try {
+    const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
+    return Response.json({ ok: true, institutions: rows.results ?? [] });
+  } catch (err) {
+    return Response.json({ ok: false, error: `โหลดข้อมูลไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+  }
 };
 
 // POST /api/interns/institutions — find-or-create by exact name (avoids duplicate institution rows)
@@ -29,14 +33,18 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const name = b?.name?.trim();
   if (!name) return Response.json({ ok: false, error: "กรุณากรอกชื่อสถาบันการศึกษา" }, { status: 400 });
 
-  const existing = await ctx.env.HR_DB.prepare(
-    "SELECT id FROM intern_institutions WHERE name = ?"
-  ).bind(name).first<{ id: number }>();
-  if (existing) return Response.json({ ok: true, id: existing.id, created: false });
+  try {
+    const existing = await ctx.env.HR_DB.prepare(
+      "SELECT id FROM intern_institutions WHERE name = ?"
+    ).bind(name).first<{ id: number }>();
+    if (existing) return Response.json({ ok: true, id: existing.id, created: false });
 
-  const result = await ctx.env.HR_DB.prepare(
-    "INSERT INTO intern_institutions (name, type, province) VALUES (?,?,?)"
-  ).bind(name, b?.type ?? null, b?.province ?? null).run();
+    const result = await ctx.env.HR_DB.prepare(
+      "INSERT INTO intern_institutions (name, type, province) VALUES (?,?,?)"
+    ).bind(name, b?.type ?? null, b?.province ?? null).run();
 
-  return Response.json({ ok: true, id: result.meta.last_row_id, created: true }, { status: 201 });
+    return Response.json({ ok: true, id: result.meta.last_row_id, created: true }, { status: 201 });
+  } catch (err) {
+    return Response.json({ ok: false, error: `บันทึกสถาบันไม่สำเร็จ: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
+  }
 };
