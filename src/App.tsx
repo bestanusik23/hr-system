@@ -17,6 +17,8 @@ import WorkflowPage from "./pages/WorkflowPage";
 import ManpowerPage from "./pages/manpower/ManpowerPage";
 import WorkforceTimelinePage from "./pages/manpower/WorkforceTimelinePage";
 import OrderOutPage from "./pages/order/OrderOutPage";
+import InternsPage from "./pages/interns/InternsPage";
+import InternCertVerifyPage from "./pages/interns/InternCertVerifyPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -39,6 +41,7 @@ export default function App() {
           <Route path="/checkin"     element={<CheckinPage />} />
           <Route path="/survey"      element={<SurveyPage />} />
           <Route path="/cert/verify" element={<CertVerifyPage />} />
+          <Route path="/intern/cert/verify" element={<InternCertVerifyPage />} />
           {/* Protected routes */}
           <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
           <Route path="/eval" element={<RequireAuth><EvalPage /></RequireAuth>} />
@@ -53,6 +56,7 @@ export default function App() {
           <Route path="/manpower" element={<RequireAuth><ManpowerPage /></RequireAuth>} />
           <Route path="/workforce-timeline" element={<RequireAuth><WorkforceTimelinePage /></RequireAuth>} />
           <Route path="/order-out" element={<RequireAuth><OrderOutPage /></RequireAuth>} />
+          <Route path="/interns" element={<RequireAuth><InternsPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

@@ -86,6 +86,12 @@ const IcDatabase = () => (
     <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
   </svg>
 );
+const IcGraduationCap = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M22 10 12 5 2 10l10 5 10-5Z"/>
+    <path d="M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"/>
+  </svg>
+);
 
 /* ─── System definitions ─── */
 interface SystemCard {
@@ -165,6 +171,12 @@ const SYSTEMS: SystemCard[] = [
     title: "สำรองข้อมูล",
     desc: "ดาวน์โหลดข้อมูลทั้งระบบเป็นไฟล์สำรองเก็บไว้ กรณีข้อมูลสูญหายหรือต้องกู้คืน",
     roles: ["admin"],
+  },
+  {
+    key: "interns", no: "13", icon: <IcGraduationCap />,
+    title: "นักศึกษาฝึกงาน",
+    desc: "บันทึกข้อมูลนักศึกษาฝึกงาน ติดตามสถานะ ดูปฏิทิน จัดการ Rotation และออกใบรับรองการฝึกงาน",
+    roles: ["hr","admin"],
   },
 ];
 
