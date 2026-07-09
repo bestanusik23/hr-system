@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import PageLayout from "../../components/PageLayout";
 import InternForm, { type InternDetail } from "./InternForm";
 import InternProfile from "./InternProfile";
@@ -67,7 +68,12 @@ export default function InternsPage() {
   const [confirmCancel, setConfirmCancel] = useState<InternListItem | null>(null);
   const [cancelReason, setCancelReason] = useState("");
   const [cancelling, setCancelling] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState<number | null>(null);
+  const [menuAnchor, setMenuAnchor] = useState<{ id: number; top: number; left: number } | null>(null);
+  function toggleMenu(e: React.MouseEvent<HTMLButtonElement>, id: number) {
+    if (menuAnchor?.id === id) { setMenuAnchor(null); return; }
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenuAnchor({ id, top: rect.bottom + 4, left: rect.right - 180 });
+  }
 
   function load() {
     setLoading(true);
@@ -128,10 +134,10 @@ export default function InternsPage() {
     const r = await fetch(`/api/interns/${row.id}`);
     const d = await r.json() as { ok: boolean; intern?: InternDetail };
     if (d.ok && d.intern) { setEditing(d.intern); setShowForm(true); }
-    setOpenMenuId(null);
+    setMenuAnchor(null);
   }
   async function issueCertificate(row: InternListItem) {
-    setOpenMenuId(null);
+    setMenuAnchor(null);
     await fetch("/api/interns/certificates", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ intern_id: row.id }),
@@ -313,32 +319,10 @@ export default function InternsPage() {
                               fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{meta.label}</span>
                           </td>
                           <td style={{ padding: "9px 14px", color: "#475569" }}>{r.supervisor_name ?? "—"}</td>
-                          <td style={{ padding: "9px 14px", position: "relative" }}>
-                            <button onClick={() => setOpenMenuId(openMenuId === r.id ? null : r.id)}
+                          <td style={{ padding: "9px 14px" }}>
+                            <button onClick={e => toggleMenu(e, r.id)}
                               style={{ border: "1px solid #e5e7eb", background: "#fff", borderRadius: 6,
                                 width: 28, height: 28, cursor: "pointer", fontSize: 14, color: "#64748b" }}>⋮</button>
-                            {openMenuId === r.id && (
-                              <div onMouseLeave={() => setOpenMenuId(null)}
-                                style={{ position: "absolute", right: 14, top: 34, background: "#fff",
-                                  border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.12)",
-                                  zIndex: 20, minWidth: 170, overflow: "hidden" }}>
-                                {[
-                                  { label: "🔍 ดูรายละเอียด", onClick: () => { setProfileId(r.id); setOpenMenuId(null); } },
-                                  { label: "✏️ แก้ไขข้อมูล", onClick: () => openEdit(r) },
-                                  { label: "📅 ดูปฏิทิน", onClick: () => { setViewTab("calendar"); setOpenMenuId(null); } },
-                                  { label: "📜 ออกใบประกาศ", onClick: () => issueCertificate(r) },
-                                  { label: "📋 ดูประวัติ", onClick: () => { setProfileId(r.id); setOpenMenuId(null); } },
-                                  ...(r.is_cancelled ? [] : [{ label: "🚫 ยกเลิกการฝึกงาน", onClick: () => { setConfirmCancel(r); setOpenMenuId(null); }, danger: true }]),
-                                ].map((item, idx) => (
-                                  <button key={idx} onClick={item.onClick}
-                                    style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px",
-                                      border: "none", background: "none", fontSize: 12.5, cursor: "pointer",
-                                      fontFamily: "inherit", color: (item as { danger?: boolean }).danger ? "#dc2626" : "#334155" }}>
-                                    {item.label}
-                                  </button>
-                                ))}
-                              </div>
-                            )}
                           </td>
                         </tr>
                       );
@@ -350,6 +334,34 @@ export default function InternsPage() {
           )}
         </>
       )}
+
+      {menuAnchor && (() => {
+        const menuRow = filtered.find(r => r.id === menuAnchor.id);
+        if (!menuRow) return null;
+        return createPortal(
+          <div onMouseLeave={() => setMenuAnchor(null)}
+            style={{ position: "fixed", top: menuAnchor.top, left: Math.max(8, menuAnchor.left), background: "#fff",
+              border: "1px solid #e5e7eb", borderRadius: 8, boxShadow: "0 8px 24px rgba(0,0,0,.16)",
+              zIndex: 1000, minWidth: 180, overflow: "hidden" }}>
+            {[
+              { label: "🔍 ดูรายละเอียด", onClick: () => { setProfileId(menuRow.id); setMenuAnchor(null); } },
+              { label: "✏️ แก้ไขข้อมูล", onClick: () => openEdit(menuRow) },
+              { label: "📅 ดูปฏิทิน", onClick: () => { setViewTab("calendar"); setMenuAnchor(null); } },
+              { label: "📜 ออกใบประกาศ", onClick: () => issueCertificate(menuRow) },
+              { label: "📋 ดูประวัติ", onClick: () => { setProfileId(menuRow.id); setMenuAnchor(null); } },
+              ...(menuRow.is_cancelled ? [] : [{ label: "🚫 ยกเลิกการฝึกงาน", onClick: () => { setConfirmCancel(menuRow); setMenuAnchor(null); }, danger: true }]),
+            ].map((item, idx) => (
+              <button key={idx} onClick={item.onClick}
+                style={{ display: "block", width: "100%", textAlign: "left", padding: "10px 14px",
+                  border: "none", background: "none", fontSize: 12.5, cursor: "pointer",
+                  fontFamily: "inherit", color: (item as { danger?: boolean }).danger ? "#dc2626" : "#334155" }}>
+                {item.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        );
+      })()}
 
       {showForm && (
         <InternForm intern={editing} onClose={() => setShowForm(false)}
