@@ -21,7 +21,7 @@ const BACKUP_TABLES = [
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "admin") return Response.json({ ok: false, error: "เฉพาะผู้ดูแลระบบ (admin) เท่านั้น" }, { status: 403 });
+  if (user.username !== "admin") return Response.json({ ok: false, error: "เฉพาะบัญชี admin เท่านั้น" }, { status: 403 });
 
   const tables: Record<string, unknown[]> = {};
   const tableErrors: Record<string, string> = {};

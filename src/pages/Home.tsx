@@ -183,7 +183,11 @@ const CSS = `
 export default function Home() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const visible = SYSTEMS.filter(s => user && s.roles.includes(user.role));
+  const visible = SYSTEMS.filter(s => {
+    if (!user || !s.roles.includes(user.role)) return false;
+    if (s.key === "admin/backup" && user.username !== "admin") return false; // backup/restore: single account only
+    return true;
+  });
 
   const [licAlerts, setLicAlerts] = useState<LicenseAlert[]>([]);
   const canSeeAlerts = user && ["hr", "deputyHR", "admin"].includes(user.role);
