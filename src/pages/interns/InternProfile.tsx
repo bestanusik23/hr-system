@@ -67,6 +67,8 @@ export default function InternProfile({ internId, onClose, onChanged }: {
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
   const [viewCert, setViewCert] = useState<Cert | null>(null);
+  const [confirmDeleteCert, setConfirmDeleteCert] = useState<Cert | null>(null);
+  const [certBusyId, setCertBusyId] = useState<number | null>(null);
 
   function load() {
     setLoading(true);
@@ -88,6 +90,25 @@ export default function InternProfile({ internId, onClose, onChanged }: {
     setIssuing(false);
     load(); onChanged();
     setTab("certificates");
+  }
+
+  async function toggleCertStatus(cert: Cert) {
+    setCertBusyId(cert.id);
+    const nextStatus = cert.status === "issued" ? "revoked" : "issued";
+    await fetch(`/api/interns/certificates/${cert.id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus }),
+    });
+    setCertBusyId(null);
+    load(); onChanged();
+  }
+
+  async function deleteCert() {
+    if (!confirmDeleteCert) return;
+    setCertBusyId(confirmDeleteCert.id);
+    await fetch(`/api/interns/certificates/${confirmDeleteCert.id}`, { method: "DELETE" });
+    setCertBusyId(null);
+    setConfirmDeleteCert(null);
+    load(); onChanged();
   }
 
   async function onDocPick(e: React.ChangeEvent<HTMLInputElement>) {
@@ -285,19 +306,35 @@ export default function InternProfile({ internId, onClose, onChanged }: {
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {certificates.map(c => (
-                        <div key={c.id} onClick={() => setViewCert(c)}
+                        <div key={c.id}
                           style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-                            background: "#faf9ff", borderRadius: 8, border: "1px solid #ede9fe", cursor: "pointer" }}>
-                          <span style={{ fontSize: 16 }}>📜</span>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", fontFamily: "monospace" }}>{c.cert_id}</div>
-                            <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                              ออกเมื่อ {new Date(c.issued_at).toLocaleDateString("th-TH")} โดย {c.issued_by ?? "—"}
-                            </div>
-                          </div>
+                            background: "#faf9ff", borderRadius: 8, border: "1px solid #ede9fe" }}>
+                          <span onClick={() => setViewCert(c)} style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: "pointer" }}>
+                            <span style={{ fontSize: 16 }}>📜</span>
+                            <span>
+                              <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", fontFamily: "monospace" }}>{c.cert_id}</div>
+                              <div style={{ fontSize: 11, color: "#94a3b8" }}>
+                                ออกเมื่อ {new Date(c.issued_at).toLocaleDateString("th-TH")} โดย {c.issued_by ?? "—"}
+                              </div>
+                            </span>
+                          </span>
                           <span style={{ fontSize: 11, color: c.status === "issued" ? "#16a34a" : "#dc2626", fontWeight: 700 }}>
                             {c.status === "issued" ? "ออกแล้ว" : "ยกเลิก"}
                           </span>
+                          <button onClick={() => toggleCertStatus(c)} disabled={certBusyId === c.id}
+                            title={c.status === "issued" ? "เพิกถอนใบรับรอง" : "คืนสถานะใบรับรอง"}
+                            style={{ border: "1px solid #e2e8f0", background: "#fff", borderRadius: 6,
+                              padding: "5px 9px", cursor: "pointer", fontSize: 12, color: "#64748b",
+                              opacity: certBusyId === c.id ? 0.5 : 1 }}>
+                            {c.status === "issued" ? "🚫 เพิกถอน" : "✅ คืนสถานะ"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteCert(c)} disabled={certBusyId === c.id}
+                            title="ลบใบรับรองนี้"
+                            style={{ border: "1px solid #fecaca", background: "#fff5f5", borderRadius: 6,
+                              padding: "5px 9px", cursor: "pointer", fontSize: 12, color: "#dc2626",
+                              opacity: certBusyId === c.id ? 0.5 : 1 }}>
+                            🗑️ ลบ
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -315,6 +352,31 @@ export default function InternProfile({ internId, onClose, onChanged }: {
             display: "flex", alignItems: "center", justifyContent: "center", padding: 20, overflowY: "auto" }}>
           <div style={{ background: "#fff", borderRadius: 12, padding: 20, maxWidth: 1000, width: "100%" }}>
             <InternCertificateView cert={viewCert} onClose={() => setViewCert(null)} />
+          </div>
+        </div>
+      )}
+
+      {confirmDeleteCert && (
+        <div onClick={e => { if (e.target === e.currentTarget && certBusyId === null) setConfirmDeleteCert(null); }}
+          style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)", zIndex: 600,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 12, padding: 26, maxWidth: 400, width: "100%",
+            border: "1px solid #fecaca", borderTop: "4px solid #dc2626" }}>
+            <div style={{ fontSize: 26, textAlign: "center", marginBottom: 10 }}>🗑️</div>
+            <div style={{ fontSize: 15, fontWeight: 800, textAlign: "center", marginBottom: 6 }}>ยืนยันลบใบรับรอง?</div>
+            <div style={{ fontSize: 12.5, color: "#64748b", textAlign: "center", marginBottom: 18, fontFamily: "monospace" }}>
+              {confirmDeleteCert.cert_id}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setConfirmDeleteCert(null)} disabled={certBusyId !== null}
+                style={{ flex: 1, padding: "10px 0", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                  background: "#fff", cursor: "pointer", fontFamily: "inherit" }}>ยกเลิก</button>
+              <button onClick={deleteCert} disabled={certBusyId !== null}
+                style={{ flex: 2, padding: "10px 0", borderRadius: 8, border: "none",
+                  background: "#dc2626", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                {certBusyId !== null ? "กำลังลบ…" : "🗑️ ยืนยันลบ"}
+              </button>
+            </div>
           </div>
         </div>
       )}
