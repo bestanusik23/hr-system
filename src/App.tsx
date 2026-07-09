@@ -9,6 +9,7 @@ import ExecPage from "./pages/exec/ExecPage";
 import RecruitPage from "./pages/recruit/RecruitPage";
 import AdminPage from "./pages/admin/AdminPage";
 import OrgPage from "./pages/admin/OrgPage";
+import BackupPage from "./pages/admin/BackupPage";
 import CheckinPage from "./pages/CheckinPage";
 import CertVerifyPage from "./pages/CertVerifyPage";
 import SurveyPage from "./pages/SurveyPage";
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/exec" element={<RequireAuth><ExecPage /></RequireAuth>} />
           <Route path="/admin" element={<RequireAuth><AdminPage /></RequireAuth>} />
           <Route path="/admin/org" element={<RequireAuth><OrgPage /></RequireAuth>} />
+          <Route path="/admin/backup" element={<RequireAuth><BackupPage /></RequireAuth>} />
           <Route path="/workflow" element={<RequireAuth><WorkflowPage /></RequireAuth>} />
           <Route path="/manpower" element={<RequireAuth><ManpowerPage /></RequireAuth>} />
           <Route path="/workforce-timeline" element={<RequireAuth><WorkforceTimelinePage /></RequireAuth>} />

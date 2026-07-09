@@ -79,6 +79,13 @@ const IcFileText = () => (
     <line x1="8" y1="17" x2="16" y2="17"/>
   </svg>
 );
+const IcDatabase = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <ellipse cx="12" cy="5" rx="9" ry="3"/>
+    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/>
+    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
+  </svg>
+);
 
 /* ─── System definitions ─── */
 interface SystemCard {
@@ -152,6 +159,12 @@ const SYSTEMS: SystemCard[] = [
     title: "คำสั่งออกหน่วย",
     desc: "กรอกข้อมูลกิจกรรม สถานที่ และรายชื่อผู้รับผิดชอบ ระบบประกอบเป็นคำสั่งมอบหมายปฏิบัติงานนอกสถานที่ พร้อมพิมพ์ได้ทันที",
     roles: ["hr","deputyHR","admin"],
+  },
+  {
+    key: "admin/backup", no: "12", icon: <IcDatabase />,
+    title: "สำรองข้อมูล",
+    desc: "ดาวน์โหลดข้อมูลทั้งระบบเป็นไฟล์สำรองเก็บไว้ กรณีข้อมูลสูญหายหรือต้องกู้คืน",
+    roles: ["admin"],
   },
 ];
 
