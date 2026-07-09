@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import PageLayout from "../../components/PageLayout";
 
 interface StaffRow { name: string; position: string; }
@@ -335,6 +335,24 @@ export default function OrderOutPage() {
   const [signerDept, setSignerDept]   = useState(DEFAULT_SIGNER.dept);
   const [popupErr, setPopupErr] = useState("");
 
+  // Last-used signer (remembered server-side) — used as the default for new orders
+  // instead of always resetting to the hardcoded DEFAULT_SIGNER.
+  const lastSignerRef = useRef(DEFAULT_SIGNER);
+  useEffect(() => {
+    fetch("/api/order-out/signer").then(r => r.json())
+      .then((d: { ok: boolean; signer?: { signerName: string; signerTitle: string; signerDept: string } | null }) => {
+        if (!d.ok || !d.signer) return;
+        const s = { name: d.signer.signerName, title: d.signer.signerTitle, dept: d.signer.signerDept };
+        lastSignerRef.current = s;
+        // Only overwrite the currently-shown fields if the user hasn't started editing an existing order.
+        setIsEditing(editing => {
+          if (!editing) { setSignerName(s.name); setSignerTitle(s.title); setSignerDept(s.dept); }
+          return editing;
+        });
+      })
+      .catch(() => { /* fall back to hardcoded default */ });
+  }, []);
+
   // History (reprint) tab
   const [history, setHistory]         = useState<OrderListItem[]>([]);
   const [historyLoading, setHistLoad] = useState(false);
@@ -421,7 +439,8 @@ export default function OrderOutPage() {
   function startNewOrder() {
     setOrderNo(""); setActivity(""); setPlaceName(""); setAddress("");
     setEventDate(""); setOrderDate(""); setStaff([{ name: "", position: "" }]);
-    setSignerName(DEFAULT_SIGNER.name); setSignerTitle(DEFAULT_SIGNER.title); setSignerDept(DEFAULT_SIGNER.dept);
+    const s = lastSignerRef.current;
+    setSignerName(s.name); setSignerTitle(s.title); setSignerDept(s.dept);
     setIsEditing(false); setPopupErr(""); setView("form");
   }
 
@@ -447,6 +466,16 @@ export default function OrderOutPage() {
         body: JSON.stringify({ orderNo, activity, placeName, address, eventDate, orderDate, staff, signerName, signerTitle, signerDept }),
       });
     } catch { /* history save is best-effort */ }
+    // Remember the (possibly edited) signer as the default for the next new order.
+    if (signerName.trim()) {
+      lastSignerRef.current = { name: signerName, title: signerTitle, dept: signerDept };
+      try {
+        await fetch("/api/order-out/signer", {
+          method: "PUT", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signerName, signerTitle, signerDept }),
+        });
+      } catch { /* best-effort */ }
+    }
   }
 
   const inputStyle: React.CSSProperties = {
