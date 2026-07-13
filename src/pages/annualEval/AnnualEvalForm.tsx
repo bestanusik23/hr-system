@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { EVAL_STATUS_META } from "./RoundDetail";
+import AnnualEvalPrintModal from "./AnnualEvalPrintModal";
 
 interface EvalDetail {
   id: number; round_id: number; employee_id: number; template_id: number;
@@ -133,6 +134,7 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
   const [returnStep, setReturnStep] = useState("");
   const [returnReason, setReturnReason] = useState("");
   const [showCancel, setShowCancel] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
 
   function load() {
@@ -281,6 +283,7 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
   const curIdx = currentStep ? workflowSteps.indexOf(currentStep) : workflowSteps.length;
 
   return (
+    <>
     <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
       style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.6)",
         display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16 }}>
@@ -498,6 +501,13 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
                 {saving ? "กำลังสรุปผล…" : "สรุปผลและอนุมัติ"}
               </button>
             )}
+            {canManage && ev.status === "completed" && (
+              <button onClick={() => setShowPrint(true)}
+                style={{ flex: 2, minWidth: 150, padding: "11px 0", borderRadius: 4, border: "none",
+                  background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit", fontSize: 13 }}>
+                🖨️ พิมพ์แบบประเมิน
+              </button>
+            )}
             {canManage && !["completed", "cancelled"].includes(ev.status) && (
               <button onClick={() => setShowReturn(v => !v)}
                 style={{ flex: 1, minWidth: 100, padding: "11px 0", borderRadius: 4, border: "1.5px solid #fed7aa",
@@ -556,5 +566,7 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
         </div>
       </div>
     </div>
+    {showPrint && <AnnualEvalPrintModal evalId={evalId} onClose={() => setShowPrint(false)} />}
+    </>
   );
 }
