@@ -81,6 +81,7 @@ export default function RecruitPage() {
   const [error, setError]               = useState("");
   const [search, setSearch]             = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [page, setPage]                 = useState(1);
   const [detail, setDetail]             = useState<Application | null>(null);
   const [updating, setUpdating]         = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Record<string, Appointment>>({});
@@ -209,6 +210,14 @@ export default function RecruitPage() {
     const matchStatus = !statusFilter || getAppStatus(a) === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  const PAGE_SIZE = 15;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages);
+  const pageStart = (pageSafe - 1) * PAGE_SIZE;
+  const paged = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  useEffect(() => { setPage(1); }, [search, statusFilter]);
 
   // When HR views interview queue, show cards instead of table
   const isInterviewQueueView = isHR && statusFilter === "กรอกใบสมัครและสัมภาษณ์";
@@ -383,7 +392,7 @@ export default function RecruitPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((app, ri) => {
+                {paged.map((app, ri) => {
                   const curStatus = statusKey ? (app[statusKey] || "รอพิจารณา") : "รอพิจารณา";
                   const sc = STATUS_COLOR[curStatus];
                   return (
@@ -391,7 +400,7 @@ export default function RecruitPage() {
                       style={{ borderBottom: "1px solid #f1f5f9", background: ri % 2 === 0 ? "#fff" : "#fafbff", transition: "background .15s" }}
                       onMouseEnter={e => (e.currentTarget.style.background = "#f0f6ff")}
                       onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? "#fff" : "#fafbff")}>
-                      <td style={{ ...TD, color: "#94a3b8", width: 36, textAlign: "center", fontWeight: 600 }}>{ri + 1}</td>
+                      <td style={{ ...TD, color: "#94a3b8", width: 36, textAlign: "center", fontWeight: 600 }}>{pageStart + ri + 1}</td>
                       {resolvedTableCols.map((col, ci) => (
                         <td key={col.label} style={{
                           ...TD,
@@ -433,8 +442,14 @@ export default function RecruitPage() {
               </tbody>
             </table>
           </div>
-          <div style={{ padding: "12px 20px", borderTop: "1px solid #f0f5ff", fontSize: 12, color: "#94a3b8", textAlign: "right" }}>
-            แสดง {filtered.length} รายการ จาก {applications.length} ทั้งหมด
+          <div style={{ padding: "12px 20px", borderTop: "1px solid #f0f5ff",
+            display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>
+              แสดง {filtered.length === 0 ? 0 : pageStart + 1}-{Math.min(pageStart + PAGE_SIZE, filtered.length)} จาก {filtered.length} รายการ (ทั้งหมด {applications.length})
+            </span>
+            {totalPages > 1 && (
+              <Pagination page={pageSafe} totalPages={totalPages} onChange={setPage} />
+            )}
           </div>
         </div>
       )}
@@ -651,6 +666,33 @@ function FilterBtn({ label, active, onClick }: { label: string; active: boolean;
         background: active ? "#0038C6" : "#fff", color: active ? "#fff" : "#64748b", transition: "all .15s" }}>
       {label}
     </button>
+  );
+}
+
+function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  const btnStyle = (active: boolean, disabled: boolean): React.CSSProperties => ({
+    minWidth: 30, height: 30, padding: "0 8px", borderRadius: 7,
+    border: `1.5px solid ${active ? "#0038C6" : "#e2e8f0"}`,
+    background: active ? "#0038C6" : "#fff", color: active ? "#fff" : disabled ? "#cbd5e1" : "#475569",
+    fontFamily: "inherit", fontSize: 12, fontWeight: active ? 700 : 600,
+    cursor: disabled ? "default" : "pointer",
+  });
+
+  // Windowed page numbers: first, last, current ±1, with "…" gaps.
+  const nums: (number | "…")[] = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || Math.abs(p - page) <= 1) nums.push(p);
+    else if (nums[nums.length - 1] !== "…") nums.push("…");
+  }
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <button disabled={page <= 1} onClick={() => onChange(page - 1)} style={btnStyle(false, page <= 1)}>‹</button>
+      {nums.map((n, i) => n === "…"
+        ? <span key={`gap-${i}`} style={{ color: "#cbd5e1", fontSize: 12, padding: "0 2px" }}>…</span>
+        : <button key={n} onClick={() => onChange(n)} style={btnStyle(n === page, false)}>{n}</button>)}
+      <button disabled={page >= totalPages} onClick={() => onChange(page + 1)} style={btnStyle(false, page >= totalPages)}>›</button>
+    </div>
   );
 }
 
