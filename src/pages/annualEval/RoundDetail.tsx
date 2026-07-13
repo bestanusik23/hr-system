@@ -34,6 +34,21 @@ const ROUND_STATUS_META: Record<string, { label: string; bg: string; color: stri
   cancelled: { label: "ยกเลิก", bg: "#fee2e2", color: "#dc2626" },
 };
 
+// No cron in this app — due-soon/overdue is computed live whenever this screen loads,
+// against the round's end_date, rather than pushed on a schedule.
+const ACTIVE_STATUSES = new Set(["pending_head", "pending_deputy", "pending_quality", "pending_hr", "pending_director", "pending_summary"]);
+function daysUntil(dateStr: string): number {
+  const end = new Date(dateStr + "T23:59:59");
+  return Math.ceil((end.getTime() - Date.now()) / 86400000);
+}
+function urgency(status: string, endDate: string): { label: string; bg: string; color: string } | null {
+  if (!ACTIVE_STATUSES.has(status)) return null;
+  const days = daysUntil(endDate);
+  if (days < 0) return { label: "🔴 เกินกำหนด", bg: "#fee2e2", color: "#dc2626" };
+  if (days <= 7) return { label: `⚠ ใกล้ครบกำหนด (${days} วัน)`, bg: "#fff7ed", color: "#c2410c" };
+  return null;
+}
+
 export default function RoundDetail({ roundId, onBack }: Props) {
   const { user } = useAuth();
   const [round, setRound] = useState<Round | null>(null);
@@ -74,6 +89,8 @@ export default function RoundDetail({ roundId, onBack }: Props) {
 
   if (loading || !round) return <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>;
   const meta = ROUND_STATUS_META[round.status];
+  const overdueCount = evals.filter(e => urgency(e.status, round.end_date)?.label.startsWith("🔴")).length;
+  const dueSoonCount = evals.filter(e => urgency(e.status, round.end_date)?.label.startsWith("⚠")).length;
 
   return (
     <div>
@@ -122,6 +139,23 @@ export default function RoundDetail({ roundId, onBack }: Props) {
         )}
       </div>
 
+      {(overdueCount > 0 || dueSoonCount > 0) && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+          {overdueCount > 0 && (
+            <div style={{ background: "#fee2e2", border: "1.5px solid #fecaca", borderRadius: 10,
+              padding: "8px 16px", fontSize: 12.5, color: "#dc2626", fontWeight: 700 }}>
+              🔴 เกินกำหนด {overdueCount} คน
+            </div>
+          )}
+          {dueSoonCount > 0 && (
+            <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: 10,
+              padding: "8px 16px", fontSize: 12.5, color: "#c2410c", fontWeight: 700 }}>
+              ⚠ ใกล้ครบกำหนด (ภายใน 7 วัน) {dueSoonCount} คน
+            </div>
+          )}
+        </div>
+      )}
+
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍 ค้นหาชื่อหรือรหัสพนักงาน…"
         style={{ padding: "9px 16px", borderRadius: 7, border: "1.5px solid #c4cfee", fontSize: 13,
           fontFamily: "inherit", width: 260, outline: "none", marginBottom: 16 }} />
@@ -134,6 +168,7 @@ export default function RoundDetail({ roundId, onBack }: Props) {
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {filtered.map(ev => {
             const sm = EVAL_STATUS_META[ev.status] ?? EVAL_STATUS_META.not_started;
+            const urg = urgency(ev.status, round.end_date);
             const initial = ev.snap_full_name.charAt(0);
             return (
               <div key={ev.id} onClick={() => setOpenEvalId(ev.id)}
@@ -165,6 +200,12 @@ export default function RoundDetail({ roundId, onBack }: Props) {
                   padding: "4px 12px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>
                   {sm.label}
                 </span>
+                {urg && (
+                  <span style={{ background: urg.bg, color: urg.color, borderRadius: 20,
+                    padding: "4px 12px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+                    {urg.label}
+                  </span>
+                )}
               </div>
             );
           })}
