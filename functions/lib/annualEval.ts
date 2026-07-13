@@ -205,3 +205,25 @@ export async function computeFinalScore(db: D1Database, evaluationId: number, te
     category_breakdown: breakdown,
   };
 }
+
+export type ScoreBandMetric =
+  | "sick_leave" | "personal_leave" | "vacation_leave" | "late_minutes"
+  | "training_count" | "hospital_activity" | "committee";
+
+export interface ScoreBand { min_value: number | null; max_value: number | null; score: number; }
+
+// Suggested score for a raw stat value (e.g. 7 sick-leave days) against the admin-configured
+// bands for that metric. Bands with a level_group win over NULL (all-levels) bands for the
+// same metric when both would match — lets e.g. training_count differ by level while leave
+// metrics stay shared. Returns null if no band matches (caller decides the fallback).
+export function scoreForMetricValue(
+  bands: (ScoreBand & { level_group: string | null })[], value: number, levelGroup: string | null,
+): number | null {
+  const candidates = bands.filter(b =>
+    (b.min_value == null || value >= b.min_value) && (b.max_value == null || value <= b.max_value)
+  );
+  const scoped = levelGroup ? candidates.find(b => b.level_group === levelGroup) : undefined;
+  if (scoped) return scoped.score;
+  const universal = candidates.find(b => b.level_group == null);
+  return universal ? universal.score : null;
+}
