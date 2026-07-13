@@ -188,7 +188,9 @@ CREATE TABLE annual_eval_score_bands (
                 'sick_leave','personal_leave','vacation_leave','late_minutes',
                 'training_count','hospital_activity','committee'
               )),
-  level_group TEXT REFERENCES annual_eval_templates(level_group), -- NULL = ทุกระดับ
+  -- ไม่ใช้ REFERENCES เพราะ level_group ไม่ unique บน annual_eval_templates (มีหลาย
+  -- version ต่อ level_group ได้) — เป็นเพียง tag กรองข้อมูล ไม่ใช่ความสัมพันธ์เชิงตาราง
+  level_group TEXT CHECK (level_group IN ('1','2-3','4') OR level_group IS NULL), -- NULL = ทุกระดับ
   min_value   REAL,     -- NULL = ไม่จำกัดขั้นต่ำ
   max_value   REAL,     -- NULL = ไม่จำกัดขั้นสูง
   score       INTEGER NOT NULL CHECK (score BETWEEN 0 AND 5),
