@@ -28,6 +28,12 @@ const IcClipboard = () => (
     <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
   </svg>
 );
+const IcAward = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="6"/>
+    <path d="M15.5 13.5L17 22l-5-3-5 3 1.5-8.5"/>
+  </svg>
+);
 const IcBook = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -177,6 +183,12 @@ const SYSTEMS: SystemCard[] = [
     title: "นักศึกษาฝึกงาน",
     desc: "บันทึกข้อมูลนักศึกษาฝึกงาน ติดตามสถานะ ดูปฏิทิน จัดการ Rotation และออกใบรับรองการฝึกงาน",
     roles: ["hr","admin"],
+  },
+  {
+    key: "annual-eval", no: "14", icon: <IcAward />,
+    title: "ประเมินผลการปฏิบัติงานประจำปี",
+    desc: "สร้างรอบประเมินประจำปี ให้คะแนนตามลำดับผู้ประเมิน สรุปผลและออกเอกสาร แยกจากการประเมินทดลองงาน",
+    roles: ["hr","head","deputy","deputyHR","admin"],
   },
 ];
 

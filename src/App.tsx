@@ -19,6 +19,7 @@ import WorkforceTimelinePage from "./pages/manpower/WorkforceTimelinePage";
 import OrderOutPage from "./pages/order/OrderOutPage";
 import InternsPage from "./pages/interns/InternsPage";
 import InternCertVerifyPage from "./pages/interns/InternCertVerifyPage";
+import AnnualEvalPage from "./pages/annualEval/AnnualEvalPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
           {/* Protected routes */}
           <Route path="/" element={<RequireAuth><Home /></RequireAuth>} />
           <Route path="/eval" element={<RequireAuth><EvalPage /></RequireAuth>} />
+          <Route path="/annual-eval" element={<RequireAuth><AnnualEvalPage /></RequireAuth>} />
           <Route path="/recruit" element={<RequireAuth><RecruitPage /></RequireAuth>} />
           <Route path="/training" element={<RequireAuth><TrainingPage /></RequireAuth>} />
           <Route path="/transfer" element={<RequireAuth><TransferPage /></RequireAuth>} />
