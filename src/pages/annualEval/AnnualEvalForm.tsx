@@ -19,6 +19,7 @@ interface Stats {
   vacation_leave_days: number; late_minutes: number; training_count: number;
   hospital_activity_count: number; committee_count: number; warning_count: number;
 }
+interface Comment { source: string; item_order: number; text: string; }
 interface Props { evalId: number; onClose: () => void; onSaved: () => void; }
 
 const STEP_LABEL: Record<string, string> = {
@@ -29,6 +30,66 @@ const STEP_LABEL: Record<string, string> = {
 const STEP_TO_RATER_ROLE: Record<string, string> = {
   head: "head", deputy: "deputy", quality: "quality_head", hr: "hr", director: "director",
 };
+// Matches functions/api/annual-eval/evaluations/[id]/comments.ts SOURCE_STEP — which comment
+// fields belong to which workflow step, and their Thai labels.
+const STEP_COMMENT_SOURCES: Record<string, { source: string; label: string }[]> = {
+  head: [{ source: "head_strength", label: "จุดแข็ง" }, { source: "head_development", label: "สิ่งที่ต้องพัฒนา" }],
+  deputy: [{ source: "deputy_strength", label: "จุดแข็ง" }, { source: "deputy_development", label: "สิ่งที่ต้องพัฒนา" }],
+  director: [{ source: "director_comment", label: "ความคิดเห็น" }],
+  hr: [
+    { source: "hr_comment", label: "ความเห็นเพิ่มเติมจาก HR" },
+    { source: "next_year_kpi", label: "ตัวชี้วัดการปฏิบัติงานหลัก/ผลงานที่คาดหวังปีถัดไป" },
+    { source: "dev_plan", label: "แผนพัฒนารายบุคคล" },
+    { source: "training_recommend", label: "หลักสูตรที่ควรเข้ารับการอบรม" },
+  ],
+};
+const ALL_SOURCE_LABELS: Record<string, string> = Object.fromEntries(
+  Object.values(STEP_COMMENT_SOURCES).flat().map(s => [s.source, s.label]),
+);
+
+function CommentEditor({ label, initial, onSave }: {
+  label: string; initial: string[]; onSave: (items: string[]) => Promise<void>;
+}) {
+  const [items, setItems] = useState(initial.length > 0 ? initial : [""]);
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    const cleaned = items.map(t => t.trim()).filter(Boolean);
+    setSaving(true);
+    await onSave(cleaned);
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>{label}</div>
+      {items.map((text, i) => (
+        <div key={i} style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+          <input value={text} onChange={e => setItems(arr => arr.map((v, idx) => idx === i ? e.target.value : v))}
+            placeholder={`ข้อ ${i + 1}`}
+            style={{ flex: 1, padding: "7px 10px", borderRadius: 4, border: "1.5px solid #dce4f5",
+              fontSize: 12.5, fontFamily: "inherit", outline: "none", boxSizing: "border-box" }} />
+          {items.length > 1 && (
+            <button onClick={() => setItems(arr => arr.filter((_, idx) => idx !== i))}
+              style={{ background: "#fee2e2", border: "none", borderRadius: 4, width: 30, cursor: "pointer", color: "#dc2626" }}>×</button>
+          )}
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={() => setItems(arr => [...arr, ""])}
+          style={{ padding: "5px 12px", borderRadius: 6, border: "1px dashed #c4cfee", background: "#fff",
+            color: "#64748b", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit" }}>
+          + เพิ่มข้อ
+        </button>
+        <button onClick={save} disabled={saving}
+          style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "#0038C6",
+            color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+          {saving ? "กำลังบันทึก…" : "บันทึก"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function ScoreRing({ score, grade }: { score: number | null; grade: string | null }) {
   const r = 40, circ = 2 * Math.PI * r;
@@ -59,6 +120,7 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
   const [items, setItems] = useState<Item[]>([]);
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [currentStep, setCurrentStep] = useState<string | null>(null);
   const [canAct, setCanAct] = useState(false);
   const [canManage, setCanManage] = useState(false);
@@ -77,11 +139,11 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
     setLoading(true); setError("");
     fetch(`/api/annual-eval/evaluations/${evalId}`).then(r => r.json())
       .then((d: { ok: boolean; error?: string; evaluation: EvalDetail; template: Template;
-        categories: Category[]; items: Item[]; scores: ScoreRow[]; stats: Stats | null;
+        categories: Category[]; items: Item[]; scores: ScoreRow[]; stats: Stats | null; comments: Comment[];
         current_step: string | null; can_act: boolean; can_manage: boolean }) => {
         if (!d.ok) { setError(d.error ?? "โหลดข้อมูลไม่สำเร็จ"); return; }
         setEv(d.evaluation); setTemplate(d.template); setCategories(d.categories);
-        setItems(d.items); setScores(d.scores); setStats(d.stats);
+        setItems(d.items); setScores(d.scores); setStats(d.stats); setComments(d.comments ?? []);
         setCurrentStep(d.current_step); setCanAct(d.can_act); setCanManage(d.can_manage);
         const raterRole = d.current_step ? STEP_TO_RATER_ROLE[d.current_step] : null;
         if (raterRole) {
@@ -185,6 +247,16 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
     setSaving(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     load();
+  }
+
+  async function saveComments(source: string, items: string[]) {
+    setError("");
+    const r = await fetch(`/api/annual-eval/evaluations/${evalId}/comments`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source, items }),
+    });
+    const d = await r.json() as { ok: boolean; error?: string };
+    if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+    setComments(cs => [...cs.filter(c => c.source !== source), ...items.map((text, i) => ({ source, item_order: i + 1, text }))]);
   }
 
   if (loading) {
@@ -362,6 +434,40 @@ export default function AnnualEvalForm({ evalId, onClose, onSaved }: Props) {
                   background: "#fff", color: "#7c3aed", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
                 บันทึกสถิติ
               </button>
+            </div>
+          )}
+
+          {(canAct && currentStep && STEP_COMMENT_SOURCES[currentStep]) && (
+            <div style={{ background: "#fff", border: "1px solid #dce4f5", borderRadius: 6,
+              borderLeft: "4px solid #16a34a", padding: "16px 20px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#16a34a", letterSpacing: "0.04em",
+                textTransform: "uppercase", marginBottom: 12 }}>ข้อคิดเห็นและแผนพัฒนา</div>
+              {STEP_COMMENT_SOURCES[currentStep].map(({ source, label }) => (
+                <CommentEditor key={source} label={label}
+                  initial={comments.filter(c => c.source === source).sort((a, b) => a.item_order - b.item_order).map(c => c.text)}
+                  onSave={items => saveComments(source, items)} />
+              ))}
+            </div>
+          )}
+
+          {Object.keys(ALL_SOURCE_LABELS)
+            .filter(src => !(currentStep && STEP_COMMENT_SOURCES[currentStep]?.some(s => s.source === src)))
+            .some(src => comments.some(c => c.source === src)) && (
+            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "16px 20px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", letterSpacing: "0.04em",
+                textTransform: "uppercase", marginBottom: 10 }}>ข้อคิดเห็นจากขั้นตอนก่อนหน้า</div>
+              {Object.entries(ALL_SOURCE_LABELS).map(([source, label]) => {
+                const list = comments.filter(c => c.source === source).sort((a, b) => a.item_order - b.item_order);
+                if (list.length === 0) return null;
+                return (
+                  <div key={source} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 4 }}>{label}</div>
+                    <ul style={{ margin: 0, paddingLeft: 18 }}>
+                      {list.map((c, i) => <li key={i} style={{ fontSize: 12.5, color: "#64748b" }}>{c.text}</li>)}
+                    </ul>
+                  </div>
+                );
+              })}
             </div>
           )}
 
