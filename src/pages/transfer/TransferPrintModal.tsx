@@ -56,20 +56,27 @@ function generatePrintHTML(data: PrintData): string {
   @media screen {
     body { background: #d0d5dc; }
     .print-bar { background: #0038C6; padding: 10px 20px; display: flex; gap: 8px; align-items: center;
-      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.25); flex-wrap: wrap; }
     .print-bar span { color: rgba(255,255,255,.8); font-size: 11pt; flex: 1; }
-    .btn-print { background: #fff; color: #0038C6; border: none; border-radius: 6px;
+    .hint-bar { background: #fff7ed; color: #9a3412; font-size: 10pt; padding: 6px 20px;
+      border-bottom: 1px solid #fed7aa; }
+    .btn-print, .btn-pdf { background: #fff; color: #0038C6; border: none; border-radius: 6px;
       padding: 8px 20px; font-size: 11pt; font-family: 'Sarabun', sans-serif; font-weight: 700; cursor: pointer; }
+    .btn-pdf { background: #16a34a; color: #fff; }
     .btn-close { background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.4);
       border-radius: 6px; padding: 8px 16px; font-size: 11pt; font-family: 'Sarabun', sans-serif; cursor: pointer; }
     .page-wrap { max-width: 230mm; margin: 20px auto; padding: 0 16px; }
     .paper { background: #fff; width: 210mm; margin: 0 auto 20px; padding: 10mm 10mm 10mm 14mm;
       box-shadow: 0 4px 20px rgba(0,0,0,.18); }
+    .editable { outline: 1.5px dashed #94a3b8; outline-offset: 2px; border-radius: 3px;
+      background: #fffbea; cursor: text; min-height: 1.4em; }
+    .editable:hover, .editable:focus { outline-color: #0038C6; background: #eef4ff; }
   }
   @media print {
-    .print-bar { display: none !important; }
+    .print-bar, .hint-bar { display: none !important; }
     .paper { padding: 0; box-shadow: none; }
     body { background: #fff; }
+    .editable { outline: none !important; background: transparent !important; }
   }
 </style>
 </head>
@@ -79,8 +86,10 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
 <div class="print-bar">
   <span>แบบคำขอย้ายแผนก — ${req.name} &nbsp;|&nbsp; ${data.document_no}</span>
   <button class="btn-print" onclick="window.print()">🖨️ พิมพ์</button>
+  <button class="btn-pdf" onclick="window.print()">💾 บันทึกเป็น PDF</button>
   <button class="btn-close" onclick="window.close()">✕ ปิด</button>
 </div>
+<div class="hint-bar">💡 คลิกที่ข้อความที่มีกรอบประ (เส้นประสีเทา) เพื่อแก้ไขได้โดยตรงก่อนพิมพ์ — เมื่อพิมพ์ กรอบจะไม่แสดง</div>
 
 <div class="page-wrap">
 <div class="paper">
@@ -104,32 +113,32 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   <table class="no-border" style="margin-bottom:16px">
     <tr>
       <td style="width:20%;font-weight:700">ชื่อ-นามสกุล</td>
-      <td style="width:80%;border-bottom:1px solid #000">${req.name}</td>
+      <td class="editable" contenteditable="true" style="width:80%;border-bottom:1px solid #000">${req.name}</td>
     </tr>
     <tr style="height:10px"></tr>
     <tr>
       <td style="font-weight:700">ตำแหน่งปัจจุบัน</td>
-      <td style="border-bottom:1px solid #000">${req.position ?? "—"}</td>
+      <td class="editable" contenteditable="true" style="border-bottom:1px solid #000">${req.position ?? ""}</td>
     </tr>
     <tr style="height:10px"></tr>
     <tr>
       <td style="font-weight:700">แผนก/ฝ่ายต้นทาง</td>
-      <td style="border-bottom:1px solid #000">${req.from_dept_name ?? "—"} / ${req.from_division_name ?? "—"}</td>
+      <td class="editable" contenteditable="true" style="border-bottom:1px solid #000">${req.from_dept_name ?? ""} / ${req.from_division_name ?? ""}</td>
     </tr>
     <tr style="height:10px"></tr>
     <tr>
       <td style="font-weight:700">แผนก/ฝ่ายปลายทาง</td>
-      <td style="border-bottom:1px solid #000">${req.to_dept_name ?? "—"} / ${req.to_division_name ?? "—"}</td>
+      <td class="editable" contenteditable="true" style="border-bottom:1px solid #000">${req.to_dept_name ?? ""} / ${req.to_division_name ?? ""}</td>
     </tr>
     <tr style="height:10px"></tr>
     <tr>
       <td style="font-weight:700">ตำแหน่งใหม่</td>
-      <td style="border-bottom:1px solid #000">${req.new_position ?? "—"}</td>
+      <td class="editable" contenteditable="true" style="border-bottom:1px solid #000">${req.new_position ?? ""}</td>
     </tr>
     <tr style="height:10px"></tr>
     <tr>
       <td style="font-weight:700;vertical-align:top">เหตุผล</td>
-      <td style="border-bottom:1px solid #000">${req.reason ?? "—"}</td>
+      <td class="editable" contenteditable="true" style="border-bottom:1px solid #000">${req.reason ?? ""}</td>
     </tr>
     <tr style="height:10px"></tr>
     <tr>
@@ -142,23 +151,23 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
     <tr><td colspan="4" class="sec-title">ลายมือชื่อ</td></tr>
     <tr style="height:110px">
       <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
-        <div style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${req.name}</div>
+        <div class="editable" contenteditable="true" style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${req.name}</div>
         <div style="font-size:9pt;margin-top:2px">พนักงานผู้ขอย้าย</div>
         <div style="font-size:8.5pt;color:#555">(รับทราบผลการพิจารณา)</div>
         <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ……/……/………</div>
       </td>
       <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
-        <div style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${s.source_head_name || "……………………………"}</div>
+        <div class="editable" contenteditable="true" style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${s.source_head_name || ""}</div>
         <div style="font-size:9pt;margin-top:2px">หัวหน้าแผนกต้นทาง</div>
         <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ……/……/………</div>
       </td>
       <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
-        <div style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${s.dest_head_name || "……………………………"}</div>
+        <div class="editable" contenteditable="true" style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${s.dest_head_name || ""}</div>
         <div style="font-size:9pt;margin-top:2px">หัวหน้าแผนกปลายทาง</div>
         <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ……/……/………</div>
       </td>
       <td class="center" style="width:25%;vertical-align:bottom;padding-bottom:4px">
-        <div style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${s.deputyhr_name || "……………………………"}</div>
+        <div class="editable" contenteditable="true" style="border-top:1px solid #000;margin:0 6px;padding-top:5px">${s.deputyhr_name || ""}</div>
         <div style="font-size:9pt;margin-top:2px">รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนฯ</div>
         <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ……/……/………</div>
       </td>
