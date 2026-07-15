@@ -1,9 +1,18 @@
 import type { Env } from "../../../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../../../lib/auth";
 
+interface Overrides {
+  name?: string; position?: string; from_dept_name?: string; to_dept_name?: string;
+  new_position?: string; reason?: string;
+  source_head_name?: string; dest_head_name?: string; deputyhr_name?: string;
+}
+
 // POST /api/transfer/requests/:id/print — assigns a running document number on first
 // print (own counter, separate from eval/annual-eval numbering), logs the print event,
-// returns everything the print template needs.
+// returns everything the print template needs. Accepts an optional `overrides` object
+// (print-time text corrections only — never written back to the stored request, same
+// pattern as the certificate template's editable text) so an approver can fix a typo or
+// fill in a name the audit trail is missing before generating the PDF.
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -13,6 +22,8 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const db = ctx.env.HR_DB;
+  const body = await ctx.request.json().catch(() => ({})) as { overrides?: Overrides };
+  const ov = body.overrides ?? {};
 
   const req = await db.prepare(`
     SELECT tr.*, fd.name AS from_division_name, td.name AS to_division_name
@@ -50,11 +61,12 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const printCount = countRow?.print_count ?? 1;
   const documentNo = `${docCode} / ${runningNo}`;
 
-  const approvals = await db.prepare(`
+  const approvalsRes = await db.prepare(`
     SELECT ta.step, ta.status, ta.note, ta.created_at, u.full_name AS approver_name, u.role_title AS approver_title
     FROM transfer_approvals ta LEFT JOIN users u ON u.id = ta.approver_user_id
     WHERE ta.request_id = ? ORDER BY ta.created_at
-  `).bind(id).all();
+  `).bind(id).all<{ step: string; status: string; approver_name: string | null }>();
+  const approvals = approvalsRes.results ?? [];
 
   const requester = req.requester_user_id
     ? await db.prepare("SELECT full_name, role_title FROM users WHERE id = ?").bind(req.requester_user_id).first<{ full_name: string; role_title: string | null }>()
@@ -66,8 +78,28 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     ).bind(user.id, user.full_name, id, documentNo).run();
   } catch { /* non-critical */ }
 
+  // Merge print-time overrides into the request fields (never persisted).
+  const printedReq = {
+    ...req,
+    name: ov.name ?? req.name,
+    position: ov.position ?? req.position,
+    from_dept_name: ov.from_dept_name ?? req.from_dept_name,
+    to_dept_name: ov.to_dept_name ?? req.to_dept_name,
+    new_position: ov.new_position ?? req.new_position,
+    reason: ov.reason ?? req.reason,
+  };
+
+  // Best-available signer name per role: audit-log approver (most authoritative) → override → blank.
+  const destHeadApproved = approvals.find(a => a.step === "dest_head" && a.status === "approved")?.approver_name;
+  const deputyHRApproved = approvals.find(a => a.step === "deputyhr" && a.status === "approved")?.approver_name;
+  const signers = {
+    source_head_name: ov.source_head_name ?? requester?.full_name ?? "",
+    dest_head_name: destHeadApproved ?? ov.dest_head_name ?? "",
+    deputyhr_name: deputyHRApproved ?? ov.deputyhr_name ?? "",
+  };
+
   return Response.json({
     ok: true, document_no: documentNo, print_count: printCount, is_copy: printCount > 1,
-    printed_by_name: user.full_name, request: req, approvals: approvals.results, requester,
+    printed_by_name: user.full_name, request: printedReq, approvals, requester, signers,
   });
 };

@@ -16,11 +16,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const req = await ctx.env.HR_DB.prepare(`
-    SELECT tr.*, fd.name AS from_division_name, td.name AS to_division_name
+    SELECT tr.*, fd.name AS from_division_name, td.name AS to_division_name, ru.full_name AS requester_name
     FROM transfer_requests tr
     LEFT JOIN departments fdept ON fdept.id = tr.from_department_id
     LEFT JOIN divisions fd ON fd.id = fdept.division_id
     LEFT JOIN divisions td ON td.id = tr.to_division_id
+    LEFT JOIN users ru ON ru.id = tr.requester_user_id
     WHERE tr.id = ?
   `).bind(id).first();
   if (!req) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
