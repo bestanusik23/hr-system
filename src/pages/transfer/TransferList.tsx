@@ -28,15 +28,22 @@ export default function TransferList() {
   const { user } = useAuth();
   const [requests, setRequests] = useState<TransferRequest[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState("");
   const [filter, setFilter]     = useState("");
   const [selected, setSelected] = useState<number | null>(null);
 
   async function load() {
-    setLoading(true);
-    const r = await fetch(`/api/transfer/requests?status=${filter}`);
-    const d = await r.json() as { ok: boolean; requests: TransferRequest[] };
-    setRequests(d.requests ?? []);
-    setLoading(false);
+    setLoading(true); setError("");
+    try {
+      const r = await fetch(`/api/transfer/requests?status=${filter}`);
+      const d = await r.json() as { ok: boolean; requests?: TransferRequest[]; error?: string };
+      if (!d.ok) { setError(d.error ?? "โหลดข้อมูลไม่สำเร็จ"); return; }
+      setRequests(d.requests ?? []);
+    } catch {
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => { load(); }, [filter]);
@@ -70,6 +77,17 @@ export default function TransferList() {
 
       {loading ? (
         <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>กำลังโหลด…</div>
+      ) : error ? (
+        <div style={{ textAlign: "center", padding: 40, background: "#fef2f2", border: "1px solid #fecaca",
+          borderRadius: 10, color: "#dc2626" }}>
+          {error}
+          <div>
+            <button onClick={load} style={{ marginTop: 12, padding: "8px 20px", borderRadius: 7, border: "none",
+              background: "#dc2626", color: "#fff", fontWeight: 700, fontSize: 12.5, cursor: "pointer", fontFamily: "inherit" }}>
+              ลองใหม่
+            </button>
+          </div>
+        </div>
       ) : requests.length === 0 ? (
         <div style={{ textAlign: "center", padding: 60, color: "#94a3b8",
           background: "#fff", borderRadius: 10, border: "1px solid #dce4f5" }}>

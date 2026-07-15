@@ -37,6 +37,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 // PUT /api/transfer/requests/:id
 // actions: dest_head_approve | dest_head_reject | deputyhr_approve | deputyhr_reject
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
+  try {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
@@ -98,4 +99,8 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   ).bind(user.id, user.full_name, action, "transfer_request", id).run();
 
   return Response.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "เกิดข้อผิดพลาด";
+    return Response.json({ ok: false, error: msg }, { status: 500 });
+  }
 };

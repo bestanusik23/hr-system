@@ -3,38 +3,43 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
 // GET /api/transfer/requests
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
-  const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
-  if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  try {
+    const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
+    if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
-  const url = new URL(ctx.request.url);
-  const status = url.searchParams.get("status") ?? "";
+    const url = new URL(ctx.request.url);
+    const status = url.searchParams.get("status") ?? "";
 
-  let sql = `
-    SELECT tr.id, tr.name, tr.position, tr.reason, tr.new_position,
-           tr.from_dept_name, tr.to_dept_name,
-           tr.dest_head_status, tr.deputyhr_status, tr.overall_status,
-           tr.from_department_id, tr.to_department_id,
-           tr.created_at, tr.updated_at,
-           fd.name AS from_division_name, td.name AS to_division_name
-    FROM transfer_requests tr
-    LEFT JOIN departments fdept ON fdept.id = tr.from_department_id
-    LEFT JOIN divisions fd ON fd.id = fdept.division_id
-    LEFT JOIN divisions td ON td.id = tr.to_division_id
-    WHERE 1=1`;
-  const params: (string | number)[] = [];
+    let sql = `
+      SELECT tr.id, tr.name, tr.position, tr.reason, tr.new_position,
+             tr.from_dept_name, tr.to_dept_name,
+             tr.dest_head_status, tr.deputyhr_status, tr.overall_status,
+             tr.from_department_id, tr.to_department_id,
+             tr.created_at, tr.updated_at,
+             fd.name AS from_division_name, td.name AS to_division_name
+      FROM transfer_requests tr
+      LEFT JOIN departments fdept ON fdept.id = tr.from_department_id
+      LEFT JOIN divisions fd ON fd.id = fdept.division_id
+      LEFT JOIN divisions td ON td.id = tr.to_division_id
+      WHERE 1=1`;
+    const params: (string | number)[] = [];
 
-  if (status) { sql += " AND tr.overall_status = ?"; params.push(status); }
+    if (status) { sql += " AND tr.overall_status = ?"; params.push(status); }
 
-  if (user.role === "head" && user.scope_department_id) {
-    // head: see requests they created (from) OR need to approve (to)
-    sql += " AND (tr.from_department_id = ? OR tr.to_department_id = ?)";
-    params.push(user.scope_department_id, user.scope_department_id);
+    if (user.role === "head" && user.scope_department_id) {
+      // head: see requests they created (from) OR need to approve (to)
+      sql += " AND (tr.from_department_id = ? OR tr.to_department_id = ?)";
+      params.push(user.scope_department_id, user.scope_department_id);
+    }
+
+    sql += " ORDER BY tr.updated_at DESC";
+
+    const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
+    return Response.json({ ok: true, requests: rows.results });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "เกิดข้อผิดพลาด";
+    return Response.json({ ok: false, error: msg }, { status: 500 });
   }
-
-  sql += " ORDER BY tr.updated_at DESC";
-
-  const rows = await ctx.env.HR_DB.prepare(sql).bind(...params).all();
-  return Response.json({ ok: true, requests: rows.results });
 };
 
 // POST /api/transfer/requests — submit a transfer request (head or hr or admin)
