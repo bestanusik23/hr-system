@@ -14,20 +14,25 @@ CREATE TABLE transfer_requests_new (
                      CHECK (head_status IN ('pending','approved','rejected')),
   hr_status          TEXT NOT NULL DEFAULT 'pending'
                      CHECK (hr_status IN ('pending','approved','rejected')),
-  dest_head_status   TEXT NOT NULL DEFAULT 'pending',
-  deputyhr_status    TEXT NOT NULL DEFAULT 'pending',
   overall_status     TEXT NOT NULL DEFAULT 'submitted'
                      CHECK (overall_status IN ('submitted','head_approved','dest_head_approved','completed','rejected')),
   requester_user_id  INTEGER REFERENCES users(id),
   created_at         TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at         TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  deputy_status      TEXT NOT NULL DEFAULT 'pending',
+  dest_head_status   TEXT NOT NULL DEFAULT 'pending',
+  deputyhr_status    TEXT NOT NULL DEFAULT 'pending'
 );
 
 INSERT INTO transfer_requests_new
+  (id, employee_id, name, position, from_department_id, from_dept_name,
+   to_division_id, to_department_id, to_dept_name, new_position, reason,
+   head_status, hr_status, overall_status, requester_user_id, created_at, updated_at,
+   deputy_status)
 SELECT id, employee_id, name, position, from_department_id, from_dept_name,
        to_division_id, to_department_id, to_dept_name, new_position, reason,
-       head_status, hr_status, dest_head_status, deputyhr_status, overall_status,
-       requester_user_id, created_at, updated_at
+       head_status, hr_status, overall_status, requester_user_id, created_at, updated_at,
+       deputy_status
 FROM transfer_requests;
 
 DROP TABLE transfer_requests;
