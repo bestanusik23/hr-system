@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
+import TransferPrintModal from "./TransferPrintModal";
 
 interface TRequest {
   id: number; name: string; position: string | null; reason: string | null; new_position: string | null;
@@ -28,6 +29,7 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
   const [note, setNote]           = useState("");
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState("");
+  const [showPrint, setShowPrint] = useState(false);
 
   useEffect(() => {
     fetch(`/api/transfer/requests/${requestId}`).then(r => r.json())
@@ -238,9 +240,19 @@ export default function TransferDetail({ requestId, onClose, onSaved }: Props) {
                 {saving ? "กำลังอนุมัติ…" : "✓ อนุมัติขั้นสุดท้าย"}
               </button>
             </>}
+
+            {user && ["hr", "deputyHR", "admin"].includes(user.role) && (
+              <button onClick={() => setShowPrint(true)}
+                style={{ flex: 1, padding: "11px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+                  background: "#fff", color: "#0038C6", fontWeight: 700, cursor: "pointer",
+                  fontFamily: "inherit", fontSize: 13 }}>
+                🖨️ พิมพ์
+              </button>
+            )}
           </div>
         </div>
       </div>
+      {showPrint && <TransferPrintModal requestId={requestId} onClose={() => setShowPrint(false)} />}
     </div>
   );
 }

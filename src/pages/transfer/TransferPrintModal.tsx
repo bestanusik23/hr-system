@@ -1,0 +1,260 @@
+import { useState } from "react";
+
+interface TRequest {
+  id: number; name: string; position: string | null; reason: string | null; new_position: string | null;
+  from_dept_name: string | null; to_dept_name: string | null;
+  from_division_name: string | null; to_division_name: string | null;
+  overall_status: string; created_at: string;
+}
+interface Approval { step: string; status: string; note: string | null; created_at: string; approver_name: string; approver_title: string | null; }
+interface Requester { full_name: string; role_title: string | null; }
+interface PrintData {
+  ok: boolean; error?: string;
+  document_no: string; print_count: number; is_copy: boolean; printed_by_name: string;
+  request: TRequest; approvals: Approval[]; requester: Requester | null;
+}
+interface Props { requestId: number; onClose: () => void; }
+
+const STEP_LABEL: Record<string, string> = {
+  dest_head: "หัวหน้าแผนกปลายทาง", deputyhr: "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนฯ",
+  head: "หัวหน้าแผนก", deputy: "รองผู้อำนวยการ", hr: "ฝ่ายบุคคล",
+};
+
+function thaiDate(d: string | null | undefined): string {
+  if (!d) return "—";
+  try {
+    return new Date(d).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+  } catch { return String(d); }
+}
+
+function generatePrintHTML(data: PrintData): string {
+  const req = data.request;
+  const destHead = data.approvals.find(a => a.step === "dest_head" && a.status === "approved");
+  const deputyHR = data.approvals.find(a => a.step === "deputyhr" && a.status === "approved");
+
+  const approvalRows = data.approvals.map(a => `
+    <tr>
+      <td>${STEP_LABEL[a.step] ?? a.step}</td>
+      <td>${a.approver_name ?? "—"}</td>
+      <td class="center" style="color:${a.status === "approved" ? "#15803d" : "#dc2626"}">${a.status === "approved" ? "✓ อนุมัติ" : "✗ ไม่อนุมัติ"}</td>
+      <td class="center">${thaiDate(a.created_at)}</td>
+      <td>${a.note ?? "—"}</td>
+    </tr>`).join("");
+
+  const todayTH = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
+
+  return `<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>แบบคำขอย้ายแผนก — ${req.name}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 portrait; margin: 10mm 10mm 10mm 14mm; }
+  *  { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Sarabun', Arial, sans-serif; font-size: 10.5pt; color: #000; background: #fff; line-height: 1.45; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #333; padding: 5px 8px; vertical-align: middle; }
+  .no-border td, .no-border th { border: none; }
+  .bg2 { background: #efefef; }
+  .bold { font-weight: 700; }
+  .center { text-align: center; }
+  .doc-no { font-family: Arial, sans-serif; font-size: 8pt; text-align: right; white-space: nowrap; }
+  .sec-title { background: #c0c8d8; font-weight: 700; text-align: center; padding: 5px; font-size: 10.5pt; }
+  .watermark { position: fixed; top: 45%; left: 50%; transform: translate(-50%,-50%) rotate(-42deg);
+    font-size: 88pt; font-weight: 900; color: rgba(180,0,0,0.07); pointer-events: none; z-index: 9999;
+    letter-spacing: 0.25em; font-family: Arial, sans-serif; }
+  @media screen {
+    body { background: #d0d5dc; }
+    .print-bar { background: #0038C6; padding: 10px 20px; display: flex; gap: 8px; align-items: center;
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.25); }
+    .print-bar span { color: rgba(255,255,255,.8); font-size: 11pt; flex: 1; }
+    .btn-print { background: #fff; color: #0038C6; border: none; border-radius: 6px;
+      padding: 8px 20px; font-size: 11pt; font-family: 'Sarabun', sans-serif; font-weight: 700; cursor: pointer; }
+    .btn-close { background: rgba(255,255,255,.15); color: #fff; border: 1.5px solid rgba(255,255,255,.4);
+      border-radius: 6px; padding: 8px 16px; font-size: 11pt; font-family: 'Sarabun', sans-serif; cursor: pointer; }
+    .page-wrap { max-width: 230mm; margin: 20px auto; padding: 0 16px; }
+    .paper { background: #fff; width: 210mm; margin: 0 auto 20px; padding: 10mm 10mm 10mm 14mm;
+      box-shadow: 0 4px 20px rgba(0,0,0,.18); }
+  }
+  @media print {
+    .print-bar { display: none !important; }
+    .paper { padding: 0; box-shadow: none; }
+    body { background: #fff; }
+  }
+</style>
+</head>
+<body>
+${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
+
+<div class="print-bar">
+  <span>แบบคำขอย้ายแผนก — ${req.name} &nbsp;|&nbsp; ${data.document_no}</span>
+  <button class="btn-print" onclick="window.print()">🖨️ พิมพ์</button>
+  <button class="btn-close" onclick="window.close()">✕ ปิด</button>
+</div>
+
+<div class="page-wrap">
+<div class="paper">
+
+  <table class="no-border" style="margin-bottom:5px">
+    <tr>
+      <td style="width:28%;vertical-align:middle">
+        <img src="/logo.png" style="height:52px;object-fit:contain;display:block" alt="CRR Logo">
+      </td>
+      <td style="width:44%;text-align:center;vertical-align:middle">
+        <div style="font-size:13.5pt;font-weight:700">แบบคำขอย้ายแผนก / ตำแหน่ง</div>
+        <div style="font-size:9.5pt;color:#333;margin-top:2px">Department Transfer Request</div>
+      </td>
+      <td style="width:28%" class="doc-no">
+        <strong>${data.document_no}</strong>
+      </td>
+    </tr>
+  </table>
+  <div style="border-top:2.5px solid #0038C6;border-bottom:1px solid #aab;margin-bottom:10px"></div>
+
+  <table class="no-border" style="margin-bottom:10px">
+    <tr>
+      <td style="width:20%;font-weight:700">ชื่อ-นามสกุล</td>
+      <td style="width:80%;border-bottom:1px solid #000">${req.name}</td>
+    </tr>
+    <tr style="height:8px"></tr>
+    <tr>
+      <td style="font-weight:700">ตำแหน่งปัจจุบัน</td>
+      <td style="border-bottom:1px solid #000">${req.position ?? "—"}</td>
+    </tr>
+    <tr style="height:8px"></tr>
+    <tr>
+      <td style="font-weight:700">แผนก/ฝ่ายต้นทาง</td>
+      <td style="border-bottom:1px solid #000">${req.from_dept_name ?? "—"} / ${req.from_division_name ?? "—"}</td>
+    </tr>
+    <tr style="height:8px"></tr>
+    <tr>
+      <td style="font-weight:700">แผนก/ฝ่ายปลายทาง</td>
+      <td style="border-bottom:1px solid #000">${req.to_dept_name ?? "—"} / ${req.to_division_name ?? "—"}</td>
+    </tr>
+    <tr style="height:8px"></tr>
+    <tr>
+      <td style="font-weight:700">ตำแหน่งใหม่</td>
+      <td style="border-bottom:1px solid #000">${req.new_position ?? "—"}</td>
+    </tr>
+    <tr style="height:8px"></tr>
+    <tr>
+      <td style="font-weight:700;vertical-align:top">เหตุผล</td>
+      <td style="border-bottom:1px solid #000">${req.reason ?? "—"}</td>
+    </tr>
+  </table>
+
+  <table style="margin-bottom:12px">
+    <tr><th colspan="5" class="sec-title">สายอนุมัติ</th></tr>
+    <tr class="bg2">
+      <th style="width:22%">ขั้นตอน</th>
+      <th style="width:20%">ผู้พิจารณา</th>
+      <th class="center" style="width:14%">ผล</th>
+      <th class="center" style="width:18%">วันที่</th>
+      <th style="width:26%">หมายเหตุ</th>
+    </tr>
+    ${approvalRows || `<tr><td colspan="5" class="center" style="color:#888">ยังไม่มีการพิจารณา</td></tr>`}
+  </table>
+
+  <table>
+    <tr><td colspan="3" class="sec-title">ลายมือชื่อ</td></tr>
+    <tr style="height:90px">
+      <td class="center" style="width:33.3%;vertical-align:bottom;padding-bottom:4px">
+        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${req.name}</div>
+        <div style="font-size:9pt;margin-top:2px">พนักงานผู้ขอย้าย</div>
+        <div style="font-size:8.5pt;color:#555">(รับทราบผลการพิจารณา)</div>
+        <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ……/……/………</div>
+      </td>
+      <td class="center" style="width:33.3%;vertical-align:bottom;padding-bottom:4px">
+        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${destHead?.approver_name ?? "……………………………"}</div>
+        <div style="font-size:9pt;margin-top:2px">หัวหน้าแผนกปลายทาง</div>
+        <div style="font-size:8.5pt;color:#555">${destHead?.approver_title ?? ""}</div>
+        <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ${destHead ? thaiDate(destHead.created_at) : "……/……/………"}</div>
+      </td>
+      <td class="center" style="width:33.3%;vertical-align:bottom;padding-bottom:4px">
+        <div style="border-top:1px solid #000;margin:0 8px;padding-top:5px">${deputyHR?.approver_name ?? "……………………………"}</div>
+        <div style="font-size:9pt;margin-top:2px">รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนฯ</div>
+        <div style="font-size:8.5pt;color:#555">${deputyHR?.approver_title ?? ""}</div>
+        <div style="font-size:8.5pt;color:#555;margin-top:2px">วันที่ ${deputyHR ? thaiDate(deputyHR.created_at) : "……/……/………"}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div style="border-top:1.5px solid #000;padding-top:6px;margin-top:12px;display:flex;justify-content:space-between;font-size:8.5pt;color:#444">
+    <span>พิมพ์โดย: ${data.printed_by_name} &nbsp;|&nbsp; วันที่พิมพ์: ${todayTH}</span>
+    <span>${data.document_no}</span>
+  </div>
+
+</div>
+</div>
+</body>
+</html>`;
+}
+
+export default function TransferPrintModal({ requestId, onClose }: Props) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handlePrint() {
+    setLoading(true); setError("");
+    try {
+      const r = await fetch(`/api/transfer/requests/${requestId}/print`, { method: "POST" });
+      const d = await r.json() as PrintData;
+      if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+
+      const html = generatePrintHTML(d);
+      const win = window.open("", "_blank", "width=900,height=1100,scrollbars=yes");
+      if (!win) { setError("ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาต popup"); return; }
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      onClose();
+    } catch {
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 24 }}>
+      <div style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 440,
+        boxShadow: "0 24px 60px rgba(0,56,198,.25)", border: "1px solid #c4cfee",
+        borderTop: "4px solid #0038C6", padding: "28px 28px 24px" }}>
+
+        <div style={{ fontSize: 17, fontWeight: 800, color: "#0a1628", marginBottom: 6 }}>
+          🖨️ พิมพ์แบบคำขอย้ายแผนก
+        </div>
+        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 20, lineHeight: 1.6 }}>
+          เอกสารจะมีรายชื่อผู้อนุมัติตามจริงในแต่ละขั้นตอน พร้อมช่องลงชื่อ
+          พนักงานผู้ขอย้ายเพื่อรับทราบผลการพิจารณา<br />
+          หากพิมพ์ซ้ำจะใช้เลขที่เดิมและแสดงตราประทับ <strong>COPY</strong>
+        </div>
+
+        {error && (
+          <div style={{ background: "#fee2e2", border: "1px solid #fecaca", borderRadius: 7,
+            padding: "10px 14px", fontSize: 12, color: "#dc2626", marginBottom: 16 }}>
+            {error}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onClose} disabled={loading}
+            style={{ flex: 1, padding: "12px 0", borderRadius: 7, border: "1.5px solid #c4cfee",
+              background: "#fff", cursor: "pointer", fontFamily: "inherit", fontSize: 13, color: "#475569" }}>
+            ยกเลิก
+          </button>
+          <button onClick={handlePrint} disabled={loading}
+            style={{ flex: 2, padding: "12px 0", borderRadius: 7, border: "none",
+              background: loading ? "#94a3b8" : "#0038C6", color: "#fff", fontWeight: 700,
+              cursor: loading ? "not-allowed" : "pointer", fontFamily: "inherit", fontSize: 13 }}>
+            {loading ? "กำลังเตรียมเอกสาร…" : "🖨️ เปิดหน้าต่างพิมพ์"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
