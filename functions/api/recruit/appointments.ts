@@ -11,8 +11,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const rows = await ctx.env.HR_DB.prepare(
-    "SELECT row_idx, appointment_date, note FROM recruit_appointments"
-  ).all<{ row_idx: number; appointment_date: string; note: string }>();
+    "SELECT row_idx, appointment_date, note, has_filled_application FROM recruit_appointments"
+  ).all<{ row_idx: number; appointment_date: string; note: string; has_filled_application: number }>();
 
   return Response.json({ ok: true, appointments: rows.results ?? [] });
 };
@@ -23,17 +23,21 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "deputyHR", "admin"].includes(user.role))
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
-  const body = await ctx.request.json().catch(() => null) as { row_idx?: number; appointment_date?: string; note?: string } | null;
+  const body = await ctx.request.json().catch(() => null) as {
+    row_idx?: number; appointment_date?: string; note?: string; has_filled_application?: boolean;
+  } | null;
   if (!body?.row_idx) return Response.json({ ok: false, error: "Missing row_idx" }, { status: 400 });
 
   try {
     await ctx.env.HR_DB.prepare(`
-      INSERT INTO recruit_appointments (row_idx, appointment_date, note, updated_by, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'))
+      INSERT INTO recruit_appointments (row_idx, appointment_date, note, has_filled_application, updated_by, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'))
       ON CONFLICT(row_idx) DO UPDATE SET
         appointment_date=excluded.appointment_date, note=excluded.note,
+        has_filled_application=excluded.has_filled_application,
         updated_by=excluded.updated_by, updated_at=datetime('now')
-    `).bind(body.row_idx, body.appointment_date ?? "", body.note ?? "", user.full_name ?? user.username ?? "").run();
+    `).bind(body.row_idx, body.appointment_date ?? "", body.note ?? "", body.has_filled_application ? 1 : 0,
+      user.full_name ?? user.username ?? "").run();
   } catch (err) {
     return Response.json({ ok: false, error: `D1 write failed: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
   }

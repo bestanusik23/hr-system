@@ -3,7 +3,7 @@ import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 
 interface Application { _row: string; [key: string]: string; }
-interface Appointment { appointment_date: string; note: string; }
+interface Appointment { appointment_date: string; note: string; has_filled_application: boolean; }
 
 function formatApptDate(iso: string): string {
   if (!iso) return "";
@@ -85,8 +85,9 @@ export default function RecruitPage() {
   const [detail, setDetail]             = useState<Application | null>(null);
   const [updating, setUpdating]         = useState<string | null>(null);
   const [appointments, setAppointments] = useState<Record<string, Appointment>>({});
-  const [apptDraft, setApptDraft]       = useState<Appointment>({ appointment_date: "", note: "" });
+  const [apptDraft, setApptDraft]       = useState<Appointment>({ appointment_date: "", note: "", has_filled_application: false });
   const [savingAppt, setSavingAppt]     = useState(false);
+  const [queueSubFilter, setQueueSubFilter] = useState<"all" | "filled" | "not_filled">("all");
 
   const isHR        = user && ["hr", "deputyHR", "admin"].includes(user.role);
   const isHead      = user?.role === "head";
@@ -118,10 +119,12 @@ export default function RecruitPage() {
   async function loadAppointments() {
     try {
       const r = await fetch("/api/recruit/appointments");
-      const d = await r.json() as { ok: boolean; appointments: { row_idx: number; appointment_date: string; note: string }[] };
+      const d = await r.json() as { ok: boolean; appointments: { row_idx: number; appointment_date: string; note: string; has_filled_application: number }[] };
       if (!d.ok) return;
       const map: Record<string, Appointment> = {};
-      for (const a of d.appointments) map[String(a.row_idx)] = { appointment_date: a.appointment_date, note: a.note };
+      for (const a of d.appointments) map[String(a.row_idx)] = {
+        appointment_date: a.appointment_date, note: a.note, has_filled_application: !!a.has_filled_application,
+      };
       setAppointments(map);
     } catch { /* non-fatal — appointment fields just show empty */ }
   }
@@ -145,7 +148,10 @@ export default function RecruitPage() {
   useEffect(() => {
     if (!detail) return;
     const existing = appointments[detail._row];
-    setApptDraft({ appointment_date: existing?.appointment_date ?? "", note: existing?.note ?? "" });
+    setApptDraft({
+      appointment_date: existing?.appointment_date ?? "", note: existing?.note ?? "",
+      has_filled_application: existing?.has_filled_application ?? false,
+    });
   }, [detail]); // eslint-disable-line
 
   async function updateStatus(app: Application, value: string) {
@@ -303,8 +309,36 @@ export default function RecruitPage() {
             </div>
           </div>
 
+          {(() => {
+            const filledCount = filtered.filter(a => appointments[a._row]?.has_filled_application).length;
+            const notFilledCount = filtered.length - filledCount;
+            const subTabs: [typeof queueSubFilter, string][] = [
+              ["all", `ทั้งหมด (${filtered.length})`],
+              ["filled", `✅ เข้ามากรอกใบสมัครแล้ว (${filledCount})`],
+              ["not_filled", `ยังไม่เข้ามา (${notFilledCount})`],
+            ];
+            return (
+              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                {subTabs.map(([k, v]) => (
+                  <button key={k} onClick={() => setQueueSubFilter(k)} style={{
+                    padding: "6px 14px", borderRadius: 20, border: "1.5px solid",
+                    borderColor: queueSubFilter === k ? "#7c3aed" : "#e2e8f0",
+                    background: queueSubFilter === k ? "#7c3aed" : "#fff",
+                    color: queueSubFilter === k ? "#fff" : "#475569",
+                    fontSize: 12, fontWeight: queueSubFilter === k ? 700 : 400,
+                    cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
+                  }}>{v}</button>
+                ))}
+              </div>
+            );
+          })()}
+
           <div style={{ display: "grid", gap: 14 }}>
-            {filtered.map((app, ri) => (
+            {filtered.filter(app => {
+              if (queueSubFilter === "all") return true;
+              const has = !!appointments[app._row]?.has_filled_application;
+              return queueSubFilter === "filled" ? has : !has;
+            }).map((app, ri) => (
               <div key={app._row} style={{ background: "#fff", borderRadius: 14, padding: "18px 22px",
                 boxShadow: "0 2px 8px rgba(0,0,0,.07)", border: "1.5px solid #fed7aa",
                 display: "flex", alignItems: "flex-start", gap: 18, flexWrap: "wrap" }}>
@@ -317,8 +351,16 @@ export default function RecruitPage() {
 
                 {/* Info */}
                 <div style={{ flex: 1, minWidth: 200 }}>
-                  <div style={{ fontWeight: 800, fontSize: 15, color: "#0f172a", marginBottom: 4 }}>
-                    {nameCol?.key ? app[nameCol?.key] || "—" : "—"}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                    <span style={{ fontWeight: 800, fontSize: 15, color: "#0f172a" }}>
+                      {nameCol?.key ? app[nameCol?.key] || "—" : "—"}
+                    </span>
+                    {appointments[app._row]?.has_filled_application && (
+                      <span style={{ background: "#dcfce7", color: "#16a34a", borderRadius: 20,
+                        padding: "2px 10px", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        ✅ กรอกใบสมัครแล้ว
+                      </span>
+                    )}
                   </div>
                   {resolvedTableCols[1].key && (
                     <div style={{ fontSize: 13, color: "#64748b", marginBottom: 6 }}>
@@ -490,6 +532,12 @@ export default function RecruitPage() {
                       📅 นัด {formatApptDate(appointments[detail._row].appointment_date)}
                     </span>
                   )}
+                  {appointments[detail._row]?.has_filled_application && (
+                    <span style={{ background: "#dcfce7", color: "#16a34a", border: "1.5px solid #86efac",
+                      borderRadius: 20, padding: "4px 12px", fontSize: 12, fontWeight: 700 }}>
+                      ✅ กรอกใบสมัครแล้ว
+                    </span>
+                  )}
                 </div>
               </div>
               <button onClick={() => setDetail(null)}
@@ -587,6 +635,17 @@ export default function RecruitPage() {
                           fontFamily: "inherit", fontSize: 13, resize: "vertical" }} />
                     </div>
                   </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, cursor: "pointer",
+                    background: apptDraft.has_filled_application ? "#f0fdf4" : "#f8fafc",
+                    border: `1.5px solid ${apptDraft.has_filled_application ? "#86efac" : "#e2e8f0"}`,
+                    borderRadius: 10, padding: "9px 14px", width: "fit-content" }}>
+                    <input type="checkbox" checked={apptDraft.has_filled_application}
+                      onChange={e => setApptDraft(d => ({ ...d, has_filled_application: e.target.checked }))}
+                      style={{ width: 16, height: 16, cursor: "pointer" }} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: apptDraft.has_filled_application ? "#16a34a" : "#475569" }}>
+                      ✅ เข้ามากรอกใบสมัครแล้ว
+                    </span>
+                  </label>
                   <button onClick={saveAppointment} disabled={savingAppt}
                     style={{ marginTop: 10, padding: "9px 20px", borderRadius: 10, border: "none",
                       background: "#0038C6", color: "#fff", fontWeight: 700, fontSize: 13, cursor: "pointer",
