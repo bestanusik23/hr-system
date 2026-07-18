@@ -44,12 +44,18 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const evalReceivedN   = evalReceived?.n ?? 0;
   const evalCoveragePct = newHireN > 0 ? round1(evalReceivedN / newHireN * 100) : null;
 
-  // 3) ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ — new hires in period who completed a course named "ปฐมนิเทศ"
+  // 3) ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ — new hires in period who completed a course named "ปฐมนิเทศ".
+  // Match attendees by emp_code first (accurate), falling back to trimmed full-name — same pattern
+  // already used in functions/api/training/registrations.ts — because training_attendees.employee_id
+  // is never actually written by any insert/update path in the training module (confirmed dead column).
   const oriented = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) AS n
     FROM employees e
-    JOIN training_attendees ta ON ta.employee_id = e.id
-    JOIN training_courses tc   ON tc.id = ta.course_id
+    JOIN training_attendees ta ON (
+      (ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code)
+      OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name))
+    )
+    JOIN training_courses tc ON tc.id = ta.course_id
     WHERE e.start_date >= ? AND e.start_date <= ?
       AND tc.course LIKE '%ปฐมนิเทศ%'
       AND COALESCE(tc.is_cancelled,0) = 0
@@ -76,23 +82,21 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const evalPassedN = evalPassed?.n ?? 0;
   const probationPassPct = evalTotalN > 0 ? round1(evalPassedN / evalTotalN * 100) : null;
 
-  // 6) ร้อยละที่อบรมตามแผน — attendee headcount reached vs. planned (target) headcount, for
-  // non-cancelled courses held in period. Matches the exact "% Completion" formula already
-  // used in the training module's own dashboard (PlanTab.tsx), just surfaced here too.
-  const trainingPlan = await db.prepare(`
-    SELECT COALESCE(SUM(tc.target), 0) AS total_target
-    FROM training_courses tc
-    WHERE COALESCE(tc.is_cancelled, 0) = 0 AND tc.course_date >= ? AND tc.course_date <= ?
-  `).bind(pStart, pEnd).first<{ total_target: number }>();
-  const trainingActual = await db.prepare(`
-    SELECT COUNT(ta.id) AS total_actual
-    FROM training_attendees ta
-    JOIN training_courses tc ON tc.id = ta.course_id
-    WHERE COALESCE(tc.is_cancelled, 0) = 0 AND tc.course_date >= ? AND tc.course_date <= ?
-  `).bind(pStart, pEnd).first<{ total_actual: number }>();
-  const trainingTargetN = trainingPlan?.total_target ?? 0;
-  const trainingActualN = trainingActual?.total_actual ?? 0;
-  const trainingPlanPct = trainingTargetN > 0 ? round1(trainingActualN / trainingTargetN * 100) : null;
+  // 6) ร้อยละที่อบรมตามแผน — course-count based: หลักสูตรที่จัดจริง (status='done', not cancelled)
+  // vs. หลักสูตรที่วางแผนไว้ทั้งหมดในช่วงนี้ (every course row for the period, cancelled or not —
+  // a cancellation counts against plan adherence instead of being silently dropped from both sides).
+  const trainingCounts = await db.prepare(`
+    SELECT
+      COUNT(*) AS planned_total,
+      SUM(CASE WHEN COALESCE(is_cancelled,0)=0 AND status='done' THEN 1 ELSE 0 END) AS actual_done,
+      SUM(CASE WHEN COALESCE(is_cancelled,0)=1 THEN 1 ELSE 0 END) AS cancelled
+    FROM training_courses
+    WHERE course_date >= ? AND course_date <= ?
+  `).bind(pStart, pEnd).first<{ planned_total: number; actual_done: number; cancelled: number }>();
+  const trainingPlannedN   = trainingCounts?.planned_total ?? 0;
+  const trainingActualN    = trainingCounts?.actual_done ?? 0;
+  const trainingCancelledN = trainingCounts?.cancelled ?? 0;
+  const trainingPlanPct    = trainingPlannedN > 0 ? round1(trainingActualN / trainingPlannedN * 100) : null;
 
   // Lists — new hires / resignations in period, for the printable monthly report
   const newHireList = await db.prepare(
@@ -110,7 +114,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },
     probation_pass: { pct: probationPassPct, passed: evalPassedN, total: evalTotalN },
-    training_plan:  { pct: trainingPlanPct, actual: trainingActualN, target: trainingTargetN },
+    training_plan:  { pct: trainingPlanPct, actual: trainingActualN, cancelled: trainingCancelledN, total: trainingPlannedN },
     new_hire_list: newHireList.results ?? [],
     resign_list: resignList.results ?? [],
   });
