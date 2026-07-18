@@ -76,6 +76,24 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const evalPassedN = evalPassed?.n ?? 0;
   const probationPassPct = evalTotalN > 0 ? round1(evalPassedN / evalTotalN * 100) : null;
 
+  // 6) ร้อยละที่อบรมตามแผน — attendee headcount reached vs. planned (target) headcount, for
+  // non-cancelled courses held in period. Matches the exact "% Completion" formula already
+  // used in the training module's own dashboard (PlanTab.tsx), just surfaced here too.
+  const trainingPlan = await db.prepare(`
+    SELECT COALESCE(SUM(tc.target), 0) AS total_target
+    FROM training_courses tc
+    WHERE COALESCE(tc.is_cancelled, 0) = 0 AND tc.course_date >= ? AND tc.course_date <= ?
+  `).bind(pStart, pEnd).first<{ total_target: number }>();
+  const trainingActual = await db.prepare(`
+    SELECT COUNT(ta.id) AS total_actual
+    FROM training_attendees ta
+    JOIN training_courses tc ON tc.id = ta.course_id
+    WHERE COALESCE(tc.is_cancelled, 0) = 0 AND tc.course_date >= ? AND tc.course_date <= ?
+  `).bind(pStart, pEnd).first<{ total_actual: number }>();
+  const trainingTargetN = trainingPlan?.total_target ?? 0;
+  const trainingActualN = trainingActual?.total_actual ?? 0;
+  const trainingPlanPct = trainingTargetN > 0 ? round1(trainingActualN / trainingTargetN * 100) : null;
+
   // Lists — new hires / resignations in period, for the printable monthly report
   const newHireList = await db.prepare(
     "SELECT full_name, position, start_date FROM employees WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC"
@@ -92,6 +110,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },
     probation_pass: { pct: probationPassPct, passed: evalPassedN, total: evalTotalN },
+    training_plan:  { pct: trainingPlanPct, actual: trainingActualN, target: trainingTargetN },
     new_hire_list: newHireList.results ?? [],
     resign_list: resignList.results ?? [],
   });

@@ -30,6 +30,7 @@ interface KpiSummary {
   orientation:    { pct: number | null; passed: number; total: number };
   satisfaction:   { pct: number | null; responses: number };
   probation_pass: { pct: number | null; passed: number; total: number };
+  training_plan:  { pct: number | null; actual: number; target: number };
   new_hire_list: { full_name: string; position: string | null; start_date: string }[];
   resign_list: { full_name: string; position: string | null; resign_date: string; resign_reason: string | null }[];
 }
@@ -272,6 +273,8 @@ export default function ExecPage() {
         detail: kpiData.satisfaction.responses > 0 ? `จาก ${kpiData.satisfaction.responses} คำตอบ` : "ยังไม่มีการตอบแบบสอบถาม" },
       { label: "ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน", pct: kpiData.probation_pass.pct,
         detail: kpiData.probation_pass.total > 0 ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน` : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้" },
+      { label: "ร้อยละที่อบรมตามแผน", pct: kpiData.training_plan.pct,
+        detail: kpiData.training_plan.target > 0 ? `เข้าอบรมจริง ${kpiData.training_plan.actual} / เป้าหมาย ${kpiData.training_plan.target} คน` : "ยังไม่มีแผนอบรมในช่วงนี้" },
     ];
 
     // Shrink type density as content grows, so the report reliably fits one landscape A4 page.
@@ -508,6 +511,11 @@ export default function ExecPage() {
             sub={kpiData.probation_pass.total > 0
               ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน`
               : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้"} />
+          <KpiCard label="ร้อยละที่อบรมตามแผน" icon="📚"
+            pct={kpiData.training_plan.pct} color={pctColorHigh(kpiData.training_plan.pct)}
+            sub={kpiData.training_plan.target > 0
+              ? `เข้าอบรมจริง ${kpiData.training_plan.actual} / เป้าหมาย ${kpiData.training_plan.target} คน`
+              : "ยังไม่มีแผนอบรมในช่วงนี้"} />
         </div>
       )}
 
