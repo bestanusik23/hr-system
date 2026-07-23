@@ -15,6 +15,18 @@ interface ScoreRow { topic_id: number; score: number; text: string; owner: strin
 interface Approval { step: string; status: string; note: string | null; created_at: string; approver_name: string; }
 interface Props { evalId: number; onClose: () => void; onSaved: (msg?: string) => void; }
 
+// D1's datetime('now') stores naive UTC with no 'T'/zone suffix — new Date(iso) alone gets
+// parsed as local time by the browser, silently dropping the +7h Bangkok offset. Force UTC
+// parsing first, then render explicitly in Asia/Bangkok (same fix pattern as TimelineView.tsx).
+function bangkokDateTime(iso: string): string {
+  const s = iso.includes("T") ? iso : iso.replace(" ", "T");
+  const d = new Date(/Z$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
+  return d.toLocaleDateString("th-TH", {
+    day: "numeric", month: "short", year: "2-digit",
+    hour: "2-digit", minute: "2-digit", timeZone: "Asia/Bangkok",
+  });
+}
+
 function gradeFromScore(s: number): string {
   if (s >= 90) return "A"; if (s >= 80) return "B"; if (s >= 70) return "C";
   if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
@@ -542,9 +554,7 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
                       {a.note ? ` · ${a.note}` : ""}
                     </div>
                     <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2, fontFamily: "monospace" }}>
-                      {new Date(a.created_at).toLocaleDateString("th-TH", {
-                        day: "numeric", month: "short", year: "2-digit",
-                        hour: "2-digit", minute: "2-digit" })}
+                      {bangkokDateTime(a.created_at)}
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,20 @@
 import { useEffect, useState } from "react";
 import InternCertificateView from "./InternCertificateView";
 
+// D1's datetime('now') stores naive UTC with no 'T'/zone suffix — new Date(iso) alone gets
+// parsed as local time by the browser, silently dropping the +7h Bangkok offset. Force UTC
+// parsing first, then render explicitly in Asia/Bangkok (same fix pattern as TimelineView.tsx).
+function toUtcDate(iso: string): Date {
+  const s = iso.includes("T") ? iso : iso.replace(" ", "T");
+  return new Date(/Z$|[+-]\d{2}:?\d{2}$/.test(s) ? s : s + "Z");
+}
+function bangkokDateTime(iso: string): string {
+  return toUtcDate(iso).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Bangkok" });
+}
+function bangkokDate(iso: string): string {
+  return toUtcDate(iso).toLocaleDateString("th-TH", { timeZone: "Asia/Bangkok" });
+}
+
 interface InternFull {
   id: number; intern_code: string; prefix: string | null; first_name: string; last_name: string;
   education_level: string | null; faculty: string | null; major: string | null; year_level: string | null;
@@ -285,7 +299,7 @@ export default function InternProfile({ internId, onClose, onChanged }: {
                             {a.detail && <span style={{ color: "#94a3b8" }}> — {a.detail}</span>}
                           </div>
                           <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 1 }}>
-                            {new Date(a.created_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}
+                            {bangkokDateTime(a.created_at)}
                           </div>
                         </div>
                       </div>
@@ -314,7 +328,7 @@ export default function InternProfile({ internId, onClose, onChanged }: {
                             <span>
                               <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", fontFamily: "monospace" }}>{c.cert_id}</div>
                               <div style={{ fontSize: 11, color: "#94a3b8" }}>
-                                ออกเมื่อ {new Date(c.issued_at).toLocaleDateString("th-TH")} โดย {c.issued_by ?? "—"}
+                                ออกเมื่อ {bangkokDate(c.issued_at)} โดย {c.issued_by ?? "—"}
                               </div>
                             </span>
                           </span>
