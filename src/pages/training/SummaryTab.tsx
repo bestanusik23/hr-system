@@ -186,20 +186,19 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
 </div>
 <table>
 <colgroup>
-  <col style="width:26px"><col style="width:78px"><col><col style="width:100px"><col style="width:100px"><col style="width:95px">
+  <col style="width:26px"><col style="width:78px"><col><col style="width:150px"><col style="width:95px">
 </colgroup>
-<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
+<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
 <tbody>
 ${attendees.map((r, i) => `<tr>
   <td>${i + 1}</td>
   <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
   <td class="nm"><strong>${r.name}</strong></td>
-  <td>${r.department ?? "—"}</td>
-  <td>${r.position ?? "—"}</td>
+  <td class="nm">${r.position ?? "—"}</td>
   <td></td>
 </tr>`).join("")}
-${trainers.length > 0 ? `<tr><td colspan="6" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.department ?? "—"}</td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
+${trainers.length > 0 ? `<tr><td colspan="5" class="sect">🎤 วิทยากร</td></tr>
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td class="nm">${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
 </tbody></table>
 <div class="sig">
   <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ผู้รับผิดชอบโครงการ</div></div>
