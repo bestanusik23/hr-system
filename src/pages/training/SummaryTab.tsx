@@ -144,7 +144,6 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     if (!course) return;
     const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
     const trainers  = regs.filter(r => r.participant_type === "trainer");
-    const checked   = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
     const win = window.open("", "_blank", "width=1000,height=750");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
@@ -159,13 +158,13 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   .sub{font-size:9.5pt;color:#64748b}
   .meta{display:flex;flex-wrap:wrap;gap:8px 32px;font-size:10.5pt;margin-bottom:18px;
     background:#f0f5ff;padding:12px 16px;border-radius:8px;border:1px solid #dce4f5}
-  table{width:100%;border-collapse:collapse;font-size:10.5pt}
-  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:8px 12px;text-align:left;font-weight:700}
-  td{border:1px solid #dce4f5;padding:9px 12px;vertical-align:middle}
+  table{width:100%;border-collapse:collapse;font-size:10.5pt;table-layout:fixed}
+  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:8px 10px;text-align:left;font-weight:700}
+  td{border:1px solid #dce4f5;padding:9px 10px;vertical-align:middle;word-break:break-word}
+  td.nm{white-space:nowrap;overflow:visible}
   tr:nth-child(even) td{background:#f8faff}
   .sect{background:#eff4ff;color:#0038C6;font-weight:700;padding:8px 12px;border:1px solid #c4cfee}
-  .summary{margin-top:16px;font-size:10.5pt;display:flex;gap:24px}
-  .sig{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
+  .sig{margin-top:56px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
   .sigbox{text-align:center;font-size:10pt}
   .sigline{border-top:1px solid #000;margin-bottom:6px}
   .foot{margin-top:18px;font-size:8pt;color:#94a3b8;text-align:right}
@@ -186,25 +185,22 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   <div>👤 วิทยากร : <strong>${course.trainer ?? "—"}</strong></div>
 </div>
 <table>
-<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ตำแหน่ง</th><th style="width:110px">ลายเซ็น</th></tr></thead>
+<colgroup>
+  <col style="width:26px"><col style="width:78px"><col><col style="width:100px"><col style="width:100px"><col style="width:95px">
+</colgroup>
+<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
 <tbody>
 ${attendees.map((r, i) => `<tr>
   <td>${i + 1}</td>
-  <td style="font-family:monospace;font-size:9.5pt">${r.emp_code ?? "—"}</td>
-  <td><strong>${r.name}</strong></td>
+  <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
+  <td class="nm"><strong>${r.name}</strong></td>
   <td>${r.department ?? "—"}</td>
   <td>${r.position ?? "—"}</td>
   <td></td>
 </tr>`).join("")}
 ${trainers.length > 0 ? `<tr><td colspan="6" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9.5pt">${r.emp_code ?? "—"}</td><td><strong>${r.name}</strong></td><td>${r.department ?? "—"}</td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.department ?? "—"}</td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
 </tbody></table>
-<div class="summary">
-  <span>ลงทะเบียนทั้งหมด <strong>${regs.length}</strong> คน</span>
-  <span>เช็คชื่อแล้ว <strong>${checked}</strong> คน</span>
-  <span>สาย <strong>${regs.filter(r => r.attendance_status === "late").length}</strong> คน</span>
-  <span>ขาด <strong>${regs.filter(r => r.attendance_status === "absent").length}</strong> คน</span>
-</div>
 <div class="sig">
   <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ผู้รับผิดชอบโครงการ</div></div>
   <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ฝ่ายทรัพยากรบุคคล (HRD)</div></div>
