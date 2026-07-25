@@ -186,7 +186,7 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
 </div>
 <table>
 <colgroup>
-  <col style="width:26px"><col style="width:78px"><col><col style="width:150px"><col style="width:95px">
+  <col style="width:28px"><col style="width:80px"><col style="width:190px"><col><col style="width:90px">
 </colgroup>
 <thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
 <tbody>
