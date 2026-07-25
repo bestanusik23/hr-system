@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import * as XLSX from "xlsx";
 
 interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; reg_open: number; }
 
@@ -213,6 +214,37 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
     setTimeout(() => win.print(), 400);
   }
 
+  function exportExcel() {
+    if (!course) return;
+    const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
+    const trainers  = regs.filter(r => r.participant_type === "trainer");
+
+    const aoa: (string | number)[][] = [
+      [course.course],
+      [course.course_code],
+      [`วันที่อบรม: ${course.course_date ?? "—"}`, "", `เวลา: ${course.start_time ?? "—"} – ${course.end_time ?? "—"} น.`],
+      [`สถานที่: ${course.location ?? "—"}`, "", `วิทยากร: ${course.trainer ?? "—"}`],
+      [],
+      ["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "ตำแหน่ง", "ลายเซ็น"],
+      ...attendees.map((r, i) => [i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]),
+    ];
+    if (trainers.length > 0) {
+      aoa.push([]);
+      aoa.push(["วิทยากร"]);
+      trainers.forEach((r, i) => aoa.push([i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]));
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 28 }, { wch: 26 }, { wch: 16 }];
+    ws["!merges"] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "รายชื่อ");
+    XLSX.writeFile(wb, `รายชื่อผู้เข้าอบรม_${course.course_code}.xlsx`);
+  }
+
   const checkedIn = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
   const pct       = regs.length > 0 ? Math.round(checkedIn / regs.length * 100) : 0;
 
@@ -331,6 +363,11 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
                   style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #0038C6",
                     background: "#0038C6", color: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
                   🖨️ พิมพ์
+                </button>
+                <button onClick={exportExcel}
+                  style={{ padding: "6px 14px", borderRadius: 6, border: "1.5px solid #16a34a",
+                    background: "#16a34a", color: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}>
+                  📊 Excel
                 </button>
                 <button onClick={() => {
                   const rows = regs.map((r, i) =>
