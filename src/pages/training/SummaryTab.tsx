@@ -160,7 +160,7 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   .meta{display:flex;flex-wrap:wrap;gap:8px 32px;font-size:10.5pt;margin-bottom:18px;
     background:#f0f5ff;padding:12px 16px;border-radius:8px;border:1px solid #dce4f5}
   table{width:100%;border-collapse:collapse;font-size:10.5pt;table-layout:fixed}
-  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:8px 10px;text-align:left;font-weight:700}
+  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap}
   td{border:1px solid #dce4f5;padding:9px 10px;vertical-align:middle;word-break:break-word}
   td.nm{white-space:nowrap;overflow:visible}
   tr:nth-child(even) td{background:#f8faff}
@@ -187,19 +187,19 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
 </div>
 <table>
 <colgroup>
-  <col style="width:28px"><col style="width:80px"><col style="width:190px"><col><col style="width:90px">
+  <col style="width:58px"><col style="width:80px"><col style="width:190px"><col><col style="width:90px">
 </colgroup>
-<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
+<thead><tr><th>ลำดับที่</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
 <tbody>
 ${attendees.map((r, i) => `<tr>
   <td>${i + 1}</td>
   <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
   <td class="nm"><strong>${r.name}</strong></td>
-  <td class="nm">${r.position ?? "—"}</td>
+  <td>${r.position ?? "—"}</td>
   <td></td>
 </tr>`).join("")}
 ${trainers.length > 0 ? `<tr><td colspan="5" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td class="nm">${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
 </tbody></table>
 <div class="sig">
   <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ผู้รับผิดชอบโครงการ</div></div>
