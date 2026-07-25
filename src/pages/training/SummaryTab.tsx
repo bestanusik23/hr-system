@@ -145,38 +145,34 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
     const trainers  = regs.filter(r => r.participant_type === "trainer");
     const checked   = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
-    const badgeClass = (s: string) => s === "checked_in" ? "bc" : s === "late" ? "bl" : s === "absent" ? "ba" : "br";
-    const badgeLabel = (s: string) => s === "checked_in" ? "เช็คชื่อ" : s === "late" ? "สาย" : s === "absent" ? "ขาด" : "ลงทะเบียน";
     const win = window.open("", "_blank", "width=1000,height=750");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
 <title>รายชื่อผู้เข้าอบรม</title>
 <style>
-  @page{size:A4;margin:18mm}
+  @page{size:A4;margin:16mm}
+  *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   body{font-family:Sarabun,Arial,sans-serif;font-size:11pt;color:#111;margin:0}
-  .hdr{display:flex;align-items:center;gap:14px;border-bottom:3px solid #0038C6;padding-bottom:12px;margin-bottom:16px}
-  .logo{width:44px;height:44px;background:#0038C6;border-radius:8px;color:#fff;font-weight:900;font-size:10pt;display:flex;align-items:center;justify-content:center;text-align:center;line-height:1.2;flex-shrink:0}
-  h1{font-size:15pt;color:#0038C6;margin:0 0 2px}
-  .sub{font-size:9pt;color:#64748b}
-  .meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:10pt;margin-bottom:16px;background:#f0f5ff;padding:10px 14px;border-radius:6px;border:1px solid #dce4f5}
-  table{width:100%;border-collapse:collapse;font-size:10pt}
-  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:7px 10px;text-align:left}
-  td{border:1px solid #dce4f5;padding:6px 10px;vertical-align:middle}
+  .hdr{display:flex;align-items:center;gap:16px;border-bottom:3px solid #0038C6;padding-bottom:14px;margin-bottom:18px}
+  .hdr img{height:50px;width:auto;object-fit:contain;flex-shrink:0}
+  h1{font-size:16pt;color:#0038C6;margin:0 0 2px;font-weight:700}
+  .sub{font-size:9.5pt;color:#64748b}
+  .meta{display:flex;flex-wrap:wrap;gap:8px 32px;font-size:10.5pt;margin-bottom:18px;
+    background:#f0f5ff;padding:12px 16px;border-radius:8px;border:1px solid #dce4f5}
+  table{width:100%;border-collapse:collapse;font-size:10.5pt}
+  th{background:#e8eeff;color:#0038C6;border:1px solid #c4cfee;padding:8px 12px;text-align:left;font-weight:700}
+  td{border:1px solid #dce4f5;padding:9px 12px;vertical-align:middle}
   tr:nth-child(even) td{background:#f8faff}
-  .bc{background:#dcfce7;color:#16a34a;padding:1px 7px;border-radius:4px;font-size:9pt}
-  .bl{background:#fef3c7;color:#d97706;padding:1px 7px;border-radius:4px;font-size:9pt}
-  .ba{background:#fee2e2;color:#dc2626;padding:1px 7px;border-radius:4px;font-size:9pt}
-  .br{background:#f0f5ff;color:#0038C6;padding:1px 7px;border-radius:4px;font-size:9pt}
-  .sect{background:#eff4ff;color:#0038C6;font-weight:700;padding:7px 10px;border:1px solid #c4cfee}
-  .summary{margin-top:14px;font-size:10pt;display:flex;gap:20px}
-  .sig{margin-top:44px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
+  .sect{background:#eff4ff;color:#0038C6;font-weight:700;padding:8px 12px;border:1px solid #c4cfee}
+  .summary{margin-top:16px;font-size:10.5pt;display:flex;gap:24px}
+  .sig{margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:50px}
   .sigbox{text-align:center;font-size:10pt}
   .sigline{border-top:1px solid #000;margin-bottom:6px}
-  .foot{margin-top:16px;font-size:8pt;color:#94a3b8;text-align:right}
+  .foot{margin-top:18px;font-size:8pt;color:#94a3b8;text-align:right}
   @media print{.noprint{display:none}}
 </style></head><body>
 <div class="hdr">
-  <div class="logo">RAM+</div>
+  <img src="/logo.png" alt="โรงพยาบาลเชียงราย ราม">
   <div>
     <div class="sub">โรงพยาบาลเชียงราย ราม · Human Resource Development</div>
     <h1>${course.course}</h1>
@@ -188,28 +184,20 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
   <div>🕐 เวลา : <strong>${course.start_time ?? "—"} – ${course.end_time ?? "—"} น.</strong></div>
   <div>📍 สถานที่ : <strong>${course.location ?? "—"}</strong></div>
   <div>👤 วิทยากร : <strong>${course.trainer ?? "—"}</strong></div>
-  <div>🎯 เป้าหมาย : <strong>${course.target} คน</strong></div>
-  <div>✅ เช็คชื่อ : <strong>${checked} / ${regs.length} คน</strong></div>
 </div>
 <table>
-<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ตำแหน่ง</th><th>เวลาเช็คชื่อ</th><th>สถานะ</th><th style="width:80px">ลายเซ็น</th></tr></thead>
+<thead><tr><th>#</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>แผนก</th><th>ตำแหน่ง</th><th style="width:110px">ลายเซ็น</th></tr></thead>
 <tbody>
-${attendees.map((r, i) => {
-  const ct = r.checkin_time
-    ? (() => { const d = new Date((r.checkin_time as string).replace(" ","T") + ((r.checkin_time as string).includes("Z") ? "" : "Z")); return new Date(d.getTime() + 7*3600000).toISOString().slice(0,16).replace("T"," "); })()
-    : "—";
-  return `<tr>
+${attendees.map((r, i) => `<tr>
   <td>${i + 1}</td>
-  <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
+  <td style="font-family:monospace;font-size:9.5pt">${r.emp_code ?? "—"}</td>
   <td><strong>${r.name}</strong></td>
   <td>${r.department ?? "—"}</td>
   <td>${r.position ?? "—"}</td>
-  <td>${ct}</td>
-  <td><span class="${badgeClass(r.attendance_status)}">${badgeLabel(r.attendance_status)}</span></td>
   <td></td>
-</tr>`;}).join("")}
-${trainers.length > 0 ? `<tr><td colspan="8" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td><strong>${r.name}</strong></td><td>${r.department ?? "—"}</td><td>${r.position ?? "—"}</td><td colspan="3"></td></tr>`).join("")}` : ""}
+</tr>`).join("")}
+${trainers.length > 0 ? `<tr><td colspan="6" class="sect">🎤 วิทยากร</td></tr>
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9.5pt">${r.emp_code ?? "—"}</td><td><strong>${r.name}</strong></td><td>${r.department ?? "—"}</td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
 </tbody></table>
 <div class="summary">
   <span>ลงทะเบียนทั้งหมด <strong>${regs.length}</strong> คน</span>
