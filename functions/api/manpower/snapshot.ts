@@ -58,10 +58,13 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const db = ctx.env.HR_DB;
 
-  // Determine which month to snapshot (default = current month)
+  // Determine which month to snapshot (default = currently-active payroll period).
+  // Matches the 26th cut-off in /api/manpower/summary: past the 26th, the active
+  // period belongs to next calendar month's label.
   const body = await ctx.request.json().catch(() => ({})) as { month?: string };
   const now   = new Date();
-  const month = body.month ?? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const eff   = now.getDate() >= 26 ? new Date(now.getFullYear(), now.getMonth() + 1, 1) : now;
+  const month = body.month ?? `${eff.getFullYear()}-${String(eff.getMonth() + 1).padStart(2, "0")}`;
 
   // ── Cut-off window for this month (26th prev → 25th current) ──
   const [y, m] = month.split("-").map(Number);

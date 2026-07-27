@@ -182,9 +182,12 @@ const STATUS_COLOR: Record<string, string> = {
   "ผ่านทดลองงาน": "#16a34a", "ทดลองงาน": "#d97706", "ย้ายแผนก": "#0891b2",
 };
 
+// Matches the 26th cut-off used by /api/manpower/summary: once past the 26th,
+// the currently-active payroll period belongs to next calendar month's label.
 function currentYM() {
   const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const eff = d.getDate() >= 26 ? new Date(d.getFullYear(), d.getMonth() + 1, 1) : d;
+  return `${eff.getFullYear()}-${String(eff.getMonth() + 1).padStart(2, "0")}`;
 }
 
 export default function ManpowerDashboard() {
