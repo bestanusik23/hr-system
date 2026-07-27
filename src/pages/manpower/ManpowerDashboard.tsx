@@ -354,9 +354,12 @@ export default function ManpowerDashboard() {
   const latestSaved     = months[0];
   const notSavedYet     = !isHist && !!latestSaved && latestSaved.snapshot_month !== currentYM();
 
-  // Closed months nobody clicked "save" for yet (e.g. June saved, August is the
-  // active period → July shows up here) — viewable/saveable on demand via computeSnapshot.
-  const gapMonths = latestSaved ? monthsBetweenExclusive(latestSaved.snapshot_month, currentYM()) : [];
+  // Closed months nobody clicked "save" for yet — fill EVERY gap between
+  // consecutive known months (saved snapshots + the current active period),
+  // not just the newest one, so an older skipped month (e.g. July, skipped
+  // between a June save and a later August save) still surfaces.
+  const anchors = Array.from(new Set([...months.map(s => s.snapshot_month), currentYM()])).sort();
+  const gapMonths = anchors.flatMap((m, i) => i === 0 ? [] : monthsBetweenExclusive(anchors[i - 1], m));
   const dropdownMonths: { snapshot_month: string; headcount: number | null; saved: boolean; created_by: string | null }[] = [
     ...gapMonths.map(m => ({ snapshot_month: m, headcount: null, saved: false, created_by: null })),
     ...months.map(s => ({ snapshot_month: s.snapshot_month, headcount: s.headcount, saved: true, created_by: s.created_by })),
