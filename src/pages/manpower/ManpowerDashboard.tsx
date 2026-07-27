@@ -354,7 +354,7 @@ export default function ManpowerDashboard() {
         <select value={histMonth} onChange={e => setHist(e.target.value)}
           style={{ padding: "7px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
             fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff" }}>
-          <option value="">▶ ข้อมูลปัจจุบัน (Real-time)</option>
+          <option value="">▶ {monthLabel(currentYM())} — ข้อมูลปัจจุบัน (Real-time)</option>
           {months.map(s => (
             <option key={s.snapshot_month} value={s.snapshot_month}>
               {monthLabel(s.snapshot_month)} — {s.headcount} คน (บันทึกโดย {s.created_by})
