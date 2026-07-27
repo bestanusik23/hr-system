@@ -139,7 +139,7 @@ interface SnapshotDetail {
   by_division: { division: string; n: number }[];
   by_type:     { type: string; n: number }[];
   by_status:   { status: string; n: number }[];
-  created_by: string; created_at: string;
+  created_by: string | null; created_at: string | null; saved: boolean;
 }
 
 type Modal = "newhire" | "resign" | null;
@@ -188,6 +188,21 @@ function currentYM() {
   const d = new Date();
   const eff = d.getDate() >= 26 ? new Date(d.getFullYear(), d.getMonth() + 1, 1) : d;
   return `${eff.getFullYear()}-${String(eff.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Closed months (already past their 26–25 window) strictly between the two
+// given "YYYY-MM" keys, ascending. Used to surface months nobody saved yet
+// (e.g. June saved, August is the active period → July is a gap).
+function monthsBetweenExclusive(fromYM: string, toYM: string): string[] {
+  const [fy, fm] = fromYM.split("-").map(Number);
+  const [ty, tm] = toYM.split("-").map(Number);
+  const out: string[] = [];
+  let y = fy, m = fm + 1;
+  while (y < ty || (y === ty && m < tm)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++; if (m > 12) { m = 1; y++; }
+  }
+  return out;
 }
 
 export default function ManpowerDashboard() {
@@ -299,15 +314,22 @@ export default function ManpowerDashboard() {
     }
   }
 
-  async function saveSnapshot() {
+  async function saveSnapshot(month: string = currentYM()) {
     setSaving(true); setSaveMsg("");
     const r  = await fetch("/api/manpower/snapshot", { method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month: currentYM() }) });
+      body: JSON.stringify({ month }) });
     const d  = await r.json() as { ok: boolean; headcount?: number; error?: string };
     setSaving(false);
-    if (d.ok) setSaveMsg(`✅ บันทึกแล้ว — ${d.headcount} คน`);
-    else      setSaveMsg(`❌ ${d.error}`);
+    if (d.ok) {
+      setSaveMsg(`✅ บันทึกแล้ว — ${d.headcount} คน`);
+      // `months` list re-fetches automatically (effect depends on `saving`); refresh
+      // the open historical view too so it flips from "computed live" to "saved".
+      if (histMonth === month) {
+        fetch(`/api/manpower/snapshot?month=${month}`).then(r2 => r2.json())
+          .then((d2: { ok: boolean; snapshot: SnapshotDetail }) => { if (d2.ok) setHistData(d2.snapshot); });
+      }
+    } else setSaveMsg(`❌ ${d.error}`);
     setTimeout(() => setSaveMsg(""), 4000);
   }
 
@@ -331,6 +353,14 @@ export default function ManpowerDashboard() {
 
   const latestSaved     = months[0];
   const notSavedYet     = !isHist && !!latestSaved && latestSaved.snapshot_month !== currentYM();
+
+  // Closed months nobody clicked "save" for yet (e.g. June saved, August is the
+  // active period → July shows up here) — viewable/saveable on demand via computeSnapshot.
+  const gapMonths = latestSaved ? monthsBetweenExclusive(latestSaved.snapshot_month, currentYM()) : [];
+  const dropdownMonths: { snapshot_month: string; headcount: number | null; saved: boolean; created_by: string | null }[] = [
+    ...gapMonths.map(m => ({ snapshot_month: m, headcount: null, saved: false, created_by: null })),
+    ...months.map(s => ({ snapshot_month: s.snapshot_month, headcount: s.headcount, saved: true, created_by: s.created_by })),
+  ].sort((a, b) => b.snapshot_month.localeCompare(a.snapshot_month));
 
   const months6     = lastMonths(6);
   const hireMap     = Object.fromEntries((data?.trend.hires ?? []).map(x => [x.m, x.n]));
@@ -358,9 +388,11 @@ export default function ManpowerDashboard() {
           style={{ padding: "7px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
             fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff" }}>
           <option value="">▶ {monthLabel(currentYM())} — ข้อมูลปัจจุบัน (Real-time)</option>
-          {months.map(s => (
+          {dropdownMonths.map(s => (
             <option key={s.snapshot_month} value={s.snapshot_month}>
-              {monthLabel(s.snapshot_month)} — {s.headcount} คน (บันทึกโดย {s.created_by})
+              {s.saved
+                ? `${monthLabel(s.snapshot_month)} — ${s.headcount} คน (บันทึกโดย ${s.created_by})`
+                : `${monthLabel(s.snapshot_month)} — ยังไม่ได้บันทึก`}
             </option>
           ))}
         </select>
@@ -384,7 +416,7 @@ export default function ManpowerDashboard() {
                 cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6 }}>
               🔢 รหัสพนักงาน
             </button>
-            <button onClick={saveSnapshot} disabled={saving}
+            <button onClick={() => saveSnapshot()} disabled={saving}
               style={{ padding: "8px 16px", borderRadius: 8, border: "none",
                 background: saving ? "#c4cfee" : "#0038c6", color: "#fff",
                 fontWeight: 700, fontSize: 12, cursor: saving ? "not-allowed" : "pointer",
@@ -418,18 +450,30 @@ export default function ManpowerDashboard() {
       {isHist && (
         <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10,
           padding: "10px 16px", fontSize: 13, color: "#92400e",
-          display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <span>
             📂 กำลังดูข้อมูลย้อนหลัง: <b>{monthLabel(histData!.snapshot_month)}</b>
             {" "}· รอบ {histData!.period_label}
-            {" "}· บันทึกโดย <b>{histData!.created_by}</b>
+            {" "}· {histData!.saved
+              ? <>บันทึกโดย <b>{histData!.created_by}</b></>
+              : <b>ยังไม่ได้บันทึก (ข้อมูลคำนวณสดจากสถานะปัจจุบัน)</b>}
           </span>
-          <button onClick={() => setHist("")}
-            style={{ background: "none", border: "1px solid #fde68a", borderRadius: 6,
-              padding: "3px 12px", cursor: "pointer", fontSize: 12, color: "#92400e",
-              fontFamily: "inherit" }}>
-            กลับสู่ปัจจุบัน ✕
-          </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {!histData!.saved && canSave && (
+              <button onClick={() => saveSnapshot(histData!.snapshot_month)} disabled={saving}
+                style={{ background: "#0038c6", border: "none", borderRadius: 6, color: "#fff",
+                  padding: "3px 12px", cursor: saving ? "not-allowed" : "pointer", fontSize: 12,
+                  fontFamily: "inherit", fontWeight: 700, whiteSpace: "nowrap" }}>
+                💾 บันทึกเดือนนี้
+              </button>
+            )}
+            <button onClick={() => setHist("")}
+              style={{ background: "none", border: "1px solid #fde68a", borderRadius: 6,
+                padding: "3px 12px", cursor: "pointer", fontSize: 12, color: "#92400e",
+                fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              กลับสู่ปัจจุบัน ✕
+            </button>
+          </div>
         </div>
       )}
 
