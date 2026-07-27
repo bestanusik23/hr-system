@@ -326,6 +326,9 @@ export default function ManpowerDashboard() {
   const statusTotal = Math.max(1, byStatus.reduce((s, t) => s + t.n, 0));
   const TYPE_MULTI  = byType.length > 1;
 
+  const latestSaved     = months[0];
+  const notSavedYet     = !isHist && !!latestSaved && latestSaved.snapshot_month !== currentYM();
+
   const months6     = lastMonths(6);
   const hireMap     = Object.fromEntries((data?.trend.hires ?? []).map(x => [x.m, x.n]));
   const resignMap   = Object.fromEntries((data?.trend.resigns ?? []).map(x => [x.m, x.n]));
@@ -388,6 +391,25 @@ export default function ManpowerDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Not-yet-saved-this-month reminder ─────────────────────────── */}
+      {notSavedYet && (
+        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 10,
+          padding: "10px 16px", fontSize: 13, color: "#92400e",
+          display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+          <span>
+            ⚠️ ยังไม่ได้บันทึกข้อมูลเดือนนี้ ({monthLabel(currentYM())}) — ข้อมูลล่าสุดที่บันทึกไว้คือ{" "}
+            <b>{monthLabel(latestSaved.snapshot_month)}</b> ({latestSaved.headcount} คน)
+            {canSave && " กด \"บันทึกข้อมูลเดือนนี้\" ด้านบนเพื่ออัปเดต ไม่เช่นนั้นข้อมูลเดือนนี้จะไม่ถูกเก็บไว้"}
+          </span>
+          <button onClick={() => setHist(latestSaved.snapshot_month)}
+            style={{ background: "none", border: "1px solid #fde68a", borderRadius: 6,
+              padding: "3px 12px", cursor: "pointer", fontSize: 12, color: "#92400e",
+              fontFamily: "inherit", whiteSpace: "nowrap" }}>
+            ดูข้อมูลเดือนล่าสุดที่บันทึก →
+          </button>
+        </div>
+      )}
 
       {/* ── Historical mode badge ──────────────────────────────────────── */}
       {isHist && (
