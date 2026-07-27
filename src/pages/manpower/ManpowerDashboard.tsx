@@ -333,6 +333,19 @@ export default function ManpowerDashboard() {
     setTimeout(() => setSaveMsg(""), 4000);
   }
 
+  async function cancelSnapshot(month: string) {
+    if (!confirm(`ยกเลิกการบันทึกข้อมูลเดือน ${monthLabel(month)}? การกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
+    setSaving(true); setSaveMsg("");
+    const r = await fetch(`/api/manpower/snapshot?month=${month}`, { method: "DELETE" });
+    const d = await r.json() as { ok: boolean; error?: string };
+    setSaving(false);
+    if (d.ok) {
+      setSaveMsg("✅ ยกเลิกการบันทึกแล้ว");
+      setHist("");
+    } else setSaveMsg(`❌ ${d.error}`);
+    setTimeout(() => setSaveMsg(""), 4000);
+  }
+
   // ─── Derived display values ───────────────────────────────────────────
   const isHist    = !!histMonth && !!histData;
   const cards     = isHist
@@ -468,6 +481,14 @@ export default function ManpowerDashboard() {
                   padding: "3px 12px", cursor: saving ? "not-allowed" : "pointer", fontSize: 12,
                   fontFamily: "inherit", fontWeight: 700, whiteSpace: "nowrap" }}>
                 💾 บันทึกเดือนนี้
+              </button>
+            )}
+            {histData!.saved && user?.role === "admin" && histData!.snapshot_month === latestSaved?.snapshot_month && (
+              <button onClick={() => cancelSnapshot(histData!.snapshot_month)} disabled={saving}
+                style={{ background: "#fff", border: "1.5px solid #dc2626", borderRadius: 6, color: "#dc2626",
+                  padding: "3px 12px", cursor: saving ? "not-allowed" : "pointer", fontSize: 12,
+                  fontFamily: "inherit", fontWeight: 700, whiteSpace: "nowrap" }}>
+                🗑️ ยกเลิกการบันทึก
               </button>
             )}
             <button onClick={() => setHist("")}
