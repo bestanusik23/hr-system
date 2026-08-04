@@ -106,6 +106,44 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     "SELECT full_name, position, resign_date, resign_reason FROM employees WHERE resign_date >= ? AND resign_date <= ? ORDER BY resign_date ASC"
   ).bind(pStart, pEnd).all<{ full_name: string; position: string | null; resign_date: string; resign_reason: string | null }>();
 
+  // Drill-down lists so HR can see exactly who/what feeds each KPI card and go fix it.
+  const evalCoverageList = await db.prepare(`
+    SELECT e.id, e.full_name, e.position, e.start_date,
+      EXISTS(SELECT 1 FROM evaluations ev WHERE ev.employee_id = e.id) AS has_eval
+    FROM employees e WHERE e.start_date >= ? AND e.start_date <= ? ORDER BY e.start_date ASC
+  `).bind(pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; has_eval: number }>();
+
+  const orientationList = await db.prepare(`
+    SELECT e.id, e.full_name, e.position, e.start_date,
+      EXISTS(
+        SELECT 1 FROM training_attendees ta JOIN training_courses tc ON tc.id = ta.course_id
+        WHERE ((ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code) OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name)))
+          AND tc.course LIKE '%ปฐมนิเทศ%' AND COALESCE(tc.is_cancelled,0) = 0
+          AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
+      ) AS oriented
+    FROM employees e WHERE e.start_date >= ? AND e.start_date <= ? ORDER BY e.start_date ASC
+  `).bind(pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; oriented: number }>();
+
+  const satisfactionList = await db.prepare(`
+    SELECT tc.id AS course_id, tc.course, tc.course_date,
+      ROUND(AVG((ts.q1+ts.q2+ts.q3+ts.q4+ts.q5)*5.0),1) AS avg_pct, COUNT(*) AS n
+    FROM training_surveys ts JOIN training_courses tc ON tc.id = ts.course_id
+    WHERE date(ts.submitted_at) >= ? AND date(ts.submitted_at) <= ?
+    GROUP BY tc.id ORDER BY tc.course_date DESC
+  `).bind(pStart, pEnd).all<{ course_id: number; course: string; course_date: string | null; avg_pct: number; n: number }>();
+
+  const probationPassList = await db.prepare(`
+    SELECT ev.id AS eval_id, e.id AS employee_id, e.full_name, e.position, ev.decision, ev.updated_at
+    FROM evaluations ev JOIN employees e ON e.id = ev.employee_id
+    WHERE ev.round = 90 AND ev.status = 'approved' AND date(ev.updated_at) >= ? AND date(ev.updated_at) <= ?
+    ORDER BY ev.updated_at ASC
+  `).bind(pStart, pEnd).all<{ eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }>();
+
+  const trainingPlanList = await db.prepare(`
+    SELECT id, course, course_date, status, COALESCE(is_cancelled,0) AS is_cancelled
+    FROM training_courses WHERE course_date >= ? AND course_date <= ? ORDER BY course_date ASC
+  `).bind(pStart, pEnd).all<{ id: number; course: string; course_date: string | null; status: string; is_cancelled: number }>();
+
   return Response.json({
     ok: true,
     period_label: label,
@@ -117,6 +155,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     training_plan:  { pct: trainingPlanPct, actual: trainingActualN, cancelled: trainingCancelledN, total: trainingPlannedN },
     new_hire_list: newHireList.results ?? [],
     resign_list: resignList.results ?? [],
+    eval_coverage_list: (evalCoverageList.results ?? []).map(r => ({ ...r, has_eval: !!r.has_eval })),
+    orientation_list: (orientationList.results ?? []).map(r => ({ ...r, oriented: !!r.oriented })),
+    satisfaction_list: satisfactionList.results ?? [],
+    probation_pass_list: probationPassList.results ?? [],
+    training_plan_list: (trainingPlanList.results ?? []).map(r => ({ ...r, is_cancelled: !!r.is_cancelled })),
   });
 };
 

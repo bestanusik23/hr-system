@@ -33,7 +33,14 @@ interface KpiSummary {
   training_plan:  { pct: number | null; actual: number; cancelled: number; total: number };
   new_hire_list: { full_name: string; position: string | null; start_date: string }[];
   resign_list: { full_name: string; position: string | null; resign_date: string; resign_reason: string | null }[];
+  eval_coverage_list: { id: number; full_name: string; position: string | null; start_date: string; has_eval: boolean }[];
+  orientation_list: { id: number; full_name: string; position: string | null; start_date: string; oriented: boolean }[];
+  satisfaction_list: { course_id: number; course: string; course_date: string | null; avg_pct: number; n: number }[];
+  probation_pass_list: { eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }[];
+  training_plan_list: { id: number; course: string; course_date: string | null; status: string; is_cancelled: boolean }[];
 }
+
+type KpiKey = "turnover" | "eval_coverage" | "orientation" | "satisfaction" | "probation_pass" | "training_plan";
 
 const REPORT_DOC_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
 const DEFAULT_ACK = { name: "อนุสิกข์  ทองแผ่น", title: "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ" };
@@ -137,10 +144,13 @@ function pctColorLow(pct: number): string {
   return "#dc2626";
 }
 
-function KpiCard({ label, icon, pct, sub, color }: { label: string; icon: string; pct: number | null; sub: string; color: string }) {
+function KpiCard({ label, icon, pct, sub, color, onClick }: { label: string; icon: string; pct: number | null; sub: string; color: string; onClick?: () => void }) {
   return (
-    <div style={{ background: "#fff", borderRadius: 12, padding: "18px 20px",
-      border: "1px solid #dce4f5", borderTop: `4px solid ${color}` }}>
+    <div onClick={onClick} style={{ background: "#fff", borderRadius: 12, padding: "18px 20px",
+      border: "1px solid #dce4f5", borderTop: `4px solid ${color}`,
+      cursor: onClick ? "pointer" : "default", transition: "box-shadow .15s, transform .15s" }}
+      onMouseEnter={e => { if (onClick) { e.currentTarget.style.boxShadow = "0 4px 14px rgba(0,56,198,.12)"; e.currentTarget.style.transform = "translateY(-1px)"; } }}
+      onMouseLeave={e => { e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</span>
         <span style={{ fontSize: 16 }}>{icon}</span>
@@ -152,6 +162,9 @@ function KpiCard({ label, icon, pct, sub, color }: { label: string; icon: string
           <div style={{ height: 6, background: color, borderRadius: 3,
             width: `${Math.min(100, pct)}%`, transition: "width .4s" }} />
         </div>
+      )}
+      {onClick && (
+        <div style={{ marginTop: 8, fontSize: 10.5, color: "#0038C6", fontWeight: 700 }}>ดูรายละเอียด →</div>
       )}
     </div>
   );
@@ -219,6 +232,7 @@ export default function ExecPage() {
   const [kpiMonth, setKpiMonth]           = useState(currentYM);
   const [kpiYear, setKpiYear]             = useState(() => String(new Date().getFullYear()));
   const [kpiData, setKpiData]             = useState<KpiSummary | null>(null);
+  const [kpiDetail, setKpiDetail]         = useState<KpiKey | null>(null);
   const [kpiLoading, setKpiLoading]       = useState(true);
   const kpiValue = kpiPeriodType === "month" ? kpiMonth : kpiYear;
 
@@ -492,32 +506,38 @@ export default function ExecPage() {
           gap: 14, marginBottom: 28 }}>
           <KpiCard label="ร้อยละพนักงานลาออก" icon="📉"
             pct={kpiData.turnover.pct} color={pctColorLow(kpiData.turnover.pct)}
-            sub={`ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`} />
+            sub={`ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`}
+            onClick={() => setKpiDetail("turnover")} />
           <KpiCard label="ร้อยละพนักงานใหม่ที่ได้รับการประเมิน" icon="📋"
             pct={kpiData.eval_coverage.pct} color={pctColorHigh(kpiData.eval_coverage.pct)}
             sub={kpiData.eval_coverage.total > 0
               ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน`
-              : "ไม่มีพนักงานใหม่ในช่วงนี้"} />
+              : "ไม่มีพนักงานใหม่ในช่วงนี้"}
+            onClick={() => setKpiDetail("eval_coverage")} />
           <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ" icon="🧑‍🏫"
             pct={kpiData.orientation.pct} color={pctColorHigh(kpiData.orientation.pct)}
             sub={kpiData.orientation.total > 0
               ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน`
-              : "ไม่มีพนักงานใหม่ในช่วงนี้"} />
+              : "ไม่มีพนักงานใหม่ในช่วงนี้"}
+            onClick={() => setKpiDetail("orientation")} />
           <KpiCard label="ร้อยละความพึงพอใจของผู้ได้รับการอบรม" icon="⭐"
             pct={kpiData.satisfaction.pct} color={pctColorHigh(kpiData.satisfaction.pct)}
             sub={kpiData.satisfaction.responses > 0
               ? `จาก ${kpiData.satisfaction.responses} คำตอบ`
-              : "ยังไม่มีการตอบแบบสอบถาม"} />
+              : "ยังไม่มีการตอบแบบสอบถาม"}
+            onClick={() => setKpiDetail("satisfaction")} />
           <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน" icon="📝"
             pct={kpiData.probation_pass.pct} color={pctColorHigh(kpiData.probation_pass.pct)}
             sub={kpiData.probation_pass.total > 0
               ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน`
-              : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้"} />
+              : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้"}
+            onClick={() => setKpiDetail("probation_pass")} />
           <KpiCard label="ร้อยละที่อบรมตามแผน" icon="📚"
             pct={kpiData.training_plan.pct} color={pctColorHigh(kpiData.training_plan.pct)}
             sub={kpiData.training_plan.total > 0
               ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
-              : "ยังไม่มีแผนอบรมในช่วงนี้"} />
+              : "ยังไม่มีแผนอบรมในช่วงนี้"}
+            onClick={() => setKpiDetail("training_plan")} />
         </div>
       )}
 
@@ -826,6 +846,115 @@ export default function ExecPage() {
                     background: "#0038C6", color: "#fff", fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                   🖨️ พิมพ์รายงาน
                 </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {kpiDetail && kpiData && (() => {
+        const CONFIG: Record<KpiKey, { title: string; icon: string; modulePath: string; moduleLabel: string }> = {
+          turnover:        { title: "รายชื่อพนักงานลาออก", icon: "📉", modulePath: "/manpower", moduleLabel: "ไปที่ระบบอัตรากำลัง →" },
+          eval_coverage:   { title: "พนักงานใหม่ที่ได้รับ/ยังไม่ได้รับการประเมิน", icon: "📋", modulePath: "/eval", moduleLabel: "ไปที่ระบบประเมินผล →" },
+          orientation:     { title: "พนักงานใหม่ที่ผ่าน/ยังไม่ผ่านการอบรมปฐมนิเทศ", icon: "🧑‍🏫", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
+          satisfaction:    { title: "ความพึงพอใจของผู้เข้าอบรม แยกตามหลักสูตร", icon: "⭐", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
+          probation_pass:  { title: "ผลการประเมินทดลองงาน (รอบสุดท้าย) ที่อนุมัติในช่วงนี้", icon: "📝", modulePath: "/eval", moduleLabel: "ไปที่ระบบประเมินผล →" },
+          training_plan:   { title: "หลักสูตรอบรมตามแผนในช่วงนี้", icon: "📚", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
+        };
+        const cfg = CONFIG[kpiDetail];
+        const thStyle: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontWeight: 700,
+          color: "#475569", borderBottom: "2px solid #dce4f5", fontSize: 11, letterSpacing: "0.06em",
+          textTransform: "uppercase" as const, background: "#f4f7ff" };
+        const tdStyle: React.CSSProperties = { padding: "9px 12px", fontSize: 13, borderBottom: "1px solid #f0f5ff" };
+        const badge = (ok: boolean, yes: string, no: string) => (
+          <span style={{ padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+            background: ok ? "#f0fdf4" : "#fef2f2", color: ok ? "#16a34a" : "#dc2626" }}>{ok ? yes : no}</span>
+        );
+
+        let rows: React.ReactNode;
+        if (kpiDetail === "turnover") {
+          rows = kpiData.resign_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีพนักงานลาออกในช่วงนี้</td></tr>
+            : kpiData.resign_list.map((r, i) => (
+              <tr key={i}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+                <td style={tdStyle}>{fmtShortDate(r.resign_date)}</td><td style={tdStyle}>{r.resign_reason ?? "—"}</td></tr>
+            ));
+        } else if (kpiDetail === "eval_coverage") {
+          rows = kpiData.eval_coverage_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีพนักงานใหม่ในช่วงนี้</td></tr>
+            : kpiData.eval_coverage_list.map(r => (
+              <tr key={r.id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+                <td style={tdStyle}>{fmtShortDate(r.start_date)}</td>
+                <td style={tdStyle}>{badge(r.has_eval, "ได้รับประเมินแล้ว", "ยังไม่ได้ประเมิน")}</td></tr>
+            ));
+        } else if (kpiDetail === "orientation") {
+          rows = kpiData.orientation_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีพนักงานใหม่ในช่วงนี้</td></tr>
+            : kpiData.orientation_list.map(r => (
+              <tr key={r.id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+                <td style={tdStyle}>{fmtShortDate(r.start_date)}</td>
+                <td style={tdStyle}>{badge(r.oriented, "ผ่านแล้ว", "ยังไม่ผ่าน")}</td></tr>
+            ));
+        } else if (kpiDetail === "satisfaction") {
+          rows = kpiData.satisfaction_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ยังไม่มีการตอบแบบสอบถามในช่วงนี้</td></tr>
+            : kpiData.satisfaction_list.map(r => (
+              <tr key={r.course_id}><td style={tdStyle}>{r.course}</td>
+                <td style={tdStyle}>{r.course_date ? fmtShortDate(r.course_date) : "—"}</td>
+                <td style={tdStyle}><b style={{ color: "#0038C6" }}>{r.avg_pct}%</b> ({r.n} คำตอบ)</td></tr>
+            ));
+        } else if (kpiDetail === "probation_pass") {
+          rows = kpiData.probation_pass_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ยังไม่มีการประเมินครบกำหนดในช่วงนี้</td></tr>
+            : kpiData.probation_pass_list.map(r => (
+              <tr key={r.eval_id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+                <td style={tdStyle}>{fmtShortDate(r.updated_at.slice(0, 10))}</td>
+                <td style={tdStyle}>{badge(r.decision === "บรรจุเป็นพนักงานประจำ", r.decision ?? "—", r.decision ?? "—")}</td></tr>
+            ));
+        } else {
+          rows = kpiData.training_plan_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ยังไม่มีแผนอบรมในช่วงนี้</td></tr>
+            : kpiData.training_plan_list.map(r => (
+              <tr key={r.id}><td style={tdStyle}>{r.course}</td>
+                <td style={tdStyle}>{r.course_date ? fmtShortDate(r.course_date) : "—"}</td>
+                <td style={tdStyle}>{r.is_cancelled ? badge(false, "", "ยกเลิก") : badge(r.status === "done", "จัดแล้ว", r.status)}</td></tr>
+            ));
+        }
+
+        const headCols: [string, string, string] =
+          kpiDetail === "turnover"       ? ["ชื่อ-นามสกุล", "วันที่ลาออก", "เหตุผล"] :
+          kpiDetail === "satisfaction"    ? ["หลักสูตร", "วันที่อบรม", "คะแนนเฉลี่ย"] :
+          kpiDetail === "training_plan"   ? ["หลักสูตร", "วันที่อบรม", "สถานะ"] :
+          kpiDetail === "eval_coverage"   ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "สถานะประเมิน"] :
+          kpiDetail === "orientation"     ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "สถานะปฐมนิเทศ"] :
+                                             ["ชื่อ-นามสกุล", "วันที่อนุมัติ", "ผลการประเมิน"];
+
+        return (
+          <div onClick={e => { if (e.target === e.currentTarget) setKpiDetail(null); }}
+            style={{ position: "fixed", inset: 0, background: "rgba(10,22,56,.55)",
+              display: "flex", alignItems: "center", justifyContent: "center", zIndex: 200, padding: 20 }}>
+            <div style={{ background: "#fff", borderRadius: 12, padding: 24, maxWidth: 620, width: "100%",
+              maxHeight: "84vh", display: "flex", flexDirection: "column",
+              border: "1px solid #c4cfee", borderTop: "4px solid #0038C6" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628" }}>{cfg.icon} {cfg.title}</div>
+                  <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{kpiData.period_label}</div>
+                </div>
+                <button onClick={() => setKpiDetail(null)}
+                  style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "#94a3b8", lineHeight: 1 }}>✕</button>
+              </div>
+              <div style={{ overflowY: "auto", marginTop: 12, marginBottom: 4, border: "1px solid #f0f5ff", borderRadius: 8 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead><tr>{headCols.map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
+                  <tbody>{rows}</tbody>
+                </table>
+              </div>
+              <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+                <a href={cfg.modulePath} style={{ padding: "9px 18px", borderRadius: 7, background: "#0038C6",
+                  color: "#fff", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>
+                  {cfg.moduleLabel}
+                </a>
               </div>
             </div>
           </div>
