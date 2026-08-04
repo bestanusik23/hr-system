@@ -175,11 +175,14 @@ function periodBounds(period: "month" | "year", value: string): { pStart: string
   if (!/^\d{4}-\d{2}$/.test(value)) return null;
   const [y, m] = value.split("-").map(Number);
   if (m < 1 || m > 12) return null;
-  const lastDay = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this month
   const MT = ["ม.ค.","ก.พ.","มี.ค.","เม.ย.","พ.ค.","มิ.ย.","ก.ค.","ส.ค.","ก.ย.","ต.ค.","พ.ย.","ธ.ค."];
+  // 26th cut-off, matching /api/manpower/summary and /api/manpower/snapshot: the
+  // "July" period runs 26 June – 25 July, not the plain calendar month.
+  const pStartDate = new Date(y, m - 2, 26);
+  const pEndDate   = new Date(y, m - 1, 25);
   return {
-    pStart: `${value}-01`,
-    pEnd: `${value}-${String(lastDay).padStart(2, "0")}`,
-    label: `${MT[m - 1]} ${y + 543}`,
+    pStart: pStartDate.toISOString().slice(0, 10),
+    pEnd:   pEndDate.toISOString().slice(0, 10),
+    label:  `${MT[m - 1]} ${y + 543}`,
   };
 }
