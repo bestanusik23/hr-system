@@ -19,13 +19,12 @@ function gradeFromScore(s: number) {
   if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
 }
 
-function workDuration(startDate: string | null): string {
-  if (!startDate) return "—";
-  const s = new Date(startDate);
-  const n = new Date();
-  const months = (n.getFullYear() - s.getFullYear()) * 12 + (n.getMonth() - s.getMonth());
-  const days = Math.abs(n.getDate() - s.getDate());
-  return `${months} เดือน ${days} วัน`;
+// Tenure shown on the form is the round's fixed day-count (start date → evaluation
+// due date), not the actual elapsed time at print time — round 1 always reads
+// "30 วัน", round 2 "60 วัน", round 3 "90 วัน", per the round the form is for.
+function roundTenure(round: number | null | undefined): string {
+  if (!round) return "—";
+  return `${round} วัน`;
 }
 
 function thaiDate(d: string | null | unknown): string {
@@ -193,7 +192,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
       <td style="font-weight:700">วันที่เริ่มงาน</td>
       <td style="border-bottom:1px solid #000">${thaiDate(ev.start_date)}</td>
       <td style="font-weight:700;padding-left:14px">อายุงาน</td>
-      <td style="border-bottom:1px solid #000">${workDuration(ev.start_date as string | null)}</td>
+      <td style="border-bottom:1px solid #000">${roundTenure(round)}</td>
     </tr>
   </table>
 
