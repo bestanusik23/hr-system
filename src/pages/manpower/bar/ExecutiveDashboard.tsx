@@ -8,7 +8,7 @@ import {
 /**
  * Executive Dashboard — ภาพรวมสำหรับผู้บริหาร
  * ตัวเลขทุกตัวคำนวณจากข้อมูลจริงในระบบ: Approved Bar (dept_bar_config / manpower_plan),
- * Actual Bar (ไฟล์กะที่นำเข้า), OT Cost (workforce_ot_entries), OT Hours + เหตุผล (ot_approvals)
+ * Actual Bar (ไฟล์กะที่นำเข้า), OT Cost (workforce_ot_entries)
  */
 export default function ExecutiveDashboard({ month, onMonthChange }: {
   month: string; onMonthChange: (m: string) => void;
@@ -20,10 +20,13 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
   const overs    = withPlan.filter(r => r.variance > 0);
   const maxOtPerBar = Math.max(...rows.map(r => r.otPerBar), 0.01);
 
+  const totalHeadcount = rows.reduce((s, r) => s + r.headcount, 0);
+  const headcountPerBar = totals.actualBar > 0 ? totalHeadcount / totals.actualBar : 0;
+
   // เส้นอ้างอิงรายช่วงเวลา: Approved Bar ทั้งวัน ÷ 12 ช่วง (ยังไม่มีการกระจายแผนรายชั่วโมงในระบบ)
   const approvedPerSlot = totals.approvedBar / 12;
 
-  // ── ข้อมูลสำหรับ Section 5 (Trend) และ Section 6 (สถานะอนุมัติ OT) ──
+  // ── ข้อมูลสำหรับ Section 5 (Trend) ──
   const approvedTotal = useMemo(
     () => config.reduce((s, c) => s + (c.active !== 0 ? c.approved_bar : 0), 0) || totals.approvedBar,
     [config, totals.approvedBar],
@@ -71,8 +74,8 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
              foot={`${totals.variance > 0 ? "เกินแผน" : "ต่ำกว่าแผน"} ${fmt(Math.abs(totals.utilization - 100), 1)}%`} />
         <Kpi lbl="Bar Utilization" icon={<IcTarget />} val={fmt(totals.utilization, 1)} unit="%"
              cls={totals.utilization > 105 ? "red" : "green"} foot="Actual ÷ Approved" />
-        <Kpi lbl="OT Hours" icon={<IcClock />} val={fmt(totals.otHours, 0)} unit="ชม." cls="amber"
-             foot="จากคำขออนุมัติ OT ของเดือนนี้" />
+        <Kpi lbl="พนักงานต่อ Bar" icon={<IcRotate />} val={fmt(headcountPerBar, 2)} unit="คน/Bar"
+             foot={`รวม ${fmt(totalHeadcount, 0)} คนขึ้นเวรจริง — Bar ≠ หัวคน เพราะหมุนเวร`} />
         <Kpi lbl="OT Cost" icon={<IcMoney />} val={fmt(totals.otCost, 0)} unit="บาท" cls="amber"
              foot="ยอดที่บันทึกไว้ในระบบ (รายเดือน)" />
         <Kpi lbl="OT per Bar" icon={<IcSpark />} val={fmt(totals.otPerBar, 0)} unit="บาท/Bar" cls="amber"
@@ -110,16 +113,13 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
               <tr>
                 <th>แผนก</th><th style={{ textAlign: "left" }}>ประเภท</th>
                 <th>Approved</th><th>Actual</th><th>Variance</th><th>Utilization</th>
-                <th>OT (ชม.)</th><th>OT Cost</th><th>OT/Bar</th><th style={{ textAlign: "left" }}>สถานะ OT</th>
+                <th>OT Cost</th><th>OT/Bar</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => (
                 <tr key={r.name} className={r.variance > 0 && r.approvedBar > 0 ? "over" : ""}>
-                  <td title={r.otReason || undefined}>
-                    <span className="rank">{i + 1}</span>{r.name}
-                    {r.otReason && <span title={r.otReason} style={{ marginLeft: 5 }}>📝</span>}
-                  </td>
+                  <td><span className="rank">{i + 1}</span>{r.name}</td>
                   <td style={{ textAlign: "left" }}><TypeChip type={r.type} /></td>
                   <td className="num">{r.approvedBar > 0 ? fmt(r.approvedBar, 0) : "—"}</td>
                   <td className="num"><b>{r.hasShiftData ? fmt(r.actualBar, 1) : "—"}</b></td>
@@ -140,7 +140,6 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
                       </>
                     ) : "—"}
                   </td>
-                  <td className="num">{r.otHours > 0 ? fmt(r.otHours, 0) : "—"}</td>
                   <td className="num"><b>{r.otCost > 0 ? fmt(r.otCost, 0) : "—"}</b></td>
                   <td className="num">
                     {r.otPerBar > 0 ? (
@@ -153,7 +152,6 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
                       </>
                     ) : "—"}
                   </td>
-                  <td style={{ textAlign: "left" }}><StatusChip status={r.otStatus} /></td>
                 </tr>
               ))}
             </tbody>
@@ -165,10 +163,8 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
                 <td className="num"><span className={totals.variance > 0 ? "up" : "down"}>
                   {totals.variance > 0 ? "+" : ""}{fmt(totals.variance, 1)}</span></td>
                 <td className="num" style={{ color: utilColor(totals.utilization) }}>{fmt(totals.utilization, 0)}%</td>
-                <td className="num">{fmt(totals.otHours, 0)}</td>
                 <td className="num">{fmt(totals.otCost, 0)}</td>
                 <td className="num">{fmt(totals.otPerBar, 0)}</td>
-                <td />
               </tr>
             </tfoot>
           </table>
@@ -255,12 +251,12 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
         </div>
         <div className="card-body tbl-wrap">
           {totals.otCost === 0 ? (
-            <div className="empty">ยังไม่มียอด OT ของเดือนนี้ — บันทึกได้ที่แท็บ OT Approval หรือ Timeline &amp; นำเข้า Excel</div>
+            <div className="empty">ยังไม่มียอด OT ของเดือนนี้ — บันทึกได้ที่แท็บ Timeline &amp; นำเข้า Excel</div>
           ) : (
             <table className="dt">
               <thead>
                 <tr>
-                  <th>อันดับ</th><th>แผนก</th><th>OT Cost (บาท)</th><th>OT Hours (ชม.)</th><th>OT/Bar (บาท)</th>
+                  <th>อันดับ</th><th>แผนก</th><th>OT Cost (บาท)</th><th>OT/Bar (บาท)</th>
                 </tr>
               </thead>
               <tbody>
@@ -269,7 +265,6 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
                     <td><span className="rank" style={i < 3 ? { background: "#FDECEC", color: "#DC2626" } : undefined}>{i + 1}</span></td>
                     <td>{r.name}</td>
                     <td className="num"><b>{fmt(r.otCost, 0)}</b></td>
-                    <td className="num">{r.otHours > 0 ? fmt(r.otHours, 0) : "—"}</td>
                     <td className="num">
                       {r.otPerBar > 0 ? (
                         <>
@@ -300,16 +295,6 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
         </div>
         <div className="card-body">
           <TrendMini trend={trend} />
-        </div>
-      </div>
-
-      {/* ── 6. สถานะการอนุมัติ OT เดือนนี้ ── */}
-      <div className="card">
-        <div className="card-head">
-          <h3><span className="n">6</span>สถานะอนุมัติ OT เดือนนี้</h3>
-        </div>
-        <div className="card-body">
-          <ApprovalDonut rows={rows} />
         </div>
       </div>
 
@@ -449,66 +434,6 @@ function TrendMini({ trend }: { trend: TrendPoint[] }) {
   );
 }
 
-// ─── สถานะอนุมัติ OT แบบโดนัท: รออนุมัติ / อนุมัติแล้ว / ไม่อนุมัติ (จาก ot_approvals จริง) ──
-function ApprovalDonut({ rows }: { rows: DeptBarRow[] }) {
-  const pending  = rows.filter(r => r.otStatus === "pending").reduce((s, r) => s + r.otHours, 0);
-  const approved = rows.filter(r => r.otStatus === "approved").reduce((s, r) => s + r.otHours, 0);
-  const rejected = rows.filter(r => r.otStatus === "rejected").reduce((s, r) => s + r.otHours, 0);
-  const total = pending + approved + rejected;
-
-  const parts = [
-    { n: "รออนุมัติ", v: pending, c: "#DC2626" },
-    { n: "อนุมัติแล้ว", v: approved, c: "#F0B429" },
-    { n: "ไม่อนุมัติ", v: rejected, c: "#94A3B8" },
-  ];
-
-  const R = 56, r = 39, cx = 70, cy = 70;
-  let ang = -Math.PI / 2;
-  const arcs = total > 0 ? parts.filter(p => p.v > 0).map(p => {
-    const a2 = ang + (p.v / total) * Math.PI * 2;
-    const large = a2 - ang > Math.PI ? 1 : 0;
-    const P = (rr: number, a: number): [number, number] => [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
-    const [x1, y1] = P(R, ang), [x2, y2] = P(R, a2), [x3, y3] = P(r, a2), [x4, y4] = P(r, ang);
-    const d = `M${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${x3} ${y3} A${r} ${r} 0 ${large} 0 ${x4} ${y4} Z`;
-    ang = a2;
-    return <path key={p.n} d={d} fill={p.c} />;
-  }) : null;
-
-  const pendingList = rows.filter(r => r.otStatus === "pending").sort((a, b) => b.otHours - a.otHours).slice(0, 4);
-
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <svg width={140} height={140} viewBox="0 0 140 140">
-          {total > 0 ? arcs : <circle cx={cx} cy={cy} r={R} fill="#EDF1F8" />}
-          <text x={cx} y={cy - 3} textAnchor="middle" fontSize={19} fontWeight={800} fill="#152A4E" className="num">{fmt(total, 0)}</text>
-          <text x={cx} y={cy + 13} textAnchor="middle" fontSize={9} fill="#6B7A99">ชม. ที่ยื่นคำขอ</text>
-        </svg>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
-        {parts.map(p => (
-          <div key={p.n} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, background: p.c, flexShrink: 0 }} />
-            <span style={{ flex: 1 }}>{p.n}</span>
-            <b className="num">{fmt(p.v, 0)} ชม.</b>
-            <span style={{ color: "#6B7A99", width: 34, textAlign: "right" }}>{total > 0 ? fmt(p.v / total * 100, 0) : 0}%</span>
-          </div>
-        ))}
-      </div>
-      <div className="pending-box" style={{ marginTop: 10 }}>
-        <div className="hint" style={{ fontWeight: 700, marginBottom: 4 }}>แผนกที่รออนุมัติ OT สูงสุด</div>
-        {pendingList.length === 0
-          ? <div className="hint">ไม่มีรายการรออนุมัติ</div>
-          : pendingList.map((r, i) => (
-              <div key={r.name} className="pending-row">
-                <span>{i + 1}. {r.name}</span><b className="num">{fmt(r.otHours, 0)} ชม.</b>
-              </div>
-            ))}
-      </div>
-    </div>
-  );
-}
-
 // ─── ชิ้นส่วนย่อย ──────────────────────────────────────────────────────────────
 function Kpi({ lbl, val, unit, foot, cls = "", icon }: {
   lbl: string; val: ReactNode; unit: string; foot: string; cls?: string; icon: ReactNode;
@@ -528,21 +453,14 @@ const IcUsers  = () => <svg {...svgProps}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4
 const IcUser   = () => <svg {...svgProps}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
 const IcScale  = () => <svg {...svgProps}><path d="M12 3v18M5 7h14M7 7l-3 7h6zM17 7l3 7h-6z" /></svg>;
 const IcTarget = () => <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M9 12l2 2 4-5" /></svg>;
-const IcClock  = () => <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
 const IcMoney  = () => <svg {...svgProps}><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
 const IcSpark  = () => <svg {...svgProps}><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg>;
 const IcBuild  = () => <svg {...svgProps}><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5" /></svg>;
+const IcRotate = () => <svg {...svgProps}><path d="M21 12a9 9 0 11-3-6.7" /><path d="M21 3v6h-6" /></svg>;
 
 export function TypeChip({ type }: { type: string }) {
   const k = type === "Support" ? "support" : type === "Back Office" ? "back" : "service";
   return <span className={`chip ${k}`}>{type}</span>;
-}
-
-export function StatusChip({ status }: { status: string }) {
-  const label: Record<string, string> = {
-    none: "— ไม่มีคำขอ", pending: "รออนุมัติ", approved: "อนุมัติแล้ว", rejected: "ไม่อนุมัติ",
-  };
-  return <span className={`chip ${status}`}>{label[status] ?? status}</span>;
 }
 
 function heatColor(u: number): string {
@@ -580,7 +498,7 @@ function buildInsights(rows: DeptBarRow[], t: BarTotals): Insight[] {
     out.push({
       level: "crit",
       title: `${w.name} ใช้ Bar เกินแผน ${fmt(w.utilization - 100, 0)}%`,
-      detail: `แผน ${fmt(w.approvedBar, 0)} Bar · ใช้จริง ${fmt(w.actualBar, 1)} Bar (+${fmt(w.variance, 1)})${w.otReason ? ` — ${w.otReason}` : " — ยังไม่ได้ระบุเหตุผล OT"}`,
+      detail: `แผน ${fmt(w.approvedBar, 0)} Bar · ใช้จริง ${fmt(w.actualBar, 1)} Bar (+${fmt(w.variance, 1)})`,
     });
   } else {
     out.push({
@@ -615,15 +533,6 @@ function buildInsights(rows: DeptBarRow[], t: BarTotals): Insight[] {
       level: "ok",
       title: `${u.name} ใช้ Bar ต่ำกว่าแผน ${fmt(100 - u.utilization, 0)}%`,
       detail: `เหลือกำลังคนว่าง ${fmt(-u.variance, 1)} Bar — พิจารณาเกลี่ยไปช่วยแผนกที่เกินแผนแทนการอนุมัติ OT`,
-    });
-  }
-
-  const pending = rows.filter(r => r.otStatus === "pending");
-  if (pending.length > 0) {
-    out.push({
-      level: "warn",
-      title: `มีคำขออนุมัติ OT ค้างอยู่ ${pending.length} แผนก`,
-      detail: `รวม ${fmt(pending.reduce((s, r) => s + r.otHours, 0), 0)} ชม. — ${pending.slice(0, 3).map(r => r.name).join(" · ")}`,
     });
   }
 

@@ -94,7 +94,7 @@ export const BAR_CSS = `
 #barmgr .msg-err{color:var(--b-red);font-size:11.5px;font-weight:600;}
 
 #barmgr .grid-a{display:grid;grid-template-columns:1.15fr 1.2fr 1fr;gap:14px;margin-bottom:14px;align-items:start;}
-#barmgr .grid-b{display:grid;grid-template-columns:1fr 1.3fr .95fr;gap:14px;margin-bottom:14px;align-items:start;}
+#barmgr .grid-b{display:grid;grid-template-columns:1fr 1.5fr;gap:14px;margin-bottom:14px;align-items:start;}
 #barmgr .grid-a>.card,#barmgr .grid-b>.card{margin-bottom:0;height:100%;}
 #barmgr .pending-box{border:1px solid var(--b-line);border-radius:10px;padding:9px 11px;background:#FAFBFE;}
 #barmgr .pending-row{display:flex;justify-content:space-between;gap:8px;font-size:11.8px;padding:5px 0;border-bottom:1px dashed var(--b-line);}

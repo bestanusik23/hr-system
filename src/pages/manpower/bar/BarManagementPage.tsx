@@ -4,7 +4,6 @@ import WorkforceTimeline from "../WorkforceTimeline";
 import ExecutiveDashboard from "./ExecutiveDashboard";
 import BarSetup from "./BarSetup";
 import ShiftStandard from "./ShiftStandard";
-import OtApproval from "./OtApproval";
 import BarAnalytics from "./BarAnalytics";
 import { BAR_CSS } from "./barStyles";
 import { currentPayrollMonthKey } from "./barMath";
@@ -14,13 +13,12 @@ import { currentPayrollMonthKey } from "./barMath";
  * (เดิมชื่อ "Workforce Timeline" ซึ่งตอนนี้ย้ายมาเป็นแท็บสุดท้ายและยังทำงานเหมือนเดิมทุกอย่าง
  *  รวมถึงการนำเข้า Excel กะ / Excel ค่าเวร และการกรอกยอด OT รายเดือน)
  */
-type Tab = "dashboard" | "bars" | "shift" | "ot" | "analytics" | "timeline";
+type Tab = "dashboard" | "bars" | "shift" | "analytics" | "timeline";
 
 const TABS: { key: Tab; icon: string; label: string; desc: string }[] = [
   { key: "dashboard", icon: "📊", label: "Executive Dashboard", desc: "ภาพรวมสำหรับผู้บริหาร" },
   { key: "bars",      icon: "🎚️", label: "Bar Management",      desc: "กำหนด Approved Bar ของแต่ละแผนก" },
   { key: "shift",     icon: "⏱️", label: "Shift Standard",      desc: "มาตรฐาน 8 / 10 / 12 ชม. ของแต่ละตำแหน่ง" },
-  { key: "ot",        icon: "✅", label: "OT Approval",         desc: "อนุมัติ OT เมื่อใช้ Bar เกินแผน" },
   { key: "analytics", icon: "📈", label: "Bar Analytics",       desc: "แนวโน้มและประสิทธิภาพการใช้ Bar" },
   { key: "timeline",  icon: "🗓️", label: "Timeline & นำเข้า Excel", desc: "ตารางกะรายวัน/รายเดือน + นำเข้าไฟล์ (ของเดิม)" },
 ];
@@ -85,7 +83,6 @@ export default function BarManagementPage() {
       {tab === "dashboard" && <ExecutiveDashboard month={month} onMonthChange={setMonth} />}
       {tab === "bars"      && <BarSetup month={month} />}
       {tab === "shift"     && <ShiftStandard />}
-      {tab === "ot"        && <OtApproval month={month} onMonthChange={setMonth} />}
       {tab === "analytics" && <BarAnalytics month={month} />}
       {tab === "timeline"  && <WorkforceTimeline />}
     </div>
