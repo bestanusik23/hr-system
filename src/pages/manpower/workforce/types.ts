@@ -66,6 +66,15 @@ export interface DeptTimelineItem {
   plan: number;
   filled: number;
   blocks: ShiftBlock[];   // variable-length list of actual time periods worked in this department
+  otPaid?: number;        // ยอด OT ที่จ่ายจริง (บาท) — filled in by WorkforceTimeline from workforce_ot_entries, not the engine
+}
+
+/** One department's OT amount for a payroll month, entered manually by HR (workforce_ot_entries) */
+export interface OtEntry {
+  month: string;      // "MM/YYYY" Thai BE, e.g. "07/2569"
+  deptName: string;
+  amountThb: number;
+  note: string;
 }
 
 export interface ShiftSummaryItem {

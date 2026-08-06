@@ -56,6 +56,7 @@ export function formatThaiDate(d: string): string {
 export async function importWorkforceFile(
   file: File,
   targetDate?: string,
+  planByDept?: Map<string, number>,
 ): Promise<{ parsed: ParseResult; data: DashboardData }> {
   const parsed = await parseWorkbook(file);
 
@@ -64,13 +65,13 @@ export async function importWorkforceFile(
   const date  = targetDate
     ?? (parsed.availableDates.includes(today) ? today : parsed.availableDates[parsed.availableDates.length - 1] ?? today);
 
-  const data = calculateDashboardData(parsed, date);
+  const data = calculateDashboardData(parsed, date, planByDept);
   return { parsed, data };
 }
 
 /** Recalculate dashboard when the user changes the target date */
-export function switchDate(parsed: ParseResult, targetDate: string): DashboardData {
-  return calculateDashboardData(parsed, targetDate);
+export function switchDate(parsed: ParseResult, targetDate: string, planByDept?: Map<string, number>): DashboardData {
+  return calculateDashboardData(parsed, targetDate, planByDept);
 }
 
 /**
@@ -126,7 +127,7 @@ export function getAvailableMonths(parsed: ParseResult): MonthOption[] {
 }
 
 /** Computes the monthly aggregate for one MonthOption (from getAvailableMonths). */
-export function calculateMonthly(parsed: ParseResult, month: MonthOption): MonthlySummary {
-  const summary = calculateMonthlySummary(parsed, month.dates);
+export function calculateMonthly(parsed: ParseResult, month: MonthOption, planByDept?: Map<string, number>): MonthlySummary {
+  const summary = calculateMonthlySummary(parsed, month.dates, planByDept);
   return { ...summary, monthLabel: month.label };
 }

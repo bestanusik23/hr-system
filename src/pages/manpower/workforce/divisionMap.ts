@@ -62,3 +62,7 @@ export function getDivisionForDept(deptName: string): string {
   const divId = DEPT_TO_DIVISION[deptName.trim()];
   return divId !== undefined ? (DIVISION_NAMES[divId] ?? OTHER_DIVISION) : OTHER_DIVISION;
 }
+
+/** Every known payroll department name, deduplicated (both spelling variants of the same dept collapse to one) */
+export const PAYROLL_DEPT_NAMES: string[] = Array.from(new Set(Object.keys(DEPT_TO_DIVISION)))
+  .filter(n => n !== "ต้อนรับเเละบริการ"); // duplicate spelling of "ต้อนรับและบริการ"

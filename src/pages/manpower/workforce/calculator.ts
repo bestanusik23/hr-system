@@ -189,6 +189,7 @@ function toDepartmentTimeline(
   active: ActiveEntry[],
   registry: Map<string, { startMin: number; endMin: number; color: string }>,
   divisor: number, // 1 for daily; days-in-month for monthly averages
+  planByDept?: Map<string, number>, // Bar Chart plan headcount per payroll dept name, from planMap.ts
 ): DeptTimelineItem[] {
   type DeptAgg = { filled: number; blocks: Map<string, number> };
   const deptMap = new Map<string, DeptAgg>();
@@ -222,10 +223,11 @@ function toDepartmentTimeline(
         })
         .sort((a, b) => a.startMin - b.startMin);
 
+      const deptName = deptNameMap.get(code) ?? `แผนก ${code}`;
       return {
-        name:   deptNameMap.get(code) ?? `แผนก ${code}`,
+        name:   deptName,
         sub:    "",
-        plan:   0,   // not available in payroll export
+        plan:   planByDept?.get(deptName) ?? 0,
         filled: divisor > 1 ? Math.round(d.filled / divisor) : d.filled,
         blocks,
       };
@@ -281,7 +283,7 @@ export function calculateShiftSummaryForDept(
  * @param parsed     Output from parseWorkbook()
  * @param targetDate "DD/MM/YYYY" Thai BE date to calculate for
  */
-export function calculateDashboardData(parsed: ParseResult, targetDate: string): DashboardData {
+export function calculateDashboardData(parsed: ParseResult, targetDate: string, planByDept?: Map<string, number>): DashboardData {
   const { employees } = parsed;
 
   // ── 1. Filter: employees who are actively working on targetDate ──────────────
@@ -317,7 +319,7 @@ export function calculateDashboardData(parsed: ParseResult, targetDate: string):
 
   // ── 4. Range registry + department timeline (Gantt data) ─────────────────────
   const registry = buildRangeRegistry(active);
-  const departmentTimeline = toDepartmentTimeline(active, registry, 1);
+  const departmentTimeline = toDepartmentTimeline(active, registry, 1, planByDept);
 
   // ── 5. Shift summary table (by actual time period) ───────────────────────────
   const shiftSummary = toRangeSummary(active, registry);
@@ -353,7 +355,7 @@ export function calculateDashboardData(parsed: ParseResult, targetDate: string):
  *
  * @param dates All "DD/MM/YYYY" dates belonging to the payroll cycle being summarized
  */
-export function calculateMonthlySummary(parsed: ParseResult, dates: string[]): MonthlySummary {
+export function calculateMonthlySummary(parsed: ParseResult, dates: string[], planByDept?: Map<string, number>): MonthlySummary {
   const daysInRange = dates.length;
   const active = getActiveEntries(parsed, dates);
 
@@ -375,7 +377,7 @@ export function calculateMonthlySummary(parsed: ParseResult, dates: string[]): M
   const shiftSummary = toRangeSummary(active, registry);
 
   // Department totals: person-days (for ranking/reporting) + avg/day (to reuse the Gantt panel).
-  const departmentTimeline = toDepartmentTimeline(active, registry, daysInRange || 1);
+  const departmentTimeline = toDepartmentTimeline(active, registry, daysInRange || 1, planByDept);
 
   type DeptTotal = { name: string; total: number };
   const deptTotals = new Map<string, DeptTotal>();

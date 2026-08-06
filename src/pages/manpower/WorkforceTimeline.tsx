@@ -2,8 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail } from "./workforce/api";
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry } from "./workforce/api";
-import { getDivisionForDept } from "./workforce/divisionMap";
+import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
+import { getPlanByPayrollDept } from "./workforce/planMap";
 import { saveImportLocal, loadImportLocal, saveImportRemote, loadImportRemote } from "./workforce/persist";
 import type { StoredImport } from "./workforce/persist";
 
@@ -87,6 +88,17 @@ function getNow() {
   const min = d.getHours() * 60 + d.getMinutes();
   return { str: `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`, min };
 }
+
+/** "MM/YYYY" (Thai BE) for the currently-active payroll cycle — 26th cut-off, same as getAvailableMonths() */
+function currentPayrollMonthKey(): string {
+  const d = new Date();
+  let mon = d.getMonth() + 1;
+  let yearBE = d.getFullYear() + 543;
+  if (d.getDate() >= 26) { mon += 1; if (mon > 12) { mon = 1; yearBE += 1; } }
+  return `${String(mon).padStart(2, "0")}/${yearBE}`;
+}
+
+interface OtEntryRow { amount_thb: number; note: string; updated_by: string | null; updated_at: string }
 
 // ─── Scoped CSS ───────────────────────────────────────────────────────────────
 const CSS = `
@@ -224,11 +236,72 @@ export default function WorkforceTimeline() {
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
   const [nowClick, setNowClick] = useState<{ x: number; y: number; entries: CurrentStaffEntry[]; date: string } | null>(null);
+  const [planByDept, setPlanByDept] = useState<Map<string, number>>(new Map());
+
+  // OT entry state — independent of the shift-timeline import (per plan: OT is
+  // compared against the Bar Chart without needing the same time window).
+  const [otMonth, setOtMonth]     = useState(currentPayrollMonthKey);
+  const [otEntries, setOtEntries] = useState<Record<string, OtEntryRow>>({});
+  const [otDrafts, setOtDrafts]   = useState<Record<string, string>>({});
+  const [otSaving, setOtSaving]   = useState<string | null>(null);
+  const [otMsg, setOtMsg]         = useState<Record<string, string>>({});
+  const [otLoading, setOtLoading] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setNow(getNow()), 60_000);
     return () => clearInterval(id);
   }, []);
+
+  // Bar Chart plan headcount per department (from manpower_plan) — fetched once,
+  // used to fill in DeptTimelineItem.plan wherever the engine builds it.
+  useEffect(() => {
+    getPlanByPayrollDept().then(setPlanByDept).catch(() => {});
+  }, []);
+
+  // Load saved OT amounts whenever the selected month changes
+  useEffect(() => {
+    setOtLoading(true);
+    fetch(`/api/manpower/ot-entries?month=${encodeURIComponent(otMonth)}`)
+      .then(r => r.json())
+      .then((d: { ok: boolean; entries?: (OtEntryRow & { dept_name: string })[] }) => {
+        const map: Record<string, OtEntryRow> = {};
+        const drafts: Record<string, string> = {};
+        (d.entries ?? []).forEach(e => {
+          map[e.dept_name] = e;
+          drafts[e.dept_name] = String(e.amount_thb);
+        });
+        setOtEntries(map);
+        setOtDrafts(drafts);
+      })
+      .finally(() => setOtLoading(false));
+  }, [otMonth]);
+
+  async function saveOtEntry(deptName: string) {
+    const raw = (otDrafts[deptName] ?? "").trim();
+    const amount = raw === "" ? 0 : Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setOtMsg(prev => ({ ...prev, [deptName]: "❌ ตัวเลขไม่ถูกต้อง" }));
+      return;
+    }
+    setOtSaving(deptName);
+    try {
+      const r = await fetch("/api/manpower/ot-entries", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ month: otMonth, dept_name: deptName, amount_thb: amount }),
+      });
+      const d = await r.json() as { ok: boolean; error?: string };
+      if (d.ok) {
+        setOtEntries(prev => ({ ...prev, [deptName]: { amount_thb: amount, note: "", updated_by: null, updated_at: new Date().toISOString() } }));
+        setOtMsg(prev => ({ ...prev, [deptName]: "✅ บันทึกแล้ว" }));
+      } else {
+        setOtMsg(prev => ({ ...prev, [deptName]: `❌ ${d.error}` }));
+      }
+    } catch {
+      setOtMsg(prev => ({ ...prev, [deptName]: "❌ เกิดข้อผิดพลาด" }));
+    }
+    setOtSaving(null);
+    setTimeout(() => setOtMsg(prev => { const n = { ...prev }; delete n[deptName]; return n; }), 3000);
+  }
 
   // Hydrate from the last imported file on mount, so the dashboard doesn't reset
   // to the static example whenever this component remounts — e.g. navigating
@@ -258,13 +331,13 @@ export default function WorkforceTimeline() {
     });
   }, []);
 
-  // Recalculate when user changes the target date
+  // Recalculate when user changes the target date (or plan data finishes loading)
   useEffect(() => {
     if (!parsed || !targetDate) return;
-    const data = switchDate(parsed, targetDate);
+    const data = switchDate(parsed, targetDate, planByDept);
     setDashData(data);
     setDepts(data.departmentTimeline);
-  }, [parsed, targetDate]);
+  }, [parsed, targetDate, planByDept]);
 
   const monthOptions: MonthOption[] = parsed ? getAvailableMonths(parsed) : [];
   const selectedMonth = monthOptions.find(m => m.key === selectedMonthKey) ?? monthOptions[monthOptions.length - 1] ?? null;
@@ -273,8 +346,8 @@ export default function WorkforceTimeline() {
   // Recalculate the monthly aggregate when the user switches to "รายเดือน" or changes the month
   useEffect(() => {
     if (!parsed || viewMode !== "monthly" || !selectedMonth) { setMonthlySummary(null); return; }
-    setMonthlySummary(calculateMonthly(parsed, selectedMonth));
-  }, [parsed, viewMode, selectedMonth?.key]);
+    setMonthlySummary(calculateMonthly(parsed, selectedMonth, planByDept));
+  }, [parsed, viewMode, selectedMonth?.key, planByDept]);
 
   // Dates in scope for the hourly chart / shift summary / department filter:
   // one day in "รายวัน" mode, the whole payroll cycle's dates in "รายเดือน" mode.
@@ -403,7 +476,7 @@ export default function WorkforceTimeline() {
     setImportErr(null);
     setSyncWarning(null);
     try {
-      const { parsed: p, data } = await importWorkforceFile(file);
+      const { parsed: p, data } = await importWorkforceFile(file, undefined, planByDept);
       const importedAtStr = new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
       setParsed(p);
       setTargetDate(data.metadata.targetDate);
@@ -650,6 +723,90 @@ export default function WorkforceTimeline() {
           </div>
         </div>
       </div>
+
+      {/* ── OT vs Bar Chart panel ── */}
+      {(() => {
+        const filledByDept = new Map(displayDepts.map(d => [d.name, d.filled]));
+        const otTotal = PAYROLL_DEPT_NAMES.reduce((s, n) => s + (otEntries[n]?.amount_thb ?? 0), 0);
+        const rows = [...PAYROLL_DEPT_NAMES].sort((a, b) => a.localeCompare(b, "th"));
+
+        return (
+          <div className="hrwt-panel">
+            <div className="hrwt-panel-head">
+              <h3>💰 ยอด OT ที่จ่ายจริง เทียบกับ Bar Chart (อัตราตั้งไว้)</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <label style={{ fontSize: 12.5, color: "#6b7794", fontWeight: 600 }}>เดือน (MM/YYYY):</label>
+                <input value={otMonth} onChange={e => setOtMonth(e.target.value)}
+                  placeholder="07/2569" className="hrwt-date-sel" style={{ width: 90 }} />
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0038C6" }}>
+                  รวม {otTotal.toLocaleString("th-TH")} บาท
+                </div>
+              </div>
+            </div>
+            <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8" }}>
+              กรอกยอด OT ที่จ่ายจริงรายแผนกด้วยตนเองทุกเดือน (ไม่ผูกช่วงเวลากับตารางกะด้านบน) —
+              แถวที่ขึ้น ⚠ คืออัตรากำลังยังขาด (แผน &gt; ปฏิบัติงานจริง) และมีการจ่าย OT ในเดือนนี้
+            </p>
+            <div className="hrwt-tbl-wrap" style={{ maxHeight: 420, padding: "0 18px 16px" }}>
+              <table className="hrwt-tbl">
+                <thead>
+                  <tr>
+                    <th>แผนก</th>
+                    <th style={{ textAlign: "right" }}>แผน (Bar Chart)</th>
+                    <th style={{ textAlign: "right" }}>ปฏิบัติงานจริง</th>
+                    <th style={{ textAlign: "right" }}>ยอด OT จ่ายจริง (บาท)</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map(deptName => {
+                    const plan = planByDept.get(deptName) ?? 0;
+                    const filled = filledByDept.get(deptName);
+                    const shortfall = filled !== undefined ? Math.max(0, plan - filled) : 0;
+                    const otAmount = otEntries[deptName]?.amount_thb ?? 0;
+                    const flagged = shortfall > 0 && otAmount > 0;
+                    return (
+                      <tr key={deptName} style={flagged ? { background: "#fffbeb" } : undefined}>
+                        <td>
+                          {flagged && <span title={`อัตรากำลังขาด ${shortfall} คน`} style={{ marginRight: 6 }}>⚠️</span>}
+                          {deptName}
+                        </td>
+                        <td className="num">{plan || "—"}</td>
+                        <td className="num">{filled ?? "—"}</td>
+                        <td className="num">
+                          <input type="number" min={0} step={1}
+                            value={otDrafts[deptName] ?? ""}
+                            onChange={e => setOtDrafts(prev => ({ ...prev, [deptName]: e.target.value }))}
+                            placeholder="0"
+                            style={{ width: 100, padding: "5px 8px", borderRadius: 6, border: "1.5px solid #eaedf5",
+                              textAlign: "right", fontFamily: "inherit", fontSize: 12.5 }} />
+                        </td>
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <button onClick={() => saveOtEntry(deptName)} disabled={otSaving === deptName}
+                            style={{ padding: "5px 12px", borderRadius: 6, border: "none",
+                              background: otSaving === deptName ? "#c4cfee" : "#0038C6", color: "#fff",
+                              fontSize: 11.5, fontWeight: 700, cursor: otSaving === deptName ? "not-allowed" : "pointer",
+                              fontFamily: "inherit" }}>
+                            {otSaving === deptName ? "..." : "บันทึก"}
+                          </button>
+                          {otMsg[deptName] && (
+                            <span style={{ marginLeft: 8, fontSize: 11, color: otMsg[deptName].startsWith("✅") ? "#16a34a" : "#dc2626" }}>
+                              {otMsg[deptName]}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {otLoading && (
+                    <tr><td colSpan={5} style={{ textAlign: "center", color: "#94a3b8", padding: 16 }}>กำลังโหลด…</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Cascading ฝ่าย → แผนก filter for Hourly Chart / Shift Summary / Gantt ── */}
       {parsed && (
