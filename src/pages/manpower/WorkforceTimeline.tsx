@@ -814,16 +814,16 @@ export default function WorkforceTimeline() {
             <div className="hrwt-panel-head">
               <h3>💰 ยอด OT ที่จ่ายจริง เทียบกับ Bar Chart (อัตราตั้งไว้)</h3>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <input ref={otFileRef} type="file" accept=".xls,.xlsx" style={{ display: "none" }} onChange={handleOtImport} />
+                <button className="hrwt-btn hrwt-btn-outline" onClick={() => otFileRef.current?.click()}>
+                  📥 นำเข้า Excel ค่าเวร
+                </button>
                 <label style={{ fontSize: 12.5, color: "#6b7794", fontWeight: 600 }}>เดือน (MM/YYYY):</label>
                 <input value={otMonth} onChange={e => setOtMonth(e.target.value)}
                   placeholder="07/2569" className="hrwt-date-sel" style={{ width: 90 }} />
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0038C6" }}>
                   รวม {otTotal.toLocaleString("th-TH")} บาท
                 </div>
-                <input ref={otFileRef} type="file" accept=".xls,.xlsx" style={{ display: "none" }} onChange={handleOtImport} />
-                <button className="hrwt-btn hrwt-btn-outline" onClick={() => otFileRef.current?.click()}>
-                  📥 นำเข้า Excel ค่าเวร
-                </button>
               </div>
             </div>
             <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8" }}>
