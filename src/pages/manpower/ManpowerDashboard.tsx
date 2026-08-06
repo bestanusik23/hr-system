@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { daysUntil, formatThaiDate } from "../../utils/date";
 import { useAuth, hasRole } from "../../context/AuthContext";
 import ExitChecklistModal from "./ExitChecklistModal";
-import WorkforceTimeline from "./WorkforceTimeline";
 
 /* ── Inline Onboarding Checklist (renders inside the modal, no overlay) ── */
 interface CheckItem { key: string; label: string; completed: boolean; completed_at: string | null; note: string | null; }
@@ -879,9 +878,6 @@ export default function ManpowerDashboard() {
           )}
         </div>
       )}
-
-      {/* ── Workforce Timeline ────────────────────────────────────────── */}
-      {!histLoad && <WorkforceTimeline />}
 
       {/* ── Snapshot list (when historical) ───────────────────────────── */}
       {isHist && !histLoad && months.length > 0 && (
