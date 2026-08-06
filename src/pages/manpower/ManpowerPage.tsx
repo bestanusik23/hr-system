@@ -2,6 +2,7 @@ import { useState } from "react";
 import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 import ManpowerDashboard from "./ManpowerDashboard";
+import ManpowerTable from "./ManpowerTable";
 import MasterList from "./MasterList";
 import NewHireTab from "./NewHireTab";
 import ResignTab from "./ResignTab";
@@ -9,7 +10,7 @@ import LicensePlateTab from "./LicensePlateTab";
 import CardExportTab from "./CardExportTab";
 import ReportTab from "./ReportTab";
 
-type Tab = "dashboard" | "master" | "newhire" | "resign" | "license" | "cards" | "report";
+type Tab = "dashboard" | "excel" | "master" | "newhire" | "resign" | "license" | "cards" | "report";
 
 export default function ManpowerPage() {
   const { user } = useAuth();
@@ -20,6 +21,7 @@ export default function ManpowerPage() {
 
   const TABS: { key: Tab; icon: string; label: string; hidden?: boolean }[] = [
     { key: "dashboard", icon: "📊", label: "ภาพรวม Manpower" },
+    { key: "excel",     icon: "📋", label: "ตารางอัตรากำลัง" },
     { key: "master",    icon: "🗂️", label: "ทะเบียนพนักงาน", hidden: !canEdit },
     { key: "newhire",   icon: "➕", label: "เพิ่มพนักงานเริ่มงานใหม่", hidden: !canEdit },
     { key: "resign",    icon: "📤", label: "เพิ่มพนักงานลาออก",       hidden: !canEdit },
@@ -48,12 +50,13 @@ export default function ManpowerPage() {
       </div>
 
       {tab === "dashboard" && <ManpowerDashboard key={`d${bump}`} />}
+      {tab === "excel"     && <ManpowerTable key={`e${bump}`} />}
       {tab === "master"    && <MasterList onChanged={() => setBump(b => b + 1)} />}
       {tab === "newhire"   && (
-        <NewHireTab onSaved={() => { setBump(b => b + 1); setTab("master"); }} />
+        <NewHireTab onSaved={() => { setBump(b => b + 1); setTab("excel"); }} />
       )}
       {tab === "resign"    && (
-        <ResignTab onSaved={() => { setBump(b => b + 1); setTab("master"); }} />
+        <ResignTab onSaved={() => { setBump(b => b + 1); setTab("excel"); }} />
       )}
       {tab === "license"   && <LicensePlateTab />}
       {tab === "cards"     && <CardExportTab />}
