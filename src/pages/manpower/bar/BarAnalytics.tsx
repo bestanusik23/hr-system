@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { calculateMonthly } from "../workforce/api";
-import { useBarData, fetchOtMonthTotals, type OtMonthTotal } from "./barApi";
+import { useMemo } from "react";
+import { useBarData, useOtTrend } from "./barApi";
 import {
-  actualBarForDept, compareMonthKey, fmt, shortMonthLabel, utilColor,
+  fmt, shortMonthLabel, utilColor,
   DEPT_TYPES, type DeptType,
 } from "./barMath";
 
@@ -14,9 +13,6 @@ import {
  */
 export default function BarAnalytics({ month }: { month: string }) {
   const { rows, totals, standards, parsed, monthOptions, config } = useBarData(month);
-  const [otMonths, setOtMonths] = useState<OtMonthTotal[]>([]);
-
-  useEffect(() => { fetchOtMonthTotals().then(setOtMonths); }, [month]);
 
   // Approved Bar รวม ณ ปัจจุบัน — ใช้เป็นฐานเทียบทุกเดือน (ระบบเก็บค่าปัจจุบันค่าเดียว ไม่มีประวัติย้อนหลัง)
   const approvedTotal = useMemo(
@@ -24,32 +20,8 @@ export default function BarAnalytics({ month }: { month: string }) {
     [config, totals.approvedBar],
   );
 
-  /** รวมทุกเดือนที่มีข้อมูลอย่างน้อยหนึ่งอย่าง (ยอด OT หรือไฟล์กะ) */
-  const trend = useMemo(() => {
-    const otMap = new Map(otMonths.map(m => [m.month, m.total_thb]));
-    const keys = Array.from(new Set([...otMap.keys(), ...monthOptions.map(m => m.key)]))
-      .sort(compareMonthKey)
-      .slice(-12);
-
-    return keys.map(key => {
-      const opt = monthOptions.find(m => m.key === key);
-      let actualBar = 0;
-      if (parsed && opt) {
-        const depts = calculateMonthly(parsed, opt, new Map()).departmentTimeline;
-        actualBar = depts.reduce((s, d) => s + actualBarForDept(d, standards), 0);
-      }
-      const otCost = otMap.get(key) ?? 0;
-      return {
-        key,
-        label: shortMonthLabel(key),
-        otCost,
-        actualBar,
-        utilization: approvedTotal > 0 && actualBar > 0 ? (actualBar / approvedTotal) * 100 : 0,
-        otPerBar: actualBar > 0 ? otCost / actualBar : 0,
-        hasShift: actualBar > 0,
-      };
-    });
-  }, [otMonths, monthOptions, parsed, standards, approvedTotal]);
+  /** รวมทุกเดือนที่มีข้อมูลอย่างน้อยหนึ่งอย่าง (ยอด OT หรือไฟล์กะ) — hook เดียวกับ Executive Dashboard */
+  const trend = useOtTrend(month, parsed, standards, monthOptions, approvedTotal);
 
   const maxOt   = Math.max(...trend.map(t => t.otCost), 1);
   const withBar = trend.filter(t => t.hasShift);

@@ -15,7 +15,7 @@ import { loadImportLocal, loadImportRemote } from "../workforce/persist";
 import { getPlanByPayrollDept } from "../workforce/planMap";
 import { PAYROLL_DEPT_NAMES } from "../workforce/divisionMap";
 import {
-  actualBarForDept, slotBars, totalsOf, FALLBACK_STANDARDS,
+  actualBarForDept, slotBars, totalsOf, FALLBACK_STANDARDS, compareMonthKey, shortMonthLabel,
   type BarConfigRow, type DeptBarRow, type DeptType, type ShiftStandardRow,
 } from "./barMath";
 
@@ -244,4 +244,51 @@ export function useBarData(month: string): BarData {
     hasShiftData: shiftDepts !== null,
     loading, reload, parsed,
   };
+}
+
+// ─── แนวโน้มรายเดือน (ใช้ร่วมกันโดย Executive Dashboard และ Bar Analytics) ──────
+export interface TrendPoint {
+  key: string; label: string; otCost: number; actualBar: number;
+  utilization: number; otPerBar: number; hasShift: boolean;
+}
+
+/**
+ * รวมยอด OT รายเดือน (workforce_ot_entries) กับ Actual Bar ที่คำนวณจากไฟล์กะของเดือนนั้น
+ * รับค่าที่ useBarData ของผู้เรียกดึงมาแล้ว (parsed/standards/monthOptions/approvedTotal)
+ * เพื่อไม่ต้องดึงไฟล์กะซ้ำสองรอบ
+ */
+export function useOtTrend(
+  month: string,
+  parsed: ParseResult | null,
+  standards: ShiftStandardRow[],
+  monthOptions: MonthOption[],
+  approvedTotal: number,
+): TrendPoint[] {
+  const [otMonths, setOtMonths] = useState<OtMonthTotal[]>([]);
+  useEffect(() => { fetchOtMonthTotals().then(setOtMonths); }, [month]);
+
+  return useMemo(() => {
+    const otMap = new Map(otMonths.map(m => [m.month, m.total_thb]));
+    const keys = Array.from(new Set([...otMap.keys(), ...monthOptions.map(m => m.key)]))
+      .sort(compareMonthKey)
+      .slice(-12);
+
+    return keys.map(key => {
+      const opt = monthOptions.find(m => m.key === key);
+      let actualBar = 0;
+      if (parsed && opt) {
+        const depts = calculateMonthly(parsed, opt, new Map()).departmentTimeline;
+        actualBar = depts.reduce((s, d) => s + actualBarForDept(d, standards), 0);
+      }
+      const otCost = otMap.get(key) ?? 0;
+      return {
+        key,
+        label: shortMonthLabel(key),
+        otCost, actualBar,
+        utilization: approvedTotal > 0 && actualBar > 0 ? (actualBar / approvedTotal) * 100 : 0,
+        otPerBar: actualBar > 0 ? otCost / actualBar : 0,
+        hasShift: actualBar > 0,
+      };
+    });
+  }, [otMonths, monthOptions, parsed, standards, approvedTotal]);
 }

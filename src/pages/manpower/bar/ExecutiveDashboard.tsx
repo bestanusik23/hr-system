@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import type { ReactNode } from "react";
-import { useBarData } from "./barApi";
+import { useBarData, useOtTrend, type TrendPoint } from "./barApi";
 import {
   SLOT_LABELS, fmt, utilColor, shortMonthLabel, type BarTotals, type DeptBarRow,
 } from "./barMath";
@@ -13,7 +13,7 @@ import {
 export default function ExecutiveDashboard({ month, onMonthChange }: {
   month: string; onMonthChange: (m: string) => void;
 }) {
-  const { rows, totals, monthOptions, hasShiftData, loading } = useBarData(month);
+  const { rows, totals, monthOptions, hasShiftData, loading, parsed, standards, config } = useBarData(month);
 
   const insights = useMemo(() => buildInsights(rows, totals), [rows, totals]);
   const withPlan = rows.filter(r => r.approvedBar > 0);
@@ -22,6 +22,13 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
 
   // เส้นอ้างอิงรายช่วงเวลา: Approved Bar ทั้งวัน ÷ 12 ช่วง (ยังไม่มีการกระจายแผนรายชั่วโมงในระบบ)
   const approvedPerSlot = totals.approvedBar / 12;
+
+  // ── ข้อมูลสำหรับ Section 5 (Trend) และ Section 6 (สถานะอนุมัติ OT) ──
+  const approvedTotal = useMemo(
+    () => config.reduce((s, c) => s + (c.active !== 0 ? c.approved_bar : 0), 0) || totals.approvedBar,
+    [config, totals.approvedBar],
+  );
+  const trend = useOtTrend(month, parsed, standards, monthOptions, approvedTotal);
 
   return (
     <div>
@@ -87,6 +94,9 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
           ))}
         </div>
       </div>
+
+      {/* ── แถวที่ 1: สรุปรายแผนก / Timeline / Heat Map ── */}
+      <div className="grid-a">
 
       {/* ── 1. สรุปการใช้ Bar รายแผนก ── */}
       <div className="card">
@@ -185,7 +195,6 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
               <div className="hint" style={{ marginTop: 8 }}>
                 เส้นอ้างอิง = Approved Bar ทั้งวัน ({fmt(totals.approvedBar, 0)} Bar) หารเฉลี่ย 12 ช่วง = {fmt(approvedPerSlot, 2)} Bar/ช่วง —
                 ระบบยังไม่ได้เก็บการกระจายแผนกำลังคนรายชั่วโมง จึงใช้ค่าเฉลี่ยเป็นเส้นเทียบ
-                (ช่วงกลางคืนจึงมักต่ำกว่าเส้นโดยธรรมชาติ)
               </div>
             </>
           )}
@@ -233,6 +242,11 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
         </div>
       </div>
 
+      </div>{/* /grid-a */}
+
+      {/* ── แถวที่ 2: OT Analysis / Trend / สถานะอนุมัติ ── */}
+      <div className="grid-b">
+
       {/* ── 4. OT Analysis Top 10 ── */}
       <div className="card">
         <div className="card-head">
@@ -275,6 +289,32 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
         </div>
       </div>
 
+      {/* ── 5. แนวโน้ม (Trend) ย้อนหลัง 12 เดือน ── */}
+      <div className="card">
+        <div className="card-head">
+          <h3><span className="n">5</span>แนวโน้ม (Trend) ย้อนหลัง 12 เดือน</h3>
+          <div className="legend">
+            <span><i style={{ background: "#0B4FC7" }} />OT Cost</span>
+            <span><i style={{ background: "#E08C00" }} />Bar Utilization</span>
+          </div>
+        </div>
+        <div className="card-body">
+          <TrendMini trend={trend} />
+        </div>
+      </div>
+
+      {/* ── 6. สถานะการอนุมัติ OT เดือนนี้ ── */}
+      <div className="card">
+        <div className="card-head">
+          <h3><span className="n">6</span>สถานะอนุมัติ OT เดือนนี้</h3>
+        </div>
+        <div className="card-body">
+          <ApprovalDonut rows={rows} />
+        </div>
+      </div>
+
+      </div>{/* /grid-b */}
+
       <div className="hint" style={{ textAlign: "right", padding: "0 4px 8px" }}>
         1 Bar = 1 หน่วยกำลังคนมาตรฐานต่อวัน (8 ชม. = 1.00 · 10 ชม. = 1.25 · 12 ชม. = 1.50 Bar) ·
         Utilization = Actual ÷ Approved · OT/Bar = OT Cost ÷ Actual Bar · Variance = Actual − Approved ·
@@ -286,7 +326,7 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
 
 // ─── Timeline: กราฟแท่งคู่ (Approved/Actual) + เส้นประแสดงส่วนเกิน ───────────────
 function TimelineChart({ slotsActual, approvedPerSlot }: { slotsActual: number[]; approvedPerSlot: number }) {
-  const W = 720, H = 220, ml = 34, mr = 20, mt = 10, mb = 30;
+  const W = 560, H = 190, ml = 32, mr = 18, mt = 10, mb = 28;
   const iw = W - ml - mr, ih = H - mt - mb;
   const maxBar = Math.max(...slotsActual, approvedPerSlot, 0.1) * 1.18;
   const over = slotsActual.map(v => Math.max(0, v - approvedPerSlot));
@@ -362,6 +402,109 @@ function BandRow({ slotsActual, approvedPerSlot }: { slotsActual: number[]; appr
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── Trend แบบย่อ: แท่ง OT Cost 12 เดือน + ตัวเลข Utilization ใต้แท่ง ──────────
+function TrendMini({ trend }: { trend: TrendPoint[] }) {
+  if (trend.length === 0) {
+    return <div className="empty">ยังไม่มีข้อมูลย้อนหลัง — บันทึกยอด OT รายเดือนและนำเข้าไฟล์กะก่อน</div>;
+  }
+  const maxOt = Math.max(...trend.map(t => t.otCost), 1);
+  const avgOt = trend.reduce((s, t) => s + t.otCost, 0) / trend.length;
+  const withBar = trend.filter(t => t.hasShift);
+  const avgUtil = withBar.length ? withBar.reduce((s, t) => s + t.utilization, 0) / withBar.length : 0;
+
+  return (
+    <>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 150, padding: "10px 0 4px" }}>
+        {trend.map(t => (
+          <div key={t.key} style={{ flex: 1, display: "flex", flexDirection: "column",
+                                     alignItems: "center", justifyContent: "flex-end", height: "100%", gap: 2 }}>
+            <span style={{ fontSize: 8.5, fontWeight: 700, color: "#6B7A99" }}>
+              {t.otCost > 0 ? fmt(t.otCost / 1000, 0) + "K" : "—"}
+            </span>
+            <div title={`${t.label} — OT ${fmt(t.otCost, 0)} บาท${t.hasShift ? ` · Utilization ${fmt(t.utilization, 1)}%` : " · ไม่มีไฟล์กะ"}`}
+                 style={{ width: "68%", height: `${(t.otCost / maxOt) * 100}%`, minHeight: 2,
+                          borderRadius: "5px 5px 2px 2px", background: "linear-gradient(#26A9E0,#0B4FC7)" }} />
+            {t.hasShift && (
+              <span style={{ fontSize: 8, fontWeight: 700, color: utilColor(t.utilization) }}>{fmt(t.utilization, 0)}%</span>
+            )}
+            <span style={{ fontSize: 8, color: "#6B7A99", whiteSpace: "nowrap" }}>{t.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="trend-foot" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+        <div style={{ border: "1px solid var(--b-line)", borderRadius: 10, padding: "7px 9px", textAlign: "center", background: "#FAFBFE" }}>
+          <div className="hint">Avg OT Cost/เดือน</div>
+          <div className="num" style={{ fontSize: 15, fontWeight: 800 }}>{fmt(avgOt, 0)}</div>
+        </div>
+        <div style={{ border: "1px solid #F5DFAE", borderRadius: 10, padding: "7px 9px", textAlign: "center", background: "#FFF6E3" }}>
+          <div className="hint">Avg Bar Utilization</div>
+          <div className="num" style={{ fontSize: 15, fontWeight: 800, color: "#B8590A" }}>{fmt(avgUtil, 1)}%</div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── สถานะอนุมัติ OT แบบโดนัท: รออนุมัติ / อนุมัติแล้ว / ไม่อนุมัติ (จาก ot_approvals จริง) ──
+function ApprovalDonut({ rows }: { rows: DeptBarRow[] }) {
+  const pending  = rows.filter(r => r.otStatus === "pending").reduce((s, r) => s + r.otHours, 0);
+  const approved = rows.filter(r => r.otStatus === "approved").reduce((s, r) => s + r.otHours, 0);
+  const rejected = rows.filter(r => r.otStatus === "rejected").reduce((s, r) => s + r.otHours, 0);
+  const total = pending + approved + rejected;
+
+  const parts = [
+    { n: "รออนุมัติ", v: pending, c: "#DC2626" },
+    { n: "อนุมัติแล้ว", v: approved, c: "#F0B429" },
+    { n: "ไม่อนุมัติ", v: rejected, c: "#94A3B8" },
+  ];
+
+  const R = 56, r = 39, cx = 70, cy = 70;
+  let ang = -Math.PI / 2;
+  const arcs = total > 0 ? parts.filter(p => p.v > 0).map(p => {
+    const a2 = ang + (p.v / total) * Math.PI * 2;
+    const large = a2 - ang > Math.PI ? 1 : 0;
+    const P = (rr: number, a: number): [number, number] => [cx + rr * Math.cos(a), cy + rr * Math.sin(a)];
+    const [x1, y1] = P(R, ang), [x2, y2] = P(R, a2), [x3, y3] = P(r, a2), [x4, y4] = P(r, ang);
+    const d = `M${x1} ${y1} A${R} ${R} 0 ${large} 1 ${x2} ${y2} L${x3} ${y3} A${r} ${r} 0 ${large} 0 ${x4} ${y4} Z`;
+    ang = a2;
+    return <path key={p.n} d={d} fill={p.c} />;
+  }) : null;
+
+  const pendingList = rows.filter(r => r.otStatus === "pending").sort((a, b) => b.otHours - a.otHours).slice(0, 4);
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "center" }}>
+        <svg width={140} height={140} viewBox="0 0 140 140">
+          {total > 0 ? arcs : <circle cx={cx} cy={cy} r={R} fill="#EDF1F8" />}
+          <text x={cx} y={cy - 3} textAnchor="middle" fontSize={19} fontWeight={800} fill="#152A4E" className="num">{fmt(total, 0)}</text>
+          <text x={cx} y={cy + 13} textAnchor="middle" fontSize={9} fill="#6B7A99">ชม. ที่ยื่นคำขอ</text>
+        </svg>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 10 }}>
+        {parts.map(p => (
+          <div key={p.n} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: p.c, flexShrink: 0 }} />
+            <span style={{ flex: 1 }}>{p.n}</span>
+            <b className="num">{fmt(p.v, 0)} ชม.</b>
+            <span style={{ color: "#6B7A99", width: 34, textAlign: "right" }}>{total > 0 ? fmt(p.v / total * 100, 0) : 0}%</span>
+          </div>
+        ))}
+      </div>
+      <div className="pending-box" style={{ marginTop: 10 }}>
+        <div className="hint" style={{ fontWeight: 700, marginBottom: 4 }}>แผนกที่รออนุมัติ OT สูงสุด</div>
+        {pendingList.length === 0
+          ? <div className="hint">ไม่มีรายการรออนุมัติ</div>
+          : pendingList.map((r, i) => (
+              <div key={r.name} className="pending-row">
+                <span>{i + 1}. {r.name}</span><b className="num">{fmt(r.otHours, 0)} ชม.</b>
+              </div>
+            ))}
+      </div>
     </div>
   );
 }
