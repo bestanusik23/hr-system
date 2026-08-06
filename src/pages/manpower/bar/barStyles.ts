@@ -37,6 +37,12 @@ export const BAR_CSS = `
 #barmgr .kpi::after{content:'';position:absolute;inset:0 auto 0 0;width:4px;background:var(--b-blue);}
 #barmgr .kpi.green::after{background:var(--b-green);} #barmgr .kpi.red::after{background:var(--b-red);}
 #barmgr .kpi.amber::after{background:var(--b-amber);} #barmgr .kpi.violet::after{background:var(--b-violet);}
+#barmgr .kpi.with-icon::after{display:none;}
+#barmgr .kpi .ic{width:32px;height:32px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:9px;background:var(--b-blue-050);color:var(--b-blue);}
+#barmgr .kpi.green .ic{background:#E7F7EE;color:var(--b-green);}
+#barmgr .kpi.red .ic{background:#FDECEC;color:var(--b-red);}
+#barmgr .kpi.amber .ic{background:#FFF6E3;color:var(--b-amber);}
+#barmgr .kpi.violet .ic{background:#F1EFFC;color:var(--b-violet);}
 #barmgr .kpi .lbl{font-size:11.5px;color:var(--b-muted);font-weight:600;line-height:1.3;min-height:30px;}
 #barmgr .kpi .val{font-size:24px;font-weight:800;letter-spacing:-.6px;line-height:1.15;}
 #barmgr .kpi .val small{font-size:11.5px;font-weight:600;color:var(--b-muted);margin-left:4px;letter-spacing:0;}
@@ -60,6 +66,10 @@ export const BAR_CSS = `
 #barmgr .chip.none{background:#F1F4FA;color:var(--b-muted);}
 #barmgr .mini-bar{display:inline-block;width:44px;height:6px;border-radius:99px;background:#EDF1F8;overflow:hidden;vertical-align:middle;margin-right:6px;}
 #barmgr .mini-bar i{display:block;height:100%;border-radius:99px;}
+#barmgr .rank{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:5px;background:#F1F4FA;color:var(--b-muted);font-size:10px;font-weight:700;margin-right:6px;flex-shrink:0;}
+#barmgr .band-row{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px;}
+#barmgr .band{border-radius:10px;padding:7px 6px;text-align:center;font-size:10.5px;font-weight:700;line-height:1.4;}
+#barmgr .band small{display:block;font-weight:500;font-size:9.5px;opacity:.85;}
 
 #barmgr .insight{background:linear-gradient(100deg,#0A2C6B 0%,#0B4FC7 55%,#1470D8 100%);border-radius:16px;padding:15px 18px 17px;color:#fff;margin-bottom:14px;box-shadow:0 10px 30px rgba(17,40,90,.09);}
 #barmgr .insight h3{margin:0 0 12px;font-size:15px;font-weight:800;display:flex;align-items:center;gap:9px;flex-wrap:wrap;}

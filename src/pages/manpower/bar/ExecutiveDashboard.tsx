@@ -18,10 +18,10 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
   const insights = useMemo(() => buildInsights(rows, totals), [rows, totals]);
   const withPlan = rows.filter(r => r.approvedBar > 0);
   const overs    = withPlan.filter(r => r.variance > 0);
+  const maxOtPerBar = Math.max(...rows.map(r => r.otPerBar), 0.01);
 
   // เส้นอ้างอิงรายช่วงเวลา: Approved Bar ทั้งวัน ÷ 12 ช่วง (ยังไม่มีการกระจายแผนรายชั่วโมงในระบบ)
   const approvedPerSlot = totals.approvedBar / 12;
-  const maxSlot = Math.max(...totals.slotsActual, approvedPerSlot, 0.1);
 
   return (
     <div>
@@ -55,22 +55,22 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
 
       {/* ── KPI ── */}
       <div className="kpis">
-        <Kpi lbl="Approved Bar" val={fmt(totals.approvedBar, 0)} unit="Bar" foot="แผนกำลังคนที่อนุมัติต่อวัน" />
-        <Kpi lbl="Actual Bar" val={fmt(totals.actualBar, 1)} unit="Bar" foot="คำนวณจากกะที่ขึ้นจริง" cls="violet" />
-        <Kpi lbl="Variance" cls={totals.variance > 0 ? "red" : "green"}
+        <Kpi lbl="Approved Bar" icon={<IcUsers />} val={fmt(totals.approvedBar, 0)} unit="Bar" foot="แผนกำลังคนที่อนุมัติต่อวัน" />
+        <Kpi lbl="Actual Bar" icon={<IcUser />} val={fmt(totals.actualBar, 1)} unit="Bar" foot="คำนวณจากกะที่ขึ้นจริง" cls="violet" />
+        <Kpi lbl="Variance" icon={<IcScale />} cls={totals.variance > 0 ? "red" : "green"}
              val={<span className={totals.variance > 0 ? "up" : "down"}>
                {totals.variance > 0 ? "+" : ""}{fmt(totals.variance, 1)}</span>}
              unit="Bar"
              foot={`${totals.variance > 0 ? "เกินแผน" : "ต่ำกว่าแผน"} ${fmt(Math.abs(totals.utilization - 100), 1)}%`} />
-        <Kpi lbl="Bar Utilization" val={fmt(totals.utilization, 1)} unit="%" cls={totals.utilization > 105 ? "red" : "green"}
-             foot="Actual ÷ Approved" />
-        <Kpi lbl="OT Hours" val={fmt(totals.otHours, 0)} unit="ชม." cls="amber"
+        <Kpi lbl="Bar Utilization" icon={<IcTarget />} val={fmt(totals.utilization, 1)} unit="%"
+             cls={totals.utilization > 105 ? "red" : "green"} foot="Actual ÷ Approved" />
+        <Kpi lbl="OT Hours" icon={<IcClock />} val={fmt(totals.otHours, 0)} unit="ชม." cls="amber"
              foot="จากคำขออนุมัติ OT ของเดือนนี้" />
-        <Kpi lbl="OT Cost" val={fmt(totals.otCost, 0)} unit="บาท" cls="amber"
+        <Kpi lbl="OT Cost" icon={<IcMoney />} val={fmt(totals.otCost, 0)} unit="บาท" cls="amber"
              foot="ยอดที่บันทึกไว้ในระบบ (รายเดือน)" />
-        <Kpi lbl="OT per Bar" val={fmt(totals.otPerBar, 0)} unit="บาท/Bar" cls="amber"
+        <Kpi lbl="OT per Bar" icon={<IcSpark />} val={fmt(totals.otPerBar, 0)} unit="บาท/Bar" cls="amber"
              foot="OT Cost ÷ Actual Bar" />
-        <Kpi lbl="Departments Over Bar" val={fmt(totals.overCount, 0)} unit="แผนก"
+        <Kpi lbl="Departments Over Bar" icon={<IcBuild />} val={fmt(totals.overCount, 0)} unit="แผนก"
              cls={totals.overCount > 0 ? "red" : "green"}
              foot={`จาก ${withPlan.length} แผนกที่ตั้ง Approved Bar แล้ว`} />
       </div>
@@ -104,10 +104,10 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
+              {rows.map((r, i) => (
                 <tr key={r.name} className={r.variance > 0 && r.approvedBar > 0 ? "over" : ""}>
                   <td title={r.otReason || undefined}>
-                    {r.name}
+                    <span className="rank">{i + 1}</span>{r.name}
                     {r.otReason && <span title={r.otReason} style={{ marginLeft: 5 }}>📝</span>}
                   </td>
                   <td style={{ textAlign: "left" }}><TypeChip type={r.type} /></td>
@@ -132,7 +132,17 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
                   </td>
                   <td className="num">{r.otHours > 0 ? fmt(r.otHours, 0) : "—"}</td>
                   <td className="num"><b>{r.otCost > 0 ? fmt(r.otCost, 0) : "—"}</b></td>
-                  <td className="num">{r.otPerBar > 0 ? fmt(r.otPerBar, 0) : "—"}</td>
+                  <td className="num">
+                    {r.otPerBar > 0 ? (
+                      <>
+                        <span className="mini-bar">
+                          <i style={{ width: `${Math.min(100, r.otPerBar / maxOtPerBar * 100)}%`,
+                                     background: "linear-gradient(90deg,#F0797C,#DC2626)" }} />
+                        </span>
+                        {fmt(r.otPerBar, 0)}
+                      </>
+                    ) : "—"}
+                  </td>
                   <td style={{ textAlign: "left" }}><StatusChip status={r.otStatus} /></td>
                 </tr>
               ))}
@@ -160,9 +170,9 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
         <div className="card-head">
           <h3><span className="n">2</span>Timeline การใช้ Bar ตามช่วงเวลา (24 ชม.)</h3>
           <div className="legend">
+            <span><i style={{ background: "#C9D2E3" }} />Approved (เฉลี่ยต่อช่วง)</span>
             <span><i style={{ background: "#0B4FC7" }} />Actual Bar</span>
-            <span><i style={{ background: "#DC2626" }} />เกินเส้นอ้างอิง</span>
-            <span><i style={{ background: "#C9D2E3" }} />Approved เฉลี่ยต่อช่วง</span>
+            <span><i style={{ background: "#DC2626", height: 2, borderRadius: 1 }} />ส่วนที่เกินแผน</span>
           </div>
         </div>
         <div className="card-body">
@@ -170,22 +180,9 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
             <div className="empty">ยังไม่มีข้อมูลกะของเดือนนี้</div>
           ) : (
             <>
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 170, padding: "10px 0" }}>
-                {totals.slotsActual.map((v, i) => {
-                  const over = v > approvedPerSlot;
-                  return (
-                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, height: "100%", justifyContent: "flex-end", position: "relative" }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: over ? "#DC2626" : "#6B7A99" }}>{fmt(v, 1)}</span>
-                      <div title={`${SLOT_LABELS[i]} น. — ใช้จริง ${fmt(v, 2)} Bar / อ้างอิง ${fmt(approvedPerSlot, 2)} Bar`}
-                           style={{ width: "70%", height: `${(v / maxSlot) * 100}%`, minHeight: 2, borderRadius: "5px 5px 2px 2px",
-                                    background: over ? "linear-gradient(#F0797C,#DC2626)" : "linear-gradient(#26A9E0,#0B4FC7)" }} />
-                      <span style={{ fontSize: 8.5, color: "#6B7A99" }}>{SLOT_LABELS[i].split("-")[0]}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ position: "relative", height: 1, background: "#C9D2E3", marginTop: -34, marginBottom: 34 }} />
-              <div className="hint">
+              <TimelineChart slotsActual={totals.slotsActual} approvedPerSlot={approvedPerSlot} />
+              <BandRow slotsActual={totals.slotsActual} approvedPerSlot={approvedPerSlot} />
+              <div className="hint" style={{ marginTop: 8 }}>
                 เส้นอ้างอิง = Approved Bar ทั้งวัน ({fmt(totals.approvedBar, 0)} Bar) หารเฉลี่ย 12 ช่วง = {fmt(approvedPerSlot, 2)} Bar/ช่วง —
                 ระบบยังไม่ได้เก็บการกระจายแผนกำลังคนรายชั่วโมง จึงใช้ค่าเฉลี่ยเป็นเส้นเทียบ
                 (ช่วงกลางคืนจึงมักต่ำกว่าเส้นโดยธรรมชาติ)
@@ -239,37 +236,41 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
       {/* ── 4. OT Analysis Top 10 ── */}
       <div className="card">
         <div className="card-head">
-          <h3><span className="n">4</span>OT Analysis — Top 10 แผนกที่มี OT Cost สูงสุด</h3>
+          <h3><span className="n">4</span>OT Analysis (Top 10 แผนก)</h3>
+          <span className="hint">เรียงจาก OT Cost สูงสุด</span>
         </div>
-        <div className="card-body">
+        <div className="card-body tbl-wrap">
           {totals.otCost === 0 ? (
             <div className="empty">ยังไม่มียอด OT ของเดือนนี้ — บันทึกได้ที่แท็บ OT Approval หรือ Timeline &amp; นำเข้า Excel</div>
           ) : (
-            <div>
-              {rows.filter(r => r.otCost > 0).slice(0, 10).map((r, i) => {
-                const max = rows[0]?.otCost || 1;
-                return (
-                  <div key={r.name} style={{ display: "grid", gridTemplateColumns: "22px 1fr 130px", gap: 8,
-                                             alignItems: "center", padding: "5px 0", borderBottom: "1px solid #F4F7FC" }}>
-                    <span style={{ fontSize: 10.5, fontWeight: 700, color: i < 3 ? "#DC2626" : "#6B7A99" }}>{i + 1}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</div>
-                      <div style={{ height: 7, background: "#F1F4FA", borderRadius: 99, overflow: "hidden", marginTop: 4 }}>
-                        <div style={{ height: "100%", width: `${(r.otCost / max) * 100}%`, borderRadius: 99,
-                                      background: "linear-gradient(90deg,#F0797C,#DC2626)" }} />
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <b className="num" style={{ fontSize: 12.5 }}>{fmt(r.otCost, 0)} บาท</b>
-                      <div className="hint">
-                        {r.otHours > 0 ? `${fmt(r.otHours, 0)} ชม. · ` : ""}
-                        {r.otPerBar > 0 ? `${fmt(r.otPerBar, 0)} บาท/Bar` : "ยังไม่มี Actual Bar"}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <table className="dt">
+              <thead>
+                <tr>
+                  <th>อันดับ</th><th>แผนก</th><th>OT Cost (บาท)</th><th>OT Hours (ชม.)</th><th>OT/Bar (บาท)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.filter(r => r.otCost > 0).slice(0, 10).map((r, i) => (
+                  <tr key={r.name}>
+                    <td><span className="rank" style={i < 3 ? { background: "#FDECEC", color: "#DC2626" } : undefined}>{i + 1}</span></td>
+                    <td>{r.name}</td>
+                    <td className="num"><b>{fmt(r.otCost, 0)}</b></td>
+                    <td className="num">{r.otHours > 0 ? fmt(r.otHours, 0) : "—"}</td>
+                    <td className="num">
+                      {r.otPerBar > 0 ? (
+                        <>
+                          <span className="mini-bar">
+                            <i style={{ width: `${Math.min(100, r.otPerBar / maxOtPerBar * 100)}%`,
+                                       background: "linear-gradient(90deg,#F0797C,#DC2626)" }} />
+                          </span>
+                          {fmt(r.otPerBar, 0)}
+                        </>
+                      ) : "ยังไม่มี Actual Bar"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>
@@ -283,18 +284,111 @@ export default function ExecutiveDashboard({ month, onMonthChange }: {
   );
 }
 
+// ─── Timeline: กราฟแท่งคู่ (Approved/Actual) + เส้นประแสดงส่วนเกิน ───────────────
+function TimelineChart({ slotsActual, approvedPerSlot }: { slotsActual: number[]; approvedPerSlot: number }) {
+  const W = 720, H = 220, ml = 34, mr = 20, mt = 10, mb = 30;
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const maxBar = Math.max(...slotsActual, approvedPerSlot, 0.1) * 1.18;
+  const over = slotsActual.map(v => Math.max(0, v - approvedPerSlot));
+  const maxOver = Math.max(0.4, ...over) * 1.9;
+  const bw = iw / 12, gw = Math.min(15, bw * 0.32);
+  const y  = (v: number) => mt + ih - (v / maxBar) * ih;
+  const y2 = (v: number) => mt + ih - (v / maxOver) * ih;
+
+  const gridLines = [0, 1, 2, 3].map(i => {
+    const gy = mt + ih * (i / 3), val = maxBar * (1 - i / 3);
+    return (
+      <g key={i}>
+        <line x1={ml} y1={gy} x2={W - mr} y2={gy} stroke="#EDF1F8" strokeWidth={1} />
+        <text x={ml - 6} y={gy + 3.5} textAnchor="end" fontSize={9} fill="#8A97B1">{fmt(val, 1)}</text>
+      </g>
+    );
+  });
+
+  const bars = slotsActual.map((ac, i) => {
+    const cx = ml + bw * i + bw / 2;
+    const isOver = ac > approvedPerSlot;
+    return (
+      <g key={i}>
+        {isOver && <rect x={ml + bw * i} y={mt} width={bw} height={ih} fill="#DC2626" opacity={0.05} />}
+        <rect x={cx - gw - 1} y={y(approvedPerSlot)} width={gw} height={mt + ih - y(approvedPerSlot)} rx={2.5} fill="#C9D2E3" />
+        <rect x={cx + 1} y={y(ac)} width={gw} height={mt + ih - y(ac)} rx={2.5} fill={isOver ? "#DC2626" : "#0B4FC7"} />
+        <text x={cx} y={H - mb + 14} textAnchor="middle" fontSize={8.6} fill="#6B7A99">{SLOT_LABELS[i].split("-")[0]}</text>
+      </g>
+    );
+  });
+
+  const points = over.map((v, i) => `${ml + bw * i + bw / 2},${y2(v)}`).join(" ");
+  const overDots = over.map((v, i) => (v > 0.05 ? (
+    <g key={i}>
+      <circle cx={ml + bw * i + bw / 2} cy={y2(v)} r={2.6} fill="#fff" stroke="#DC2626" strokeWidth={1.8} />
+      {v > 0.25 && (
+        <text x={ml + bw * i + bw / 2} y={y2(v) - 7} textAnchor="middle" fontSize={8.6} fontWeight={700} fill="#DC2626">
+          +{fmt(v, 1)}
+        </text>
+      )}
+    </g>
+  ) : null));
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet" style={{ width: "100%", display: "block" }}>
+      {gridLines}
+      {bars}
+      <polyline points={points} fill="none" stroke="#DC2626" strokeWidth={2} strokeDasharray="5 4" />
+      {overDots}
+    </svg>
+  );
+}
+
+// ─── แถบสรุป 5 ช่วงเวลา (เทียบ Utilization เฉลี่ยของแต่ละช่วงกับเส้นอ้างอิง) ─────
+function BandRow({ slotsActual, approvedPerSlot }: { slotsActual: number[]; approvedPerSlot: number }) {
+  const bands = [
+    { n: "ช่วงน้อย", t: "00–06 น.", idx: [0, 1, 2] },
+    { n: "ช่วงเริ่มเพิ่มขึ้น", t: "06–10 น.", idx: [3, 4] },
+    { n: "ช่วงพีค", t: "10–16 น.", idx: [5, 6, 7] },
+    { n: "ช่วงลดลง", t: "16–20 น.", idx: [8, 9] },
+    { n: "ช่วงน้อย", t: "20–24 น.", idx: [10, 11] },
+  ];
+  return (
+    <div className="band-row">
+      {bands.map((b, i) => {
+        const avg = b.idx.reduce((s, k) => s + slotsActual[k], 0) / b.idx.length;
+        const u = approvedPerSlot > 0 ? (avg / approvedPerSlot) * 100 : 0;
+        const c = utilColor(u);
+        const bg = u > 105 ? "#FDECEC" : u >= 95 ? "#FFF6E3" : "#E7F7EE";
+        return (
+          <div key={i} className="band" style={{ background: bg, color: c }}>
+            {b.n}<small>{b.t} · {fmt(u, 0)}%</small>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── ชิ้นส่วนย่อย ──────────────────────────────────────────────────────────────
-function Kpi({ lbl, val, unit, foot, cls = "" }: {
-  lbl: string; val: ReactNode; unit: string; foot: string; cls?: string;
+function Kpi({ lbl, val, unit, foot, cls = "", icon }: {
+  lbl: string; val: ReactNode; unit: string; foot: string; cls?: string; icon: ReactNode;
 }) {
   return (
-    <div className={`kpi ${cls}`}>
+    <div className={`kpi with-icon ${cls}`}>
+      <div className="ic">{icon}</div>
       <div className="lbl">{lbl}</div>
       <div className="val num">{val}<small>{unit}</small></div>
       <div className="foot">{foot}</div>
     </div>
   );
 }
+
+const svgProps = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+const IcUsers  = () => <svg {...svgProps}><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /></svg>;
+const IcUser   = () => <svg {...svgProps}><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>;
+const IcScale  = () => <svg {...svgProps}><path d="M12 3v18M5 7h14M7 7l-3 7h6zM17 7l3 7h-6z" /></svg>;
+const IcTarget = () => <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M9 12l2 2 4-5" /></svg>;
+const IcClock  = () => <svg {...svgProps}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>;
+const IcMoney  = () => <svg {...svgProps}><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>;
+const IcSpark  = () => <svg {...svgProps}><path d="M13 2L4 14h7l-1 8 9-12h-7z" /></svg>;
+const IcBuild  = () => <svg {...svgProps}><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-5h6v5" /></svg>;
 
 export function TypeChip({ type }: { type: string }) {
   const k = type === "Support" ? "support" : type === "Back Office" ? "back" : "service";
