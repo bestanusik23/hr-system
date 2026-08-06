@@ -5,6 +5,8 @@ import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPo
 import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
 import { getPlanByPayrollDept } from "./workforce/planMap";
+import { parseOtWorkbook } from "./workforce/otParser";
+import type { OtParseHit, OtParseSkip } from "./workforce/otParser";
 import { saveImportLocal, loadImportLocal, saveImportRemote, loadImportRemote } from "./workforce/persist";
 import type { StoredImport } from "./workforce/persist";
 
@@ -285,20 +287,16 @@ export default function WorkforceTimeline() {
       .finally(() => setOtLoading(false));
   }, [otMonth]);
 
-  async function saveOtEntry(deptName: string) {
-    const raw = (otDrafts[deptName] ?? "").trim();
-    const amount = raw === "" ? 0 : Number(raw);
-    if (!Number.isFinite(amount) || amount < 0) {
-      setOtMsg(prev => ({ ...prev, [deptName]: "❌ ตัวเลขไม่ถูกต้อง" }));
-      return;
-    }
+  async function saveOtAmount(deptName: string, amount: number): Promise<boolean> {
     setOtSaving(deptName);
+    let ok = false;
     try {
       const r = await fetch("/api/manpower/ot-entries", {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ month: otMonth, dept_name: deptName, amount_thb: amount }),
       });
       const d = await r.json() as { ok: boolean; error?: string };
+      ok = d.ok;
       if (d.ok) {
         setOtEntries(prev => ({ ...prev, [deptName]: { amount_thb: amount, note: "", updated_by: null, updated_at: new Date().toISOString() } }));
         setOtMsg(prev => ({ ...prev, [deptName]: "✅ บันทึกแล้ว" }));
@@ -310,6 +308,56 @@ export default function WorkforceTimeline() {
     }
     setOtSaving(null);
     setTimeout(() => setOtMsg(prev => { const n = { ...prev }; delete n[deptName]; return n; }), 3000);
+    return ok;
+  }
+
+  async function saveOtEntry(deptName: string) {
+    const raw = (otDrafts[deptName] ?? "").trim();
+    const amount = raw === "" ? 0 : Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setOtMsg(prev => ({ ...prev, [deptName]: "❌ ตัวเลขไม่ถูกต้อง" }));
+      return;
+    }
+    await saveOtAmount(deptName, amount);
+  }
+
+  // ── Import OT amounts from the monthly "ค่าเวร" payroll Excel ──────────────
+  const otFileRef = useRef<HTMLInputElement>(null);
+  const [otImportSummary, setOtImportSummary] = useState<{ hits: OtParseHit[]; skipped: OtParseSkip[] } | null>(null);
+  const [otImportErr, setOtImportErr] = useState<string | null>(null);
+  const [otBulkSaving, setOtBulkSaving] = useState(false);
+
+  async function handleOtImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOtImportErr(null);
+    setOtImportSummary(null);
+    try {
+      const result = await parseOtWorkbook(file);
+      if (result.hits.length === 0) {
+        setOtImportErr("อ่านไฟล์ได้ แต่ไม่พบยอดที่จับคู่แผนกได้เลย — กรุณากรอกเอง");
+      } else {
+        setOtDrafts(prev => {
+          const next = { ...prev };
+          for (const h of result.hits) next[h.deptName] = String(h.amount);
+          return next;
+        });
+        setOtImportSummary({ hits: result.hits, skipped: result.skipped });
+      }
+    } catch {
+      setOtImportErr("อ่านไฟล์ไม่ได้ — ตรวจสอบว่าเป็นไฟล์ค่าเวรรายเดือน (.xls/.xlsx) ที่ถูกต้อง");
+    } finally {
+      e.target.value = "";
+    }
+  }
+
+  async function saveAllImportedOt() {
+    if (!otImportSummary) return;
+    setOtBulkSaving(true);
+    for (const h of otImportSummary.hits) {
+      await saveOtAmount(h.deptName, h.amount);
+    }
+    setOtBulkSaving(false);
   }
 
   // Hydrate from the last imported file on mount, so the dashboard doesn't reset
@@ -765,13 +813,17 @@ export default function WorkforceTimeline() {
           <div className="hrwt-panel">
             <div className="hrwt-panel-head">
               <h3>💰 ยอด OT ที่จ่ายจริง เทียบกับ Bar Chart (อัตราตั้งไว้)</h3>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <label style={{ fontSize: 12.5, color: "#6b7794", fontWeight: 600 }}>เดือน (MM/YYYY):</label>
                 <input value={otMonth} onChange={e => setOtMonth(e.target.value)}
                   placeholder="07/2569" className="hrwt-date-sel" style={{ width: 90 }} />
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0038C6" }}>
                   รวม {otTotal.toLocaleString("th-TH")} บาท
                 </div>
+                <input ref={otFileRef} type="file" accept=".xls,.xlsx" style={{ display: "none" }} onChange={handleOtImport} />
+                <button className="hrwt-btn hrwt-btn-outline" onClick={() => otFileRef.current?.click()}>
+                  📥 นำเข้า Excel ค่าเวร
+                </button>
               </div>
             </div>
             <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8" }}>
@@ -779,6 +831,31 @@ export default function WorkforceTimeline() {
               {!otMonthHasShiftData && parsed && " (ยังไม่มีข้อมูลตารางกะของเดือนนี้ — คอลัมน์ปฏิบัติงานจริงจะว่าง)"} —
               แถวที่ขึ้น ⚠ คืออัตรากำลังยังขาด (แผน &gt; ปฏิบัติงานจริง) และมีการจ่าย OT ในเดือนนี้
             </p>
+            {otImportErr && (
+              <div style={{ margin: "0 18px 10px", padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca",
+                borderRadius: 8, fontSize: 12, color: "#dc2626" }}>{otImportErr}</div>
+            )}
+            {otImportSummary && (
+              <div style={{ margin: "0 18px 10px", padding: "10px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0",
+                borderRadius: 8, fontSize: 12.5, color: "#166534" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                  <span>
+                    ✅ อ่านไฟล์แล้ว เติมยอดในช่องกรอกให้ {otImportSummary.hits.length} แผนก — ตรวจทานตัวเลขในตารางด้านล่างก่อนกดบันทึก
+                  </span>
+                  <button onClick={saveAllImportedOt} disabled={otBulkSaving}
+                    style={{ padding: "6px 14px", borderRadius: 6, border: "none",
+                      background: otBulkSaving ? "#c4cfee" : "#16a34a", color: "#fff", fontSize: 12, fontWeight: 700,
+                      cursor: otBulkSaving ? "not-allowed" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                    {otBulkSaving ? "กำลังบันทึก…" : `💾 บันทึกทั้งหมดที่นำเข้า (${otImportSummary.hits.length})`}
+                  </button>
+                </div>
+                {otImportSummary.skipped.length > 0 && (
+                  <div style={{ marginTop: 8, color: "#92400e" }}>
+                    ⚠ ต้องกรอกเอง: {otImportSummary.skipped.map(s => `${s.sourceLabel}${s.amount ? ` (รวม ${s.amount.toLocaleString("th-TH")} บาท)` : ""} — ${s.reason}`).join(" · ")}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="hrwt-tbl-wrap" style={{ maxHeight: 420, padding: "0 18px 16px" }}>
               <table className="hrwt-tbl">
                 <thead>
