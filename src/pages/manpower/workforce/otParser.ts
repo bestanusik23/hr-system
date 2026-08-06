@@ -16,8 +16,8 @@
  *     person → summed directly into ศูนย์มะเร็ง / รังสีวินิจฉัย.
  *   - "IT/บัญชี" has one column, but each person's position title says
  *     which team they're on → matched by keyword into เทคโนโลยีสารสนเทศ /
- *     บัญชี. A few positions (คลังสินค้า, จัดซื้อยา) belong to neither and
- *     are reported as a leftover instead of guessed into either bucket.
+ *     บัญชี. คลังสินค้า/จัดซื้อ positions count as บัญชี per HR; anything
+ *     still unmatched is reported as a leftover instead of guessed in.
  *
  * If a future month's file doesn't have the expected columns/keywords,
  * both splitters fall back to reporting the section as "needs manual
@@ -111,7 +111,7 @@ function splitItAccounting(rows: Cell[][], start: number, end: number): { hits: 
     const amt = rows[r]?.[4];
     if (typeof pos !== "string" || typeof amt !== "number") continue;
     if (/เทคโนโลยีสารสนเทศ/.test(pos)) { itSum += amt; matched = true; }
-    else if (/บัญชี/.test(pos)) { acctSum += amt; matched = true; }
+    else if (/บัญชี|คลังสินค้า|จัดซื้อ/.test(pos)) { acctSum += amt; matched = true; } // warehouse/procurement roles count as บัญชี per HR
     else otherSum += amt;
   }
   if (!matched) return null; // no recognizable position titles this month
