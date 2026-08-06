@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail } from "./workforce/api";
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry } from "./workforce/api";
@@ -95,6 +95,15 @@ function currentPayrollMonthKey(): string {
   let mon = d.getMonth() + 1;
   let yearBE = d.getFullYear() + 543;
   if (d.getDate() >= 26) { mon += 1; if (mon > 12) { mon = 1; yearBE += 1; } }
+  return `${String(mon).padStart(2, "0")}/${yearBE}`;
+}
+
+/** Same 26th cut-off, applied to one "DD/MM/YYYY" Thai BE date → its "MM/YYYY" payroll cycle key */
+function payrollMonthKeyFromThaiDate(dateStr: string): string {
+  const [dayStr, monStr, yearStr] = dateStr.split("/");
+  let mon = parseInt(monStr, 10);
+  let yearBE = parseInt(yearStr, 10);
+  if (parseInt(dayStr, 10) >= 26) { mon += 1; if (mon > 12) { mon = 1; yearBE += 1; } }
   return `${String(mon).padStart(2, "0")}/${yearBE}`;
 }
 
@@ -348,6 +357,24 @@ export default function WorkforceTimeline() {
     if (!parsed || viewMode !== "monthly" || !selectedMonth) { setMonthlySummary(null); return; }
     setMonthlySummary(calculateMonthly(parsed, selectedMonth, planByDept));
   }, [parsed, viewMode, selectedMonth?.key, planByDept]);
+
+  // Keep the OT panel's month in sync with whatever month is showing above,
+  // so "ปฏิบัติงานจริง" next to the OT input is always the same month's shift
+  // data — not a leftover from whatever month was picked last.
+  useEffect(() => {
+    if (viewMode === "monthly" && selectedMonth) setOtMonth(selectedMonth.key);
+    else if (viewMode === "daily" && targetDate) setOtMonth(payrollMonthKeyFromThaiDate(targetDate));
+  }, [viewMode, selectedMonth?.key, targetDate]);
+
+  // Shift-based plan/filled figures for whichever month the OT panel is currently
+  // showing (otMonth) — computed independently from the Gantt view above so it
+  // stays correct even if otMonth was typed to a different month by hand.
+  const otMonthDepts: DeptTimelineItem[] | null = useMemo(() => {
+    if (!parsed) return null;
+    const match = getAvailableMonths(parsed).find(m => m.key === otMonth);
+    if (!match) return null;
+    return calculateMonthly(parsed, match, planByDept).departmentTimeline;
+  }, [parsed, otMonth, planByDept]);
 
   // Dates in scope for the hourly chart / shift summary / department filter:
   // one day in "รายวัน" mode, the whole payroll cycle's dates in "รายเดือน" mode.
@@ -726,7 +753,11 @@ export default function WorkforceTimeline() {
 
       {/* ── OT vs Bar Chart panel ── */}
       {(() => {
-        const filledByDept = new Map(displayDepts.map(d => [d.name, d.filled]));
+        // "ปฏิบัติงานจริง" always reflects otMonth's own shift data (from otMonthDepts),
+        // so it stays correct for whichever month OT is being entered/viewed for —
+        // independent of what the Gantt view above happens to be showing right now.
+        const filledByDept = new Map((otMonthDepts ?? []).map(d => [d.name, d.filled]));
+        const otMonthHasShiftData = otMonthDepts !== null;
         const otTotal = PAYROLL_DEPT_NAMES.reduce((s, n) => s + (otEntries[n]?.amount_thb ?? 0), 0);
         const rows = [...PAYROLL_DEPT_NAMES].sort((a, b) => a.localeCompare(b, "th"));
 
@@ -744,7 +775,8 @@ export default function WorkforceTimeline() {
               </div>
             </div>
             <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8" }}>
-              กรอกยอด OT ที่จ่ายจริงรายแผนกด้วยตนเองทุกเดือน (ไม่ผูกช่วงเวลากับตารางกะด้านบน) —
+              เดือนนี้เปลี่ยนตามตารางกะ (รายวัน/รายเดือน) ด้านบนโดยอัตโนมัติ — พิมพ์ทับเพื่อกรอก OT เดือนอื่นได้
+              {!otMonthHasShiftData && parsed && " (ยังไม่มีข้อมูลตารางกะของเดือนนี้ — คอลัมน์ปฏิบัติงานจริงจะว่าง)"} —
               แถวที่ขึ้น ⚠ คืออัตรากำลังยังขาด (แผน &gt; ปฏิบัติงานจริง) และมีการจ่าย OT ในเดือนนี้
             </p>
             <div className="hrwt-tbl-wrap" style={{ maxHeight: 420, padding: "0 18px 16px" }}>
