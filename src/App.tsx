@@ -15,7 +15,7 @@ import CertVerifyPage from "./pages/CertVerifyPage";
 import SurveyPage from "./pages/SurveyPage";
 import WorkflowPage from "./pages/WorkflowPage";
 import ManpowerPage from "./pages/manpower/ManpowerPage";
-import WorkforceTimelinePage from "./pages/manpower/WorkforceTimelinePage";
+import BarManagementPage from "./pages/manpower/bar/BarManagementPage";
 import OrderOutPage from "./pages/order/OrderOutPage";
 import InternsPage from "./pages/interns/InternsPage";
 import InternCertVerifyPage from "./pages/interns/InternCertVerifyPage";
@@ -56,7 +56,9 @@ export default function App() {
           <Route path="/admin/backup" element={<RequireAuth><BackupPage /></RequireAuth>} />
           <Route path="/workflow" element={<RequireAuth><WorkflowPage /></RequireAuth>} />
           <Route path="/manpower" element={<RequireAuth><ManpowerPage /></RequireAuth>} />
-          <Route path="/workforce-timeline" element={<RequireAuth><WorkforceTimelinePage /></RequireAuth>} />
+          <Route path="/bar-management" element={<RequireAuth><BarManagementPage /></RequireAuth>} />
+          {/* ลิงก์เดิมของ Workforce Timeline — ส่งต่อไปเมนูใหม่ เพื่อไม่ให้ลิงก์ที่บันทึกไว้เสีย */}
+          <Route path="/workforce-timeline" element={<Navigate to="/bar-management" replace />} />
           <Route path="/order-out" element={<RequireAuth><OrderOutPage /></RequireAuth>} />
           <Route path="/interns" element={<RequireAuth><InternsPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />

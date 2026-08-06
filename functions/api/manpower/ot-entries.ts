@@ -2,6 +2,7 @@ import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
 // GET   /api/manpower/ot-entries?month=07/2569   → all dept OT amounts saved for that month
+// GET   /api/manpower/ot-entries?months=all      → totals per month (Bar Analytics trend)
 // PATCH /api/manpower/ot-entries                 → upsert one department's amount (hr/admin/deputyHR)
 
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
@@ -10,6 +11,17 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const url   = new URL(ctx.request.url);
   const month = url.searchParams.get("month");
+
+  // Trend mode — one row per month, used by Bar Analytics. Kept on this endpoint
+  // (instead of a new one) so the same table stays the single source of OT money.
+  if (!month && url.searchParams.get("months") === "all") {
+    const totals = await ctx.env.HR_DB.prepare(
+      `SELECT month, SUM(amount_thb) AS total_thb, COUNT(*) AS dept_count
+         FROM workforce_ot_entries GROUP BY month`
+    ).all<{ month: string; total_thb: number; dept_count: number }>();
+    return Response.json({ ok: true, months: totals.results ?? [] });
+  }
+
   if (!month) return Response.json({ ok: false, error: "ระบุเดือน" }, { status: 400 });
 
   const rows = await ctx.env.HR_DB.prepare(

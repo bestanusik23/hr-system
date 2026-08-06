@@ -161,9 +161,9 @@ const SYSTEMS: SystemCard[] = [
     roles: ["deputyHR","admin"],
   },
   {
-    key: "workforce-timeline", no: "10", icon: <IcTimeline />,
-    title: "Workforce Timeline",
-    desc: "ภาพรวมกำลังคนประจำเวร (ดึก / เช้า / บ่าย) แยกตามฝ่าย พร้อมตัวบ่งชี้เวลาปัจจุบันแบบ Real-time",
+    key: "bar-management", no: "10", icon: <IcTimeline />,
+    title: "Bar Management",
+    desc: "บริหารกำลังคนด้วย Bar Chart — Executive Dashboard, กำหนด Approved Bar, มาตรฐานกะ 8/10/12 ชม., อนุมัติ OT และวิเคราะห์แนวโน้ม",
     roles: ["deputyHR","admin"],
   },
   {
