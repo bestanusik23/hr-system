@@ -308,9 +308,18 @@ export default function ManpowerTable() {
   const [editingPosIdx, setEditingPosIdx] = useState<number | null>(null);
   const [posEditVal,    setPosEditVal]    = useState("");
 
+  // "ตั้งอัตรา" — add an ad-hoc position (currently "ไม่มีในแผน") into the plan
+  // with a real quota, keyed by the row's render-loop index (overflow rows all
+  // share _rowIdx === -1, so that can't identify which one is open).
+  const [addPlanKey,     setAddPlanKey]     = useState<number | null>(null);
+  const [addPlanSection, setAddPlanSection] = useState("");
+  const [addPlanQty,     setAddPlanQty]     = useState("1");
+  const [addPlanSaving,  setAddPlanSaving]  = useState(false);
+  const [addPlanError,   setAddPlanError]   = useState("");
+
   // Fetch plan from DB (hydrates on top of static fallback)
-  useEffect(() => {
-    fetch("/api/manpower/plan")
+  const fetchPlan = useCallback(() => {
+    return fetch("/api/manpower/plan")
       .then(r => r.json())
       .then((d: { ok: boolean; plan?: Array<{ row_idx: number; type: string; name: string; pos: string; div_id: number; plan_qty: number; note: string }> }) => {
         if (!d.ok || !d.plan?.length) return;
@@ -320,8 +329,47 @@ export default function ManpowerTable() {
           plan: p.plan_qty, filled: 0, vac: 0, emp: "", note: p.note,
         })));
       })
-      .catch(() => { /* keep static fallback */ });
+      .catch(() => { /* keep current plan */ });
   }, []);
+
+  useEffect(() => { fetchPlan(); }, [fetchPlan]);
+
+  // ชื่อหมวด (section/subdept) ที่มีอยู่แล้วในแต่ละฝ่าย — ตัวเลือกปลายทางเวลา "ตั้งอัตรา"
+  const sectionsByDiv = useMemo(() => {
+    const m = new Map<number, string[]>();
+    for (const r of planRows) {
+      if (r.type !== "section" && r.type !== "subdept") continue;
+      const name = r.name.trim();
+      if (!name) continue;
+      const arr = m.get(r.divId) ?? [];
+      if (!arr.includes(name)) arr.push(name);
+      m.set(r.divId, arr);
+    }
+    return m;
+  }, [planRows]);
+
+  async function saveNewPlanRow(pos: string, divId: number) {
+    const section = addPlanSection.trim();
+    const qty = Number(addPlanQty);
+    if (!section) { setAddPlanError("เลือกแผนก/หมวดที่จะสังกัด"); return; }
+    if (!Number.isFinite(qty) || qty < 0) { setAddPlanError("อัตราต้องเป็นตัวเลขไม่ติดลบ"); return; }
+    setAddPlanSaving(true);
+    setAddPlanError("");
+    try {
+      const res = await fetch("/api/manpower/plan", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pos, div_id: divId, section_name: section, plan_qty: qty }),
+      });
+      const d = await res.json() as { ok: boolean; error?: string };
+      if (!d.ok) { setAddPlanError(d.error ?? "บันทึกไม่สำเร็จ"); setAddPlanSaving(false); return; }
+      await fetchPlan();
+      setAddPlanKey(null);
+      setAddPlanSaving(false);
+    } catch {
+      setAddPlanError("เชื่อมต่อเซิร์ฟเวอร์ไม่ได้");
+      setAddPlanSaving(false);
+    }
+  }
 
   async function adjustPlan(rowIdx: number, change: 1 | -1) {
     const cur = planRows[rowIdx]?.plan ?? 1;
@@ -771,8 +819,8 @@ export default function ManpowerTable() {
                             </span>
                           )}
                         </td>
-                        {/* อัตราตั้งไว้ — แสดง effective plan พร้อม +/- */}
-                        <td style={{ ...td, textAlign: "center" }}>
+                        {/* อัตราตั้งไว้ — แสดง effective plan พร้อม +/- (หรือฟอร์ม "ตั้งอัตรา" ถ้ายังไม่มีในแผน) */}
+                        <td style={{ ...td, textAlign: "center", position: "relative" }}>
                           {canEdit && r._rowIdx >= 0 ? (
                             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
                               <button onClick={() => adjustPlan(r._rowIdx, -1)}
@@ -794,6 +842,72 @@ export default function ManpowerTable() {
                                 ＋
                               </button>
                             </div>
+                          ) : canEdit && r._rowIdx === -1 ? (
+                            <>
+                              <button onClick={() => {
+                                  setAddPlanKey(i); setAddPlanSection(""); setAddPlanQty("1"); setAddPlanError("");
+                                }}
+                                title="ตั้งอัตราให้ตำแหน่งนี้ เพื่อนำไปใช้ใน Bar Management"
+                                style={{ fontSize: 10.5, padding: "2px 8px", borderRadius: 6,
+                                  border: "1px solid #93c5fd", background: "#eff6ff", color: "#0038C6",
+                                  cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                ➕ ตั้งอัตรา
+                              </button>
+                              {addPlanKey === i && (() => {
+                                const sections = sectionsByDiv.get(r.divId) ?? [];
+                                return (
+                                  <div onClick={e => e.stopPropagation()}
+                                    style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)",
+                                      zIndex: 50, marginTop: 4, background: "#fff", border: "1px solid #c4cfee",
+                                      borderRadius: 8, boxShadow: "0 10px 30px rgba(0,56,198,0.18)",
+                                      padding: 12, width: 220, textAlign: "left" }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: "#0a1628", marginBottom: 8 }}>
+                                      ตั้งอัตรา: {r.pos}
+                                    </div>
+                                    <label style={{ display: "block", fontSize: 10, color: "#64748b", marginBottom: 3 }}>
+                                      สังกัดหมวด/แผนก *
+                                    </label>
+                                    {sections.length > 0 ? (
+                                      <select value={addPlanSection} onChange={e => setAddPlanSection(e.target.value)}
+                                        style={{ width: "100%", padding: "5px 6px", borderRadius: 5,
+                                          border: "1px solid #c4cfee", fontSize: 11.5, marginBottom: 8, fontFamily: "inherit" }}>
+                                        <option value="">-- เลือกหมวด --</option>
+                                        {sections.map(s => <option key={s} value={s}>{s}</option>)}
+                                      </select>
+                                    ) : (
+                                      <div style={{ fontSize: 10.5, color: "#dc2626", marginBottom: 8 }}>
+                                        ไม่พบหมวดในฝ่ายนี้ — ตรวจสอบข้อมูลแผนกำลังคนก่อน
+                                      </div>
+                                    )}
+                                    <label style={{ display: "block", fontSize: 10, color: "#64748b", marginBottom: 3 }}>
+                                      อัตราที่ตั้ง (คน) *
+                                    </label>
+                                    <input type="number" min={0} step={1} value={addPlanQty}
+                                      onChange={e => setAddPlanQty(e.target.value)}
+                                      style={{ width: "100%", padding: "5px 6px", borderRadius: 5,
+                                        border: "1px solid #c4cfee", fontSize: 11.5, marginBottom: 8,
+                                        fontFamily: "inherit", boxSizing: "border-box" as const }} />
+                                    {addPlanError && (
+                                      <div style={{ fontSize: 10.5, color: "#dc2626", marginBottom: 8 }}>{addPlanError}</div>
+                                    )}
+                                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                                      <button onClick={() => setAddPlanKey(null)}
+                                        style={{ fontSize: 10.5, padding: "4px 9px", background: "none",
+                                          border: "1px solid #e2e8f0", borderRadius: 5, cursor: "pointer", fontFamily: "inherit" }}>
+                                        ยกเลิก
+                                      </button>
+                                      <button onClick={() => saveNewPlanRow(r.pos, r.divId)}
+                                        disabled={addPlanSaving || sections.length === 0}
+                                        style={{ fontSize: 10.5, padding: "4px 9px", background: "#0038C6", color: "#fff",
+                                          border: "none", borderRadius: 5, cursor: addPlanSaving ? "default" : "pointer",
+                                          fontWeight: 700, fontFamily: "inherit", opacity: addPlanSaving ? .6 : 1 }}>
+                                        {addPlanSaving ? "กำลังบันทึก…" : "บันทึก"}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+                            </>
                           ) : (effPlan || "—")}
                         </td>
                         <td style={{ ...td, textAlign: "center", color: "#16a34a", fontWeight: 600 }}>
