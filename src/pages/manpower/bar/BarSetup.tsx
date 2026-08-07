@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../context/AuthContext";
 import { useBarData, saveBarConfig } from "./barApi";
+import { getPlanByPayrollDept } from "../workforce/planMap";
 import { DEPT_TYPES, fmt, utilColor, type DeptType } from "./barMath";
 import { TypeChip } from "./ExecutiveDashboard";
 
@@ -20,6 +21,11 @@ export default function BarSetup({ month }: { month: string }) {
   const [msg, setMsg]       = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [bulkMsg, setBulkMsg] = useState("");
+
+  // อัตราปัจจุบันจาก manpower_plan (ไม่ผ่าน dept_bar_config override) — ใช้เทียบ/ซิงก์
+  // แผนกที่เคยตั้งค่าเองไว้แล้ว เพื่อดึงอัตราล่าสุดหลังมีการเพิ่ม/แก้ตำแหน่งในแผนกำลังคน
+  const [rawPlanMap, setRawPlanMap] = useState<Map<string, number>>(new Map());
+  useEffect(() => { getPlanByPayrollDept().then(setRawPlanMap).catch(() => {}); }, [config.length]);
 
   // ตั้งค่าเริ่มต้นของช่องกรอกจากค่าที่ระบบใช้อยู่จริง (config → ไม่มีก็ manpower_plan)
   // ใช้ลายเซ็นของค่าจริงเป็น dependency เพราะค่า Approved Bar ทยอยมาถึงหลัง rows ถูกสร้างครั้งแรก
@@ -134,12 +140,31 @@ export default function BarSetup({ month }: { month: string }) {
                       ) : <TypeChip type={r.type} />}
                     </td>
                     <td className="num">
-                      {canEdit ? (
-                        <input type="number" min={0} step={0.5}
-                               value={draftBar[r.name] ?? ""}
-                               onChange={e => setDraftBar(p => ({ ...p, [r.name]: e.target.value }))}
-                               style={{ width: 88, height: 30, textAlign: "right", fontSize: 12.5 }} />
-                      ) : fmt(r.approvedBar, 1)}
+                      {canEdit ? (() => {
+                        const rawPlan = rawPlanMap.get(r.name);
+                        const draftNum = Number(draftBar[r.name]);
+                        const outOfSync = isSet && rawPlan !== undefined && rawPlan !== draftNum;
+                        return (
+                          <div>
+                            <input type="number" min={0} step={0.5}
+                                   value={draftBar[r.name] ?? ""}
+                                   onChange={e => setDraftBar(p => ({ ...p, [r.name]: e.target.value }))}
+                                   style={{ width: 88, height: 30, textAlign: "right", fontSize: 12.5 }} />
+                            {outOfSync && (
+                              <div style={{ marginTop: 3 }}>
+                                <button
+                                  onClick={() => setDraftBar(p => ({ ...p, [r.name]: String(rawPlan ?? 0) }))}
+                                  title="ตั้งค่าไว้แล้วแต่แผนกำลังคนเปลี่ยนไป — กดเพื่อดึงอัตราล่าสุดมาใส่ (ยังไม่บันทึกจนกว่าจะกดบันทึก)"
+                                  style={{ fontSize: 10, padding: "1px 6px", borderRadius: 5,
+                                    border: "1px solid #93c5fd", background: "#eff6ff", color: "#0038C6",
+                                    cursor: "pointer", fontWeight: 700, whiteSpace: "nowrap" }}>
+                                  🔄 ซิงก์ ({fmt(rawPlan ?? 0, 0)})
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })() : fmt(r.approvedBar, 1)}
                     </td>
                     <td className="num">{r.hasShiftData ? fmt(r.actualBar, 1) : "—"}</td>
                     <td className="num">
@@ -191,7 +216,9 @@ export default function BarSetup({ month }: { month: string }) {
         เพื่อหมุนเวรให้ครบ 10 Bar ต่อวัน<br />
         • <b>Actual Bar</b> คำนวณจากไฟล์กะที่นำเข้า (คน-ชั่วโมง ÷ 8) จึงเทียบกับ Approved Bar ได้ตรงหน่วย
         {!hasShiftData && " — เดือนนี้ยังไม่มีไฟล์กะ จึงยังไม่มีค่า"}<br />
-        • <b>ประเภทงาน</b> (Service / Support / Back Office) แก้ไขได้ที่คอลัมน์ที่ 2 ใช้จัดกลุ่มในรายงานและ Bar Analytics
+        • <b>ประเภทงาน</b> (Service / Support / Back Office) แก้ไขได้ที่คอลัมน์ที่ 2 ใช้จัดกลุ่มในรายงานและ Bar Analytics<br />
+        • แผนกที่ <b>ตั้งค่าแล้ว</b> จะไม่อัปเดตตามแผนกำลังคนอัตโนมัติอีก (กันไม่ให้ตัวเลขที่ตั้งเองถูกทับ) — ถ้าแก้ไขอัตราในตารางอัตรากำลัง (Manpower) แล้ว
+        ให้กลับมาที่นี่และกดปุ่ม <b>🔄 ซิงก์</b> ที่จะโผล่ใต้ช่องกรอกเมื่อค่าไม่ตรงกัน แล้วกด <b>บันทึก</b> อีกครั้งเพื่อยืนยัน
       </div>
     </div>
   );
