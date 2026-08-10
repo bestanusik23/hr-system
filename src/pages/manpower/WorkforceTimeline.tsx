@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, bandStartMinute, bandIndexForStart } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftChunkStarts, bandIndexForStart } from "./workforce/api";
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, ShiftBandItem, DeptBandRow } from "./workforce/api";
 import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
@@ -78,7 +78,7 @@ function bandsFromBlocks(depts: DeptTimelineItem[]): ShiftBandItem[] {
   for (const d of depts) {
     for (const b of d.blocks) {
       all += b.count;
-      totals[bandIndexForStart(bandStartMinute([b]))] += b.count;
+      for (const start of shiftChunkStarts([b])) totals[bandIndexForStart(start)] += b.count;
     }
   }
   return SHIFT_BANDS.map((b, i) => ({
@@ -93,7 +93,7 @@ function deptBandsFromBlocks(depts: DeptTimelineItem[]): DeptBandRow[] {
     let total = 0;
     for (const b of d.blocks) {
       total += b.count;
-      counts[bandIndexForStart(bandStartMinute([b]))] += b.count;
+      for (const start of shiftChunkStarts([b])) counts[bandIndexForStart(start)] += b.count;
     }
     return { deptName: d.name, total, counts };
   }).sort((a, b) => b.total - a.total);
@@ -744,8 +744,9 @@ export default function WorkforceTimeline() {
           </div>
         </div>
 
-        {/* Headcount per เวร, split by shift start time (averaged per day in monthly mode).
-            A partition — each person is in exactly one เวร, so these sum to the real total.
+        {/* Coverage per เวร (averaged per day in monthly mode) — shifts longer than 8h are
+            split into 8h chunks (see shiftChunkStarts), so one person can land in more than
+            one เวร and these can sum to more than the real headcount; see the panel note below.
             "band-N" (not the fixed c1/c2/c6 names) so this never collides with the peak-hour
             card's own dedicated CSS below, regardless of how many bands there are. */}
         {bandRows.map((r, i) => (
@@ -861,8 +862,9 @@ export default function WorkforceTimeline() {
           </div>
         </div>
         <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8", lineHeight: 1.6 }}>
-          แบ่งเวรตาม<b>เวลาเริ่มงาน</b> — เวรเช้าเริ่ม 07:00–15:59 · เวรบ่ายเริ่ม 16:00–23:59 · เวรดึกเริ่ม 00:00–06:59
-          หนึ่งคนอยู่ได้เวรเดียว ผลรวมสามเวรจึงเท่ากับจำนวนคนจริงพอดี
+          ใครทำงานเกิน 8 ชม. จะถูกแบ่งเป็นช่วงละ 8 ชม. แล้วนับเข้าเวรที่ตรงกับเวลาเริ่มของแต่ละช่วง —
+          เช่น เข้างาน 08:00 เลิก 00:00 (16 ชม.) นับเป็น <b>1 คนในเวรเช้า</b> (ช่วง 08:00–16:00) และ <b>1 คนในเวรบ่าย</b> (ช่วง 16:00–00:00)
+          ผลรวมทั้ง 4 เวรจึงอาจ<b>มากกว่า</b>จำนวนคนจริง (คอลัมน์ "รวม" ยังเป็นจำนวนคนจริง ไม่ใช่ผลรวมของเวร)
           {isMonthly ? " · ตัวเลขเป็นค่าเฉลี่ยต่อวันของทั้งเดือน" : ""}
         </p>
         <div className="hrwt-tbl-wrap" style={{ maxHeight: 420, padding: "0 18px 16px" }}>

@@ -207,27 +207,47 @@ export const SHIFT_BANDS: { key: string; label: string; sub: string; startFrom: 
   { key: "night",   label: "เวรดึก",         sub: "เริ่ม 00:00–06:59", startFrom: 0,    startTo: 420,  color: "#1d4ed8" },
 ];
 
+const CHUNK_MIN = 480; // 1 standard shift = 8 hours
+
 /**
- * The start time that defines which เวร a shift belongs to. Split shifts
- * (e.g. I008 = 08:00–16:00 + 00:00–08:00) are represented by their LONGEST
- * segment, so the person is filed under the เวร they actually spend the day in
- * rather than whichever segment the file happened to list first.
+ * Splits a shift's ranges into consecutive 8-hour chunks (a shorter trailing
+ * remainder still counts as one chunk) and returns each chunk's own start
+ * time (0–1439). Someone on a continuous 08:00–00:00 (16h) shift yields two
+ * chunks — 08:00 and 16:00 — so they're counted once in เวรเช้า AND once in
+ * เวรบ่าย, matching how many 8-hour-equivalent shifts of coverage they
+ * actually provide. An exact 8h shift yields one chunk, unchanged from before.
+ *
+ * Genuine split shifts in the file (two separate ranges in one day, e.g.
+ * I008 = 08:00–16:00 + 00:00–08:00) are walked per-range, so each already-8h
+ * segment still yields exactly one chunk.
+ *
+ * Because one person can now land in more than one เวร, the per-เวร counts
+ * are no longer a strict partition of headcount — they can sum to more than
+ * the real number of people. That's intentional here: it's coverage per เวร,
+ * not a headcount split.
  */
-export function bandStartMinute(ranges: TimeRange[]): number {
-  let best = ranges[0];
+export function shiftChunkStarts(ranges: TimeRange[]): number[] {
+  const starts: number[] = [];
   for (const r of ranges) {
-    if (r.endMin - r.startMin > best.endMin - best.startMin) best = r;
+    for (let cur = r.startMin; cur < r.endMin; cur += CHUNK_MIN) {
+      starts.push(((cur % 1440) + 1440) % 1440);
+    }
   }
-  return ((best.startMin % 1440) + 1440) % 1440;
+  return starts;
 }
 
-/** Index into SHIFT_BANDS for a shift starting at `startMin` (0–1439). */
+/** Index into SHIFT_BANDS for a chunk starting at `startMin` (0–1439). */
 export function bandIndexForStart(startMin: number): number {
   const i = SHIFT_BANDS.findIndex(b => startMin >= b.startFrom && startMin < b.startTo);
   return i >= 0 ? i : SHIFT_BANDS.length - 1;   // 00:00–06:59 falls through to ดึก
 }
 
-/** Headcount per เวร, scoped to a set of departments (or all when null/omitted). */
+/**
+ * Coverage per เวร, scoped to a set of departments (or all when null/omitted).
+ * `staff` is chunk-count (8h-shift-equivalents), not headcount — see
+ * shiftChunkStarts(). Percentage is still relative to real headcount
+ * (active.length), read as "% of today's staff present during this เวร".
+ */
 export function calculateShiftBandSummary(
   parsed: ParseResult,
   dates: string | string[],
@@ -238,7 +258,9 @@ export function calculateShiftBandSummary(
   const totals  = new Array<number>(SHIFT_BANDS.length).fill(0);
 
   for (const entry of active) {
-    totals[bandIndexForStart(bandStartMinute(entry.ranges))]++;
+    for (const start of shiftChunkStarts(entry.ranges)) {
+      totals[bandIndexForStart(start)]++;
+    }
   }
 
   return SHIFT_BANDS.map((b, i) => ({
@@ -252,8 +274,9 @@ export function calculateShiftBandSummary(
 }
 
 /**
- * Per-department headcount across the three เวร, sorted by total desc.
- * Answers "which departments staff which เวร, and how heavily".
+ * Per-department coverage across the เวร, sorted by headcount desc.
+ * `total` is real headcount for that department; `counts` are chunk-counts
+ * per เวร, so a row's counts can sum to more than its own total.
  */
 export function calculateBandsByDept(
   parsed: ParseResult,
@@ -271,7 +294,9 @@ export function calculateBandsByDept(
       byDept.set(entry.deptName, row);
     }
     row.total++;
-    row.counts[bandIndexForStart(bandStartMinute(entry.ranges))]++;
+    for (const start of shiftChunkStarts(entry.ranges)) {
+      row.counts[bandIndexForStart(start)]++;
+    }
   }
 
   return Array.from(byDept.values()).sort((a, b) => b.total - a.total);

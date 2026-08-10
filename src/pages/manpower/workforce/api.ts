@@ -8,7 +8,7 @@ import { parseWorkbook } from "./parser";
 import {
   calculateDashboardData, calculateHourlyForDept, calculateShiftSummaryForDept,
   calculateMonthlySummary, getCurrentStaffDetail,
-  calculateShiftBandSummary, calculateBandsByDept, SHIFT_BANDS, bandStartMinute, bandIndexForStart,
+  calculateShiftBandSummary, calculateBandsByDept, SHIFT_BANDS, shiftChunkStarts, bandIndexForStart,
 } from "./calculator";
 import type { ParseResult, DashboardData, MonthOption, MonthlySummary } from "./types";
 
@@ -19,7 +19,7 @@ export type {
 } from "./types";
 export {
   getCurrentStaffDetail, calculateShiftBandSummary, calculateBandsByDept,
-  SHIFT_BANDS, bandStartMinute, bandIndexForStart,
+  SHIFT_BANDS, shiftChunkStarts, bandIndexForStart,
 };
 
 const THAI_MONTHS = [
