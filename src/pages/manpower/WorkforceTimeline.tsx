@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail } from "./workforce/api";
-import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, FIXED_WINDOWS, overlapsWindow } from "./workforce/api";
+import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, WindowSummaryItem, DeptWindowRow } from "./workforce/api";
 import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
 import { getPlanByPayrollDept } from "./workforce/planMap";
@@ -65,6 +65,42 @@ function computeStats(depts: DeptTimelineItem[]) {
     .sort((a, b) => b.staff - a.staff);
 
   return { total, hourly, maxHourly, peakHour: peakIdx >= 0 ? hourly[peakIdx][0] : "08:00", shiftSummary };
+}
+
+// ─── Fixed-window fallbacks (used before any file is imported) ────────────────
+// The engine computes these per employee-record; with no import there are no
+// records, only the example depts' aggregated blocks — so derive the same
+// numbers from those, reusing the engine's own overlap rule so both paths agree.
+
+function windowsFromBlocks(depts: DeptTimelineItem[]): WindowSummaryItem[] {
+  const totals = FIXED_WINDOWS.map(() => 0);
+  let all = 0;
+  for (const d of depts) {
+    for (const b of d.blocks) {
+      all += b.count;
+      FIXED_WINDOWS.forEach((w, i) => {
+        if (overlapsWindow(b, w.startMin, w.endMin)) totals[i] += b.count;
+      });
+    }
+  }
+  return FIXED_WINDOWS.map((w, i) => ({
+    key: w.key, label: w.label, staff: totals[i],
+    percentage: all ? Math.round(totals[i] / all * 100) : 0, color: w.color,
+  }));
+}
+
+function deptWindowsFromBlocks(depts: DeptTimelineItem[]): DeptWindowRow[] {
+  return depts.map(d => {
+    const counts = FIXED_WINDOWS.map(() => 0);
+    let total = 0;
+    for (const b of d.blocks) {
+      total += b.count;
+      FIXED_WINDOWS.forEach((w, i) => {
+        if (overlapsWindow(b, w.startMin, w.endMin)) counts[i] += b.count;
+      });
+    }
+    return { deptName: d.name, total, counts };
+  }).sort((a, b) => b.total - a.total);
 }
 
 /** Splits a block into 1 or 2 {left,width} segments (in minutes, 0-1440 scale) so overnight blocks wrap correctly on the ruler */
@@ -242,7 +278,12 @@ export default function WorkforceTimeline() {
   const [tip, setTip]               = useState<{ x: number; y: number; dept: string; shift: string; count: number; color: string } | null>(null);
   const [selectedDivision, setSelectedDivision] = useState<string>(""); // "" = all divisions (ฝ่าย)
   const [selectedDept, setSelectedDept] = useState<string>(""); // "" = all departments (แผนก) within the selected division
-  const [deptView, setDeptView]         = useState<{ hourlyWorkforce: HourlyPoint[]; shiftSummary: ShiftSummaryItem[] } | null>(null);
+  const [deptView, setDeptView]         = useState<{
+    hourlyWorkforce: HourlyPoint[];
+    shiftSummary: ShiftSummaryItem[];
+    windowSummary: WindowSummaryItem[];
+    deptWindows: DeptWindowRow[];
+  } | null>(null);
   const [viewMode, setViewMode]         = useState<"daily" | "monthly">("daily");
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
@@ -501,7 +542,18 @@ export default function WorkforceTimeline() {
   const shiftSummaryRowsRaw: ShiftSummaryItem[] = deptView?.shiftSummary ?? aggregateShiftSummary ?? stats.shiftSummary;
   const shiftSummaryRows = shiftSummaryRowsRaw.map(s => ({ ...s, staff: toDisplayCount(s.staff) }));
   const shiftSummaryTotal = shiftSummaryRows.reduce((s, x) => s + x.staff, 0) || T_TOTAL;
-  const topRanges = shiftSummaryRows.slice(0, 3);
+
+  // Fixed reporting windows (08–16 / 16–24 / 00–08) — same daily-average treatment.
+  // Falls back to the example depts' blocks before any file has been imported.
+  const windowRowsRaw: WindowSummaryItem[] = deptView?.windowSummary ?? windowsFromBlocks(scopedDepts);
+  const windowRows = windowRowsRaw.map(w => ({ ...w, staff: toDisplayCount(w.staff) }));
+
+  const deptWindowsRaw: DeptWindowRow[] = deptView?.deptWindows ?? deptWindowsFromBlocks(scopedDepts);
+  const deptWindowRows = deptWindowsRaw.map(d => ({
+    ...d,
+    total: toDisplayCount(d.total),
+    counts: d.counts.map(toDisplayCount),
+  }));
 
   const filtered = search.trim()
     ? divisionFilteredDepts.filter(d =>
@@ -696,11 +748,12 @@ export default function WorkforceTimeline() {
           </div>
         </div>
 
-        {/* Top 3 actual time periods by headcount (averaged per day in monthly mode) — replaces the old fixed morning/afternoon/night split */}
-        {topRanges.map((r, i) => (
-          <div key={r.shift} className={`hrwt-kpi c${3 + i}`}>
+        {/* Headcount on duty in each of the three standard windows (averaged per day in monthly mode).
+            A shift counts in every window it touches, so an overnight shift appears in two of them. */}
+        {windowRows.map((r, i) => (
+          <div key={r.key} className={`hrwt-kpi c${3 + i}`}>
             <div className="ic" style={{ background: `${r.color}22`, color: r.color }}><IcClock/></div>
-            <div className="lbl">ช่วงเวลา {r.shift}</div>
+            <div className="lbl">ช่วงเวลา {r.label}</div>
             <div className="val">{r.staff}<small>คน{isMonthly ? "/วัน" : ""}</small></div>
             <div className="foot">{r.percentage}% ของทั้งหมด</div>
           </div>
@@ -796,6 +849,63 @@ export default function WorkforceTimeline() {
             })}
 
           </div>
+        </div>
+      </div>
+
+      {/* ── Department × fixed-window headcount ── */}
+      <div className="hrwt-panel">
+        <div className="hrwt-panel-head">
+          <h3>จำนวนบุคลากรแต่ละแผนก แยกตามช่วงเวลา</h3>
+          <div className="hrwt-legend">
+            {FIXED_WINDOWS.map(w => (
+              <span key={w.key}><i style={{ background: w.color }} />{w.label}</span>
+            ))}
+          </div>
+        </div>
+        <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8", lineHeight: 1.6 }}>
+          นับ “อยู่ปฏิบัติงานในช่วงนั้น” — เวรที่คร่อมสองช่วง (เช่น 20:00–08:00) จะถูกนับทั้งช่วงเย็นและช่วงดึก
+          ผลรวมรายช่วงจึงมากกว่าจำนวนคนทั้งหมดได้{isMonthly ? " · ตัวเลขเป็นค่าเฉลี่ยต่อวันของทั้งเดือน" : ""}
+        </p>
+        <div className="hrwt-tbl-wrap" style={{ maxHeight: 420, padding: "0 18px 16px" }}>
+          <table className="hrwt-tbl">
+            <thead>
+              <tr>
+                <th>แผนก</th>
+                {FIXED_WINDOWS.map(w => (
+                  <th key={w.key} style={{ textAlign: "right" }}>{w.label}</th>
+                ))}
+                <th style={{ textAlign: "right" }}>รวม</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deptWindowRows.length === 0 ? (
+                <tr><td colSpan={FIXED_WINDOWS.length + 2} style={{ textAlign: "center", color: "#94a3b8", padding: 16 }}>
+                  ไม่มีข้อมูลในช่วงที่เลือก
+                </td></tr>
+              ) : deptWindowRows.map(d => (
+                <tr key={d.deptName}>
+                  <td>{d.deptName}</td>
+                  {d.counts.map((c, i) => (
+                    <td key={i} className="num" style={{ color: c > 0 ? FIXED_WINDOWS[i].color : "#cbd5e1" }}>
+                      {c || "—"}
+                    </td>
+                  ))}
+                  <td className="num">{d.total}</td>
+                </tr>
+              ))}
+              {deptWindowRows.length > 0 && (
+                <tr className="total">
+                  <td>รวมทุกแผนก</td>
+                  {FIXED_WINDOWS.map((w, i) => (
+                    <td key={w.key} className="num">
+                      {deptWindowRows.reduce((s, d) => s + d.counts[i], 0)}
+                    </td>
+                  ))}
+                  <td className="num">{deptWindowRows.reduce((s, d) => s + d.total, 0)}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 

@@ -84,6 +84,31 @@ export interface ShiftSummaryItem {
   color: string;
 }
 
+/**
+ * Headcount inside one of the three fixed reporting windows
+ * (08:00–16:00 / 16:00–00:00 / 00:00–08:00).
+ *
+ * Distinct from ShiftSummaryItem: that one groups by the ACTUAL shift periods
+ * found in the file (30+ of them), this one buckets whoever is on duty during a
+ * standard window regardless of when their shift starts. Someone on 07:00–16:00
+ * counts in the 08:00–16:00 window; a 20:00–08:00 shift counts in BOTH the
+ * 16:00–00:00 and 00:00–08:00 windows, so these totals can exceed headcount.
+ */
+export interface WindowSummaryItem {
+  key: string;         // "day" | "eve" | "night"
+  label: string;       // "08:00–16:00"
+  staff: number;       // person-days when `dates` spans a month
+  percentage: number;  // relative to total active entries
+  color: string;
+}
+
+/** One department's headcount across the three fixed windows */
+export interface DeptWindowRow {
+  deptName: string;
+  total: number;       // active entries (person-days) in this department
+  counts: number[];    // aligned with FIXED_WINDOWS order
+}
+
 export interface DeptRankItem {
   department: string;
   staff: number;

@@ -8,12 +8,16 @@ import { parseWorkbook } from "./parser";
 import {
   calculateDashboardData, calculateHourlyForDept, calculateShiftSummaryForDept,
   calculateMonthlySummary, getCurrentStaffDetail,
+  calculateWindowSummary, calculateWindowsByDept, FIXED_WINDOWS, overlapsWindow,
 } from "./calculator";
 import type { ParseResult, DashboardData, MonthOption, MonthlySummary } from "./types";
 
 export type { ParseResult, DashboardData, MonthOption, MonthlySummary };
-export type { DeptTimelineItem, HourlyPoint, KPIData, ShiftSummaryItem, ShiftBlock, CurrentStaffEntry } from "./types";
-export { getCurrentStaffDetail };
+export type {
+  DeptTimelineItem, HourlyPoint, KPIData, ShiftSummaryItem, ShiftBlock, CurrentStaffEntry,
+  WindowSummaryItem, DeptWindowRow,
+} from "./types";
+export { getCurrentStaffDetail, calculateWindowSummary, calculateWindowsByDept, FIXED_WINDOWS, overlapsWindow };
 
 const THAI_MONTHS = [
   "", "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
@@ -85,6 +89,8 @@ export function switchDeptView(parsed: ParseResult, dates: string | string[], de
   return {
     hourlyWorkforce: calculateHourlyForDept(parsed, dates, deptNames, average),
     shiftSummary:    calculateShiftSummaryForDept(parsed, dates, deptNames),
+    windowSummary:   calculateWindowSummary(parsed, dates, deptNames),
+    deptWindows:     calculateWindowsByDept(parsed, dates, deptNames),
   };
 }
 

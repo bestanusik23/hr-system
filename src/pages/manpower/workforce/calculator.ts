@@ -20,6 +20,7 @@
 import type {
   ParseResult, DashboardData, KPIData, HourlyPoint,
   DeptTimelineItem, ShiftSummaryItem, ShiftBlock, TimeRange, MonthlySummary, CurrentStaffEntry,
+  WindowSummaryItem, DeptWindowRow,
 } from "./types";
 
 // ─── Hourly coverage check ────────────────────────────────────────────────────
@@ -182,6 +183,90 @@ function toRangeSummary(active: ActiveEntry[], registry: Map<string, { startMin:
       };
     })
     .sort((a, b) => b.staff - a.staff);
+}
+
+// ─── Fixed reporting windows (08–16 / 16–24 / 00–08) ──────────────────────────
+
+/**
+ * The three standard windows management reports on, independent of the 30+
+ * actual shift codes in the file. A shift counts toward a window when it
+ * overlaps it at all, so a 20:00–08:00 night shift lands in both the evening
+ * and the night window — these totals are "who was on duty during this window",
+ * not a partition of headcount, and can sum to more than the total.
+ */
+export const FIXED_WINDOWS: { key: string; label: string; startMin: number; endMin: number; color: string }[] = [
+  { key: "day",   label: "08:00–16:00", startMin: 480,  endMin: 960,  color: "#3fb96a" },
+  { key: "eve",   label: "16:00–00:00", startMin: 960,  endMin: 1440, color: "#8b6fe0" },
+  { key: "night", label: "00:00–08:00", startMin: 0,    endMin: 480,  color: "#1d4ed8" },
+];
+
+/**
+ * True when a shift range overlaps [ws, we). Checks the range as-is and shifted
+ * back a day, so overnight ranges (endMin > 1440, e.g. 16:00→08:00 = 960→1920)
+ * are matched against the early-morning windows too — same wrap trick as
+ * coversHour().
+ */
+export function overlapsWindow(range: TimeRange, ws: number, we: number): boolean {
+  const direct  = Math.min(range.endMin, we) - Math.max(range.startMin, ws);
+  const wrapped = Math.min(range.endMin - 1440, we) - Math.max(range.startMin - 1440, ws);
+  return direct > 0 || wrapped > 0;
+}
+
+/**
+ * Counts each active entry once per window it touches (a split shift with two
+ * ranges inside the same window still counts once for that window).
+ */
+function windowCountsFor(entry: ActiveEntry): boolean[] {
+  return FIXED_WINDOWS.map(w => entry.ranges.some(r => overlapsWindow(r, w.startMin, w.endMin)));
+}
+
+/** Headcount per fixed window, scoped to a set of departments (or all when null/omitted). */
+export function calculateWindowSummary(
+  parsed: ParseResult,
+  dates: string | string[],
+  deptNames?: string[] | null,
+): WindowSummaryItem[] {
+  const dateArr = Array.isArray(dates) ? dates : [dates];
+  const active  = getActiveEntries(parsed, dateArr, deptNames);
+  const totals  = new Array<number>(FIXED_WINDOWS.length).fill(0);
+
+  for (const entry of active) {
+    windowCountsFor(entry).forEach((hit, i) => { if (hit) totals[i]++; });
+  }
+
+  return FIXED_WINDOWS.map((w, i) => ({
+    key: w.key,
+    label: w.label,
+    staff: totals[i],
+    percentage: active.length ? Math.round(totals[i] / active.length * 100) : 0,
+    color: w.color,
+  }));
+}
+
+/**
+ * Per-department headcount across the three fixed windows, sorted by total desc.
+ * Answers "which departments staff which parts of the day, and how heavily".
+ */
+export function calculateWindowsByDept(
+  parsed: ParseResult,
+  dates: string | string[],
+  deptNames?: string[] | null,
+): DeptWindowRow[] {
+  const dateArr = Array.isArray(dates) ? dates : [dates];
+  const active  = getActiveEntries(parsed, dateArr, deptNames);
+  const byDept  = new Map<string, DeptWindowRow>();
+
+  for (const entry of active) {
+    let row = byDept.get(entry.deptName);
+    if (!row) {
+      row = { deptName: entry.deptName, total: 0, counts: new Array(FIXED_WINDOWS.length).fill(0) };
+      byDept.set(entry.deptName, row);
+    }
+    row.total++;
+    windowCountsFor(entry).forEach((hit, i) => { if (hit) row!.counts[i]++; });
+  }
+
+  return Array.from(byDept.values()).sort((a, b) => b.total - a.total);
 }
 
 /** Builds the per-department Gantt blocks (one per distinct time period worked in that department) */
