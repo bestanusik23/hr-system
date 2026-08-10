@@ -172,7 +172,7 @@ const CSS = `
 .hrwt-btn-primary:hover{background:#002fa8;border-color:#002fa8;}
 .hrwt-import-info{font-size:12px;color:#16a34a;display:flex;align-items:center;gap:5px;}
 .hrwt-import-err{font-size:12px;color:#dc2626;display:flex;align-items:center;gap:5px;}
-.hrwt-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:18px;}
+.hrwt-kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:12px;margin-bottom:18px;}
 .hrwt-kpi{background:#fff;border:1px solid var(--hr-line);border-radius:14px;padding:15px 16px;position:relative;overflow:hidden;box-shadow:0 4px 14px rgba(20,40,90,.05);transition:.18s;}
 .hrwt-kpi:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(20,40,90,.10);}
 .hrwt-kpi .ic{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-bottom:11px;}
@@ -745,9 +745,11 @@ export default function WorkforceTimeline() {
         </div>
 
         {/* Headcount per เวร, split by shift start time (averaged per day in monthly mode).
-            A partition — each person is in exactly one เวร, so these sum to the real total. */}
+            A partition — each person is in exactly one เวร, so these sum to the real total.
+            "band-N" (not the fixed c1/c2/c6 names) so this never collides with the peak-hour
+            card's own dedicated CSS below, regardless of how many bands there are. */}
         {bandRows.map((r, i) => (
-          <div key={r.key} className={`hrwt-kpi c${3 + i}`}>
+          <div key={r.key} className={`hrwt-kpi band-${i}`}>
             <div className="ic" style={{ background: `${r.color}22`, color: r.color }}><IcClock/></div>
             <div className="lbl">{r.label} <span style={{ opacity: .7 }}>· {r.sub}</span></div>
             <div className="val">{r.staff}<small>คน{isMonthly ? "/วัน" : ""}</small></div>
