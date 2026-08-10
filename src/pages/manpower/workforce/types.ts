@@ -85,28 +85,29 @@ export interface ShiftSummaryItem {
 }
 
 /**
- * Headcount inside one of the three fixed reporting windows
- * (08:00–16:00 / 16:00–00:00 / 00:00–08:00).
+ * Headcount in one of the three เวร (เช้า / บ่าย / ดึก).
  *
  * Distinct from ShiftSummaryItem: that one groups by the ACTUAL shift periods
- * found in the file (30+ of them), this one buckets whoever is on duty during a
- * standard window regardless of when their shift starts. Someone on 07:00–16:00
- * counts in the 08:00–16:00 window; a 20:00–08:00 shift counts in BOTH the
- * 16:00–00:00 and 00:00–08:00 windows, so these totals can exceed headcount.
+ * found in the file (30+ of them), this one assigns each person to exactly one
+ * เวร by when their shift STARTS. Because it's a partition, the three counts
+ * always sum to the real headcount — nobody is counted twice and nobody is
+ * dropped, which an end-time rule couldn't guarantee (a 08:00–20:00 or
+ * 20:00–08:00 shift matches no fixed start+end pair).
  */
-export interface WindowSummaryItem {
-  key: string;         // "day" | "eve" | "night"
-  label: string;       // "08:00–16:00"
+export interface ShiftBandItem {
+  key: string;         // "morning" | "evening" | "night"
+  label: string;       // "เวรเช้า"
+  sub: string;         // "เริ่ม 07:00–15:59"
   staff: number;       // person-days when `dates` spans a month
   percentage: number;  // relative to total active entries
   color: string;
 }
 
-/** One department's headcount across the three fixed windows */
-export interface DeptWindowRow {
+/** One department's headcount across the three เวร */
+export interface DeptBandRow {
   deptName: string;
   total: number;       // active entries (person-days) in this department
-  counts: number[];    // aligned with FIXED_WINDOWS order
+  counts: number[];    // aligned with SHIFT_BANDS order
 }
 
 export interface DeptRankItem {

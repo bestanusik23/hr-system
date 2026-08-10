@@ -20,7 +20,7 @@
 import type {
   ParseResult, DashboardData, KPIData, HourlyPoint,
   DeptTimelineItem, ShiftSummaryItem, ShiftBlock, TimeRange, MonthlySummary, CurrentStaffEntry,
-  WindowSummaryItem, DeptWindowRow,
+  ShiftBandItem, DeptBandRow,
 } from "./types";
 
 // ─── Hourly coverage check ────────────────────────────────────────────────────
@@ -185,85 +185,91 @@ function toRangeSummary(active: ActiveEntry[], registry: Map<string, { startMin:
     .sort((a, b) => b.staff - a.staff);
 }
 
-// ─── Fixed reporting windows (08–16 / 16–24 / 00–08) ──────────────────────────
+// ─── เวรเช้า / บ่าย / ดึก — partition by shift START time ──────────────────────
 
 /**
- * The three standard windows management reports on, independent of the 30+
- * actual shift codes in the file. A shift counts toward a window when it
- * overlaps it at all, so a 20:00–08:00 night shift lands in both the evening
- * and the night window — these totals are "who was on duty during this window",
- * not a partition of headcount, and can sum to more than the total.
+ * The three เวร, split by when a shift STARTS. Boundaries come from the
+ * hospital's own definition: เช้า starts 07:00, บ่าย starts 16:00, ดึก starts
+ * 00:00.
+ *
+ * Classifying by start time (rather than by which hours a shift covers) makes
+ * this a true partition: every person lands in exactly one เวร, so the three
+ * counts always add up to the real headcount. Matching on start AND end time
+ * instead would drop anyone whose shift runs long — 08:00–20:00, 09:00–19:00
+ * and 20:00–08:00 all exist in the payroll file and fit no fixed start+end
+ * pair — leaving them out of every column.
  */
-export const FIXED_WINDOWS: { key: string; label: string; startMin: number; endMin: number; color: string }[] = [
-  { key: "day",   label: "08:00–16:00", startMin: 480,  endMin: 960,  color: "#3fb96a" },
-  { key: "eve",   label: "16:00–00:00", startMin: 960,  endMin: 1440, color: "#8b6fe0" },
-  { key: "night", label: "00:00–08:00", startMin: 0,    endMin: 480,  color: "#1d4ed8" },
+export const SHIFT_BANDS: { key: string; label: string; sub: string; startFrom: number; startTo: number; color: string }[] = [
+  { key: "morning", label: "เวรเช้า", sub: "เริ่ม 07:00–15:59", startFrom: 420,  startTo: 960,  color: "#3fb96a" },
+  { key: "evening", label: "เวรบ่าย", sub: "เริ่ม 16:00–23:59", startFrom: 960,  startTo: 1440, color: "#8b6fe0" },
+  { key: "night",   label: "เวรดึก",  sub: "เริ่ม 00:00–06:59", startFrom: 0,    startTo: 420,  color: "#1d4ed8" },
 ];
 
 /**
- * True when a shift range overlaps [ws, we). Checks the range as-is and shifted
- * back a day, so overnight ranges (endMin > 1440, e.g. 16:00→08:00 = 960→1920)
- * are matched against the early-morning windows too — same wrap trick as
- * coversHour().
+ * The start time that defines which เวร a shift belongs to. Split shifts
+ * (e.g. I008 = 08:00–16:00 + 00:00–08:00) are represented by their LONGEST
+ * segment, so the person is filed under the เวร they actually spend the day in
+ * rather than whichever segment the file happened to list first.
  */
-export function overlapsWindow(range: TimeRange, ws: number, we: number): boolean {
-  const direct  = Math.min(range.endMin, we) - Math.max(range.startMin, ws);
-  const wrapped = Math.min(range.endMin - 1440, we) - Math.max(range.startMin - 1440, ws);
-  return direct > 0 || wrapped > 0;
+export function bandStartMinute(ranges: TimeRange[]): number {
+  let best = ranges[0];
+  for (const r of ranges) {
+    if (r.endMin - r.startMin > best.endMin - best.startMin) best = r;
+  }
+  return ((best.startMin % 1440) + 1440) % 1440;
 }
 
-/**
- * Counts each active entry once per window it touches (a split shift with two
- * ranges inside the same window still counts once for that window).
- */
-function windowCountsFor(entry: ActiveEntry): boolean[] {
-  return FIXED_WINDOWS.map(w => entry.ranges.some(r => overlapsWindow(r, w.startMin, w.endMin)));
+/** Index into SHIFT_BANDS for a shift starting at `startMin` (0–1439). */
+export function bandIndexForStart(startMin: number): number {
+  const i = SHIFT_BANDS.findIndex(b => startMin >= b.startFrom && startMin < b.startTo);
+  return i >= 0 ? i : SHIFT_BANDS.length - 1;   // 00:00–06:59 falls through to ดึก
 }
 
-/** Headcount per fixed window, scoped to a set of departments (or all when null/omitted). */
-export function calculateWindowSummary(
+/** Headcount per เวร, scoped to a set of departments (or all when null/omitted). */
+export function calculateShiftBandSummary(
   parsed: ParseResult,
   dates: string | string[],
   deptNames?: string[] | null,
-): WindowSummaryItem[] {
+): ShiftBandItem[] {
   const dateArr = Array.isArray(dates) ? dates : [dates];
   const active  = getActiveEntries(parsed, dateArr, deptNames);
-  const totals  = new Array<number>(FIXED_WINDOWS.length).fill(0);
+  const totals  = new Array<number>(SHIFT_BANDS.length).fill(0);
 
   for (const entry of active) {
-    windowCountsFor(entry).forEach((hit, i) => { if (hit) totals[i]++; });
+    totals[bandIndexForStart(bandStartMinute(entry.ranges))]++;
   }
 
-  return FIXED_WINDOWS.map((w, i) => ({
-    key: w.key,
-    label: w.label,
+  return SHIFT_BANDS.map((b, i) => ({
+    key: b.key,
+    label: b.label,
+    sub: b.sub,
     staff: totals[i],
     percentage: active.length ? Math.round(totals[i] / active.length * 100) : 0,
-    color: w.color,
+    color: b.color,
   }));
 }
 
 /**
- * Per-department headcount across the three fixed windows, sorted by total desc.
- * Answers "which departments staff which parts of the day, and how heavily".
+ * Per-department headcount across the three เวร, sorted by total desc.
+ * Answers "which departments staff which เวร, and how heavily".
  */
-export function calculateWindowsByDept(
+export function calculateBandsByDept(
   parsed: ParseResult,
   dates: string | string[],
   deptNames?: string[] | null,
-): DeptWindowRow[] {
+): DeptBandRow[] {
   const dateArr = Array.isArray(dates) ? dates : [dates];
   const active  = getActiveEntries(parsed, dateArr, deptNames);
-  const byDept  = new Map<string, DeptWindowRow>();
+  const byDept  = new Map<string, DeptBandRow>();
 
   for (const entry of active) {
     let row = byDept.get(entry.deptName);
     if (!row) {
-      row = { deptName: entry.deptName, total: 0, counts: new Array(FIXED_WINDOWS.length).fill(0) };
+      row = { deptName: entry.deptName, total: 0, counts: new Array(SHIFT_BANDS.length).fill(0) };
       byDept.set(entry.deptName, row);
     }
     row.total++;
-    windowCountsFor(entry).forEach((hit, i) => { if (hit) row!.counts[i]++; });
+    row.counts[bandIndexForStart(bandStartMinute(entry.ranges))]++;
   }
 
   return Array.from(byDept.values()).sort((a, b) => b.total - a.total);
