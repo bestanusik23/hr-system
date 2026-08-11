@@ -154,6 +154,7 @@ export interface BandStaffEntry {
   name: string;
   rangeLabel: string;      // the person's FULL shift, e.g. "08:00–00:00" (not just this เวร's chunk)
   straddleNote: string;    // "" when the shift fits entirely inside this เวร
+  startMin: number;        // shift's own start time (0–1439) — sort key for the department list
 }
 
 /** Monthly aggregate — person-day totals for reporting, reuses the same panel shapes as DashboardData */

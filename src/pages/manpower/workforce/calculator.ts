@@ -608,8 +608,10 @@ export function getBandStaffDetail(
         straddleNote: otherLabels.length
           ? `${rec.ranges.length > 1 ? "กะแยกช่วง" : "กะยาวเกิน 8 ชม."} — นับใน ${otherLabels.join(" และ ")} ด้วย`
           : "",
+        startMin: Math.min(...rec.ranges.map(r => ((r.startMin % 1440) + 1440) % 1440)),
       });
     }
   }
-  return result.sort((a, b) => a.department.localeCompare(b.department, "th") || a.name.localeCompare(b.name, "th"));
+  return result.sort((a, b) =>
+    a.department.localeCompare(b.department, "th") || a.startMin - b.startMin || a.name.localeCompare(b.name, "th"));
 }
