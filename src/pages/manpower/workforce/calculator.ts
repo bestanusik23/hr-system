@@ -188,22 +188,9 @@ function toRangeSummary(active: ActiveEntry[], registry: Map<string, { startMin:
 // ─── เวรเช้า / บ่าย / ดึก — partition by shift START time ──────────────────────
 
 /**
- * The เวร, split by when a shift (or 8-hour chunk of one — see
- * shiftChunkStarts) STARTS. Boundaries come from the hospital's own
- * definition: เช้า starts 07:00, บ่าย starts 16:00, ดึก starts 00:00 —
- * so เวรบ่าย spans the full 16:00–00:00.
- *
- * A 12h night shift starting 20:00 is NOT a special case here: chunking
- * already splits it into an 8h chunk starting 20:00 (falls in เวรบ่าย,
- * 16:00–23:59) and a 4h remainder starting 04:00 (falls in เวรดึก), each
- * counted where it actually falls, with the person flagged via
- * straddleNote in getBandStaffDetail — no separate 4th band needed.
- *
- * Classifying by start time (rather than by which hours a shift covers)
- * keeps a plain 8h shift a true 1-to-1 match: it lands in exactly one เวร.
- * Matching on start AND end time instead would drop anyone whose shift runs
- * long — 08:00–20:00, 09:00–19:00 and 20:00–08:00 all exist in the payroll
- * file and fit no fixed start+end pair — leaving them out of every column.
+ * The เวร. Boundaries come from the hospital's own definition: เช้า starts
+ * 07:00 (up to a 10h shift, i.e. ends by 17:00), บ่าย starts 16:00 (spans
+ * the full 16:00–00:00), ดึก starts 00:00 (ends by 08:00).
  */
 export const SHIFT_BANDS: { key: string; label: string; sub: string; startFrom: number; startTo: number; color: string }[] = [
   { key: "morning", label: "เวรเช้า", sub: "เริ่ม 07:00–15:59", startFrom: 420, startTo: 960,  color: "#3fb96a" },
@@ -211,34 +198,8 @@ export const SHIFT_BANDS: { key: string; label: string; sub: string; startFrom: 
   { key: "night",   label: "เวรดึก",  sub: "เริ่ม 00:00–06:59", startFrom: 0,   startTo: 420,  color: "#1d4ed8" },
 ];
 
-const CHUNK_MIN = 480; // 1 standard shift = 8 hours
-
-/**
- * Splits a shift's ranges into consecutive 8-hour chunks (a shorter trailing
- * remainder still counts as one chunk) and returns each chunk's own start
- * time (0–1439). Someone on a continuous 08:00–00:00 (16h) shift yields two
- * chunks — 08:00 and 16:00 — so they're counted once in เวรเช้า AND once in
- * เวรบ่าย, matching how many 8-hour-equivalent shifts of coverage they
- * actually provide. An exact 8h shift yields one chunk, unchanged from before.
- *
- * Genuine split shifts in the file (two separate ranges in one day, e.g.
- * I008 = 08:00–16:00 + 00:00–08:00) are walked per-range, so each already-8h
- * segment still yields exactly one chunk.
- *
- * Because one person can now land in more than one เวร, the per-เวร counts
- * are no longer a strict partition of headcount — they can sum to more than
- * the real number of people. That's intentional here: it's coverage per เวร,
- * not a headcount split.
- */
-export function shiftChunkStarts(ranges: TimeRange[]): number[] {
-  const starts: number[] = [];
-  for (const r of ranges) {
-    for (let cur = r.startMin; cur < r.endMin; cur += CHUNK_MIN) {
-      starts.push(((cur % 1440) + 1440) % 1440);
-    }
-  }
-  return starts;
-}
+const CHUNK_MIN       = 480; // 1 standard shift = 8 hours
+const SINGLE_BAND_MAX = 600; // 10h — matches the hospital's own เวรเช้า definition (07:00–17:00)
 
 /** Index into SHIFT_BANDS for a chunk starting at `startMin` (0–1439). */
 export function bandIndexForStart(startMin: number): number {
@@ -246,10 +207,63 @@ export function bandIndexForStart(startMin: number): number {
   return i >= 0 ? i : SHIFT_BANDS.length - 1;   // 00:00–06:59 falls through to ดึก
 }
 
+/** Minutes a shift range overlaps a เวร's clock window, wrapping past midnight both ways. */
+function bandOverlapMinutes(r: TimeRange, band: { startFrom: number; startTo: number }): number {
+  const overlap = (aS: number, aE: number, bS: number, bE: number) => Math.max(0, Math.min(aE, bE) - Math.max(aS, bS));
+  return overlap(r.startMin, r.endMin, band.startFrom, band.startTo)
+       + overlap(r.startMin - 1440, r.endMin - 1440, band.startFrom, band.startTo);
+}
+
+/**
+ * Which เวร(s) a shift's ranges count toward, as SHIFT_BANDS indices
+ * (duplicates are fine — each occurrence is one 8h-equivalent of coverage).
+ *
+ * Short ranges (≤10h, SINGLE_BAND_MAX) are classified WHOLE, by which เวร
+ * window they overlap the most — looking at the full start-to-end span, not
+ * just the clock minute it starts on. That's what keeps e.g. a 06:30–15:30
+ * shift (9h, starts 30min before the 07:00 เวรเช้า cutoff) reading as one
+ * person in เวรเช้า instead of splitting off a token sliver into เวรดึก.
+ *
+ * Longer ranges are walked in 8-hour chunks from their own start — this is
+ * what represents "two shifts' worth of coverage" for a genuine 12h or 16h
+ * shift (e.g. 08:00–00:00 → one chunk in เวรเช้า, one in เวรบ่าย), and stays
+ * exact for those; the ≤10h rule above only softens shorter, single-shift
+ * cases that would otherwise misfire on a boundary they barely cross.
+ *
+ * Genuine split shifts in the file (two separate ranges in one day, e.g.
+ * I008 = 08:00–16:00 + 00:00–08:00) are walked per-range, so each already-8h
+ * segment is classified on its own.
+ *
+ * Because one person can land in more than one เวร, the per-เวร counts are
+ * no longer a strict partition of headcount — they can sum to more than the
+ * real number of people. That's intentional here: it's coverage per เวร,
+ * not a headcount split.
+ */
+export function shiftBandIndices(ranges: TimeRange[]): number[] {
+  const indices: number[] = [];
+  for (const r of ranges) {
+    const duration = r.endMin - r.startMin;
+    if (duration <= SINGLE_BAND_MAX) {
+      let best = bandIndexForStart(((r.startMin % 1440) + 1440) % 1440);
+      let bestOverlap = -1;
+      SHIFT_BANDS.forEach((b, i) => {
+        const ov = bandOverlapMinutes(r, b);
+        if (ov > bestOverlap) { bestOverlap = ov; best = i; }
+      });
+      indices.push(best);
+    } else {
+      for (let cur = r.startMin; cur < r.endMin; cur += CHUNK_MIN) {
+        indices.push(bandIndexForStart(((cur % 1440) + 1440) % 1440));
+      }
+    }
+  }
+  return indices;
+}
+
 /**
  * Coverage per เวร, scoped to a set of departments (or all when null/omitted).
  * `staff` is chunk-count (8h-shift-equivalents), not headcount — see
- * shiftChunkStarts(). Percentage is still relative to real headcount
+ * shiftBandIndices(). Percentage is still relative to real headcount
  * (active.length), read as "% of today's staff present during this เวร".
  */
 export function calculateShiftBandSummary(
@@ -262,9 +276,7 @@ export function calculateShiftBandSummary(
   const totals  = new Array<number>(SHIFT_BANDS.length).fill(0);
 
   for (const entry of active) {
-    for (const start of shiftChunkStarts(entry.ranges)) {
-      totals[bandIndexForStart(start)]++;
-    }
+    for (const bi of shiftBandIndices(entry.ranges)) totals[bi]++;
   }
 
   return SHIFT_BANDS.map((b, i) => ({
@@ -298,9 +310,7 @@ export function calculateBandsByDept(
       byDept.set(entry.deptName, row);
     }
     row.total++;
-    for (const start of shiftChunkStarts(entry.ranges)) {
-      row.counts[bandIndexForStart(start)]++;
-    }
+    for (const bi of shiftBandIndices(entry.ranges)) row.counts[bi]++;
   }
 
   return Array.from(byDept.values()).sort((a, b) => b.total - a.total);
@@ -584,7 +594,7 @@ export function getBandStaffDetail(
     for (const rec of emp.records) {
       if (rec.date !== date || !rec.isActive || rec.ranges.length === 0) continue;
 
-      const chunkBands = new Set(shiftChunkStarts(rec.ranges).map(bandIndexForStart));
+      const chunkBands = new Set(shiftBandIndices(rec.ranges));
       if (!chunkBands.has(bandIndex)) continue;
 
       const otherLabels = SHIFT_BANDS

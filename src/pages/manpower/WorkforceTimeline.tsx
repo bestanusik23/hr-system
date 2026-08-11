@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftChunkStarts, bandIndexForStart, getBandStaffDetail } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftBandIndices, getBandStaffDetail } from "./workforce/api";
 import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, ShiftBandItem, DeptBandRow, BandStaffEntry } from "./workforce/api";
 import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
@@ -70,7 +70,7 @@ function computeStats(depts: DeptTimelineItem[]) {
 // ─── เวร fallbacks (used before any file is imported) ─────────────────────────
 // The engine classifies per employee-record; with no import there are no
 // records, only the example depts' aggregated blocks — so derive the same
-// numbers from those, reusing the engine's own start-time rule so both agree.
+// numbers from those, reusing the engine's own classification rule so both agree.
 
 function bandsFromBlocks(depts: DeptTimelineItem[]): ShiftBandItem[] {
   const totals = SHIFT_BANDS.map(() => 0);
@@ -78,7 +78,7 @@ function bandsFromBlocks(depts: DeptTimelineItem[]): ShiftBandItem[] {
   for (const d of depts) {
     for (const b of d.blocks) {
       all += b.count;
-      for (const start of shiftChunkStarts([b])) totals[bandIndexForStart(start)] += b.count;
+      for (const bi of shiftBandIndices([b])) totals[bi] += b.count;
     }
   }
   return SHIFT_BANDS.map((b, i) => ({
@@ -93,7 +93,7 @@ function deptBandsFromBlocks(depts: DeptTimelineItem[]): DeptBandRow[] {
     let total = 0;
     for (const b of d.blocks) {
       total += b.count;
-      for (const start of shiftChunkStarts([b])) counts[bandIndexForStart(start)] += b.count;
+      for (const bi of shiftBandIndices([b])) counts[bi] += b.count;
     }
     return { deptName: d.name, total, counts };
   }).sort((a, b) => b.total - a.total);
@@ -285,6 +285,7 @@ export default function WorkforceTimeline() {
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
   const [nowClick, setNowClick] = useState<{ x: number; y: number; entries: CurrentStaffEntry[]; date: string } | null>(null);
   const [bandClick, setBandClick] = useState<{ x: number; y: number; entries: BandStaffEntry[]; date: string; bandLabel: string } | null>(null);
+  const [bandFilter, setBandFilter] = useState<string | null>(null); // null = ทั้งหมด; "" = ไม่มีหมายเหตุ; else = exact straddleNote text
   const [planByDept, setPlanByDept] = useState<Map<string, number>>(new Map());
 
   // OT entry state — independent of the shift-timeline import (per plan: OT is
@@ -597,6 +598,7 @@ export default function WorkforceTimeline() {
   const openBandDetail = (bandIndex: number, bandLabel: string, x: number, y: number) => {
     if (!parsed || !nowSnapshotDate) return;
     const entries = getBandStaffDetail(parsed, nowSnapshotDate, bandIndex, deptScope);
+    setBandFilter(null);
     setBandClick({ x, y, entries, date: nowSnapshotDate, bandLabel });
   };
 
@@ -753,8 +755,8 @@ export default function WorkforceTimeline() {
           </div>
         </div>
 
-        {/* Coverage per เวร (averaged per day in monthly mode) — shifts longer than 8h are
-            split into 8h chunks (see shiftChunkStarts), so one person can land in more than
+        {/* Coverage per เวร (averaged per day in monthly mode) — shifts long enough to genuinely
+            span two เวร (see shiftBandIndices) are split, so one person can land in more than
             one เวร and these can sum to more than the real headcount; see the panel note below.
             "band-N" (not the fixed c1/c2/c6 names) so this never collides with the peak-hour
             card's own dedicated CSS below, regardless of how many bands there are. */}
@@ -1202,10 +1204,26 @@ export default function WorkforceTimeline() {
         );
       })()}
 
-      {/* เวร card click — who makes up that count, grouped by ฝ่าย → แผนก, with a note on long shifts */}
+      {/* เวร card click — who makes up that count, grouped by ฝ่าย → แผนก, filterable by หมายเหตุ */}
       {bandClick && (() => {
+        // สรุปจำนวนคนตามหมายเหตุ (เงื่อนไข) — "" = ไม่มีหมายเหตุ (ปฏิบัติงานปกติ)
+        const noteCounts = new Map<string, number>();
+        for (const e of bandClick.entries) {
+          const key = e.straddleNote || "";
+          noteCounts.set(key, (noteCounts.get(key) ?? 0) + 1);
+        }
+        const noteChips = Array.from(noteCounts.entries()).sort((a, b) => {
+          if (a[0] === "") return -1;
+          if (b[0] === "") return 1;
+          return b[1] - a[1];
+        });
+
+        const shownEntries = bandFilter === null
+          ? bandClick.entries
+          : bandClick.entries.filter(e => (e.straddleNote || "") === bandFilter);
+
         const byDivision = new Map<string, Map<string, BandStaffEntry[]>>();
-        for (const entry of bandClick.entries) {
+        for (const entry of shownEntries) {
           const div = getDivisionForDept(entry.department);
           if (!byDivision.has(div)) byDivision.set(div, new Map());
           const deptMap = byDivision.get(div)!;
@@ -1215,10 +1233,10 @@ export default function WorkforceTimeline() {
         const divisions = Array.from(byDivision.entries()).sort((a, b) => b[1].size - a[1].size);
         const straddleCount = bandClick.entries.filter(e => e.straddleNote).length;
         const left = Math.min(bandClick.x, Math.max(window.innerWidth - 400, 0));
-        const top  = Math.min(bandClick.y, Math.max(window.innerHeight - 460, 0));
+        const top  = Math.min(bandClick.y, Math.max(window.innerHeight - 500, 0));
 
         return (
-          <div style={{ position:"fixed", left, top, width:380, maxHeight:460, display:"flex", flexDirection:"column", background:"#fff", color:"#1b2a4a", borderRadius:12, border:"1px solid #eaedf5", boxShadow:"0 20px 50px rgba(0,0,0,.35)", zIndex:9999 }}>
+          <div style={{ position:"fixed", left, top, width:380, maxHeight:500, display:"flex", flexDirection:"column", background:"#fff", color:"#1b2a4a", borderRadius:12, border:"1px solid #eaedf5", boxShadow:"0 20px 50px rgba(0,0,0,.35)", zIndex:9999 }}>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderBottom:"1px solid #eaedf5" }}>
               <div style={{ fontWeight:700, fontSize:13 }}>
                 {bandClick.bandLabel} — รวม {bandClick.entries.length} คน
@@ -1234,9 +1252,40 @@ export default function WorkforceTimeline() {
                 </div>
               )}
             </div>
+
+            {/* ตัวกรองตามหมายเหตุ — ให้ผู้บริหารเห็นว่ายอดรวมประกอบด้วยเงื่อนไขอะไรบ้าง */}
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5, padding:"8px 14px 0" }}>
+              <button onClick={() => setBandFilter(null)}
+                style={{
+                  fontSize:10.5, padding:"3px 9px", borderRadius:99, cursor:"pointer", fontFamily:"inherit", fontWeight:700,
+                  border: bandFilter === null ? "1.5px solid #0038C6" : "1px solid #e2e8f0",
+                  background: bandFilter === null ? "#eef3ff" : "#fff",
+                  color: bandFilter === null ? "#0038C6" : "#64748b",
+                }}>
+                ทั้งหมด ({bandClick.entries.length})
+              </button>
+              {noteChips.map(([note, count]) => {
+                const active = bandFilter === note;
+                const isNormal = note === "";
+                return (
+                  <button key={note || "normal"} onClick={() => setBandFilter(note)}
+                    title={note || "ปฏิบัติงานปกติ ไม่คาบเกี่ยวเวรอื่น"}
+                    style={{
+                      fontSize:10.5, padding:"3px 9px", borderRadius:99, cursor:"pointer", fontFamily:"inherit", fontWeight:700,
+                      maxWidth:170, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                      border: active ? `1.5px solid ${isNormal ? "#16a34a" : "#b8590a"}` : "1px solid #e2e8f0",
+                      background: active ? (isNormal ? "#f0fdf4" : "#fff7e6") : "#fff",
+                      color: active ? (isNormal ? "#16a34a" : "#b8590a") : "#64748b",
+                    }}>
+                    {isNormal ? "ปกติ (ไม่คาบเกี่ยว)" : note} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
             <div style={{ overflowY:"auto", padding:"8px 14px 12px" }}>
-              {bandClick.entries.length === 0 ? (
-                <div style={{ fontSize:12.5, color:"#94a3b8", padding:"12px 0" }}>ไม่มีเจ้าหน้าที่ในเวรนี้</div>
+              {shownEntries.length === 0 ? (
+                <div style={{ fontSize:12.5, color:"#94a3b8", padding:"12px 0" }}>ไม่มีเจ้าหน้าที่ตรงเงื่อนไขนี้</div>
               ) : divisions.map(([div, deptMap]) => {
                 const divTotal = Array.from(deptMap.values()).reduce((s, arr) => s + arr.length, 0);
                 return (
