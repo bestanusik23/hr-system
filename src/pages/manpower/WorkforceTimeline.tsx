@@ -287,7 +287,7 @@ export default function WorkforceTimeline() {
   const [nowClick, setNowClick] = useState<{ x: number; y: number; entries: CurrentStaffEntry[]; date: string } | null>(null);
   const [bandClick, setBandClick] = useState<{ x: number; y: number; entries: BandStaffEntry[]; date: string; bandLabel: string } | null>(null);
   const [bandFilter, setBandFilter] = useState<string | null>(null); // null = ทั้งหมด; "" = ไม่มีหมายเหตุ; else = exact straddleNote text
-  const [hoursFilter, setHoursFilter] = useState<"over" | "all" | "unknown">("over");
+  const [hoursFilter, setHoursFilter] = useState<"over" | "all" | "unknown" | "anomaly">("over");
   const [planByDept, setPlanByDept] = useState<Map<string, number>>(new Map());
 
   // OT entry state — independent of the shift-timeline import (per plan: OT is
@@ -941,17 +941,22 @@ export default function WorkforceTimeline() {
         const threshold = MONTHLY_HOUR_THRESHOLDS[monthKey] ?? null;
         const overRows     = hoursReport.filter(r => r.overHours > 0);
         const unknownRows  = hoursReport.filter(r => r.position === null);
-        const shownRows    = hoursFilter === "over" ? overRows : hoursFilter === "unknown" ? unknownRows : hoursReport;
+        const anomalyRows  = hoursReport.filter(r => r.anomalies.length > 0);
+        const shownRows    = hoursFilter === "over" ? overRows
+                            : hoursFilter === "unknown" ? unknownRows
+                            : hoursFilter === "anomaly" ? anomalyRows
+                            : hoursReport;
 
         return (
           <div className="hrwt-panel">
             <div className="hrwt-panel-head">
               <h3>⏱️ ชั่วโมงทำงานรวม/เดือน เทียบเกณฑ์ ({selectedMonth?.label ?? "-"})</h3>
-              <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {([
                   ["over", `เกินเกณฑ์ (${overRows.length})`],
                   ["all", `ทั้งหมด (${hoursReport.length})`],
                   ["unknown", `ไม่ทราบตำแหน่ง (${unknownRows.length})`],
+                  ["anomaly", `⚠ ข้อมูลผิดปกติ (${anomalyRows.length})`],
                 ] as const).map(([key, label]) => (
                   <button key={key}
                     className={`hrwt-btn ${hoursFilter === key ? "hrwt-btn-primary" : "hrwt-btn-outline"}`}
@@ -968,6 +973,13 @@ export default function WorkforceTimeline() {
                 : <span style={{ color: "#dc2626" }}>⚠ ยังไม่มีเกณฑ์ประกาศไว้สำหรับเดือนนี้ ({monthKey || "-"}) — ตารางจะแสดงชั่วโมงรวมแต่ไม่คำนวณส่วนเกิน</span>}
               {" "}ตำแหน่งจับคู่จากชื่อกับแผนกำลังคน หากจับคู่ไม่ได้จะขึ้น "ไม่ทราบตำแหน่ง" (ไม่เดาให้) ตรวจสอบเพิ่มเองได้ที่แท็บ Bar Management → Bar Management
             </p>
+            {anomalyRows.length > 0 && (
+              <div style={{ margin: "0 18px 10px", padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca",
+                borderRadius: 8, fontSize: 11.5, color: "#dc2626", lineHeight: 1.7 }}>
+                ⚠ พบกะที่ยาวผิดปกติ (เกิน 20 ชม./กะ) {anomalyRows.length} คน — <b>ไม่ถูกนับรวมในชั่วโมงรวม</b> เพราะน่าจะเกิดจากการอ่านไฟล์ผิดพลาด ไม่ใช่กะจริง
+                กดปุ่ม "⚠ ข้อมูลผิดปกติ" ด้านบนเพื่อดูรายชื่อ แล้ววางเมาส์ที่ชื่อเพื่อดูรายละเอียดกะที่ถูกตัดออก
+              </div>
+            )}
             <div className="hrwt-tbl-wrap" style={{ maxHeight: 460, padding: "0 18px 16px" }}>
               <table className="hrwt-tbl">
                 <thead>
@@ -987,8 +999,16 @@ export default function WorkforceTimeline() {
                       {hoursReport.length === 0 ? "ยังไม่มีข้อมูลกะของเดือนนี้" : "ไม่มีรายการตรงเงื่อนไข"}
                     </td></tr>
                   ) : shownRows.map(r => (
-                    <tr key={r.name} style={r.overHours > 0 ? { background: "#fffbeb" } : undefined}>
-                      <td>{r.name}</td>
+                    <tr key={r.name} style={r.anomalies.length > 0 ? { background: "#fef2f2" } : r.overHours > 0 ? { background: "#fffbeb" } : undefined}>
+                      <td>
+                        {r.name}
+                        {r.anomalies.length > 0 && (
+                          <span title={r.anomalies.map(a => `${formatThaiDate(a.date)} · ${a.shiftName} → คำนวณได้ ${a.minutes} ชม. (ตัดออกเพราะเกิน 20 ชม./กะ)`).join("\n")}
+                            style={{ marginLeft: 5, cursor: "help" }}>
+                            ⚠️
+                          </span>
+                        )}
+                      </td>
                       <td>{r.department}</td>
                       <td>
                         {r.position ?? (

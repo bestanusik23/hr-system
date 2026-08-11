@@ -172,6 +172,7 @@ export interface MonthlyHoursRow {
   totalHours: number;
   threshold: number | null;               // null = no announced threshold for this month/category
   overHours: number;                      // max(0, totalHours - threshold), 0 when threshold is null
+  anomalies: { date: string; shiftName: string; minutes: number }[]; // shifts excluded as implausible — see MAX_PLAUSIBLE_SHIFT_MIN
 }
 
 /** Monthly aggregate — person-day totals for reporting, reuses the same panel shapes as DashboardData */

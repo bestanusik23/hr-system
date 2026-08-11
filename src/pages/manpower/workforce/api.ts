@@ -170,6 +170,7 @@ export function calculateMonthlyHoursReport(parsed: ParseResult, month: MonthOpt
       totalHours: h.totalHours,
       threshold: limit,
       overHours: limit != null ? Math.max(0, Math.round((h.totalHours - limit) * 10) / 10) : 0,
+      anomalies: h.anomalies,
     };
   }).sort((a, b) => b.overHours - a.overHours || b.totalHours - a.totalHours);
 }

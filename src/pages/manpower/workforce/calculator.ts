@@ -538,6 +538,13 @@ export function calculateMonthlySummary(parsed: ParseResult, dates: string[], pl
   };
 }
 
+// A single shift range longer than this is treated as a parse anomaly, not a
+// real shift — the longest real shift seen in this file is 16h (08:00–00:00);
+// 20h leaves margin without letting a mis-matched cell (e.g. the global regex
+// in parseShiftTimes latching onto stray "\d{1,2}.\d{2}-\d{1,2}.\d{2}"-shaped
+// text in a garbled cell) silently inflate someone's monthly total.
+const MAX_PLAUSIBLE_SHIFT_MIN = 20 * 60;
+
 /**
  * Total worked hours per employee across `dates` (typically a whole payroll
  * month) — the raw input for the monthly-hours-vs-threshold report. Deliberately
@@ -546,26 +553,53 @@ export function calculateMonthlySummary(parsed: ParseResult, dates: string[], pl
  * ผู้ช่วยวิชาชีพ) is done at the UI layer against the manpower plan roster
  * (see hoursPolicy.ts + positionMap.ts), same as how getPositionForName() is
  * already used elsewhere — this keeps the engine itself position-agnostic.
+ *
+ * Grouped by employee CODE, not name: the payroll report starts a fresh
+ * Employee entry every time it lists someone under a department section (so
+ * one real person can appear as several Employee objects across the file),
+ * and names are not guaranteed unique across a hospital-sized roster — code
+ * is the only reliably-unique key available, so grouping by name risked
+ * silently merging two different people's hours into one inflated total.
+ *
+ * Any single shift whose parsed duration exceeds MAX_PLAUSIBLE_SHIFT_MIN is
+ * excluded from the sum and reported separately via `anomalies`, instead of
+ * being added in and silently producing an impossible monthly total.
  */
 export function calculateMonthlyHoursPerEmployee(
   parsed: ParseResult,
   dates: string[],
-): { name: string; department: string; totalHours: number }[] {
+): {
+  name: string; department: string; totalHours: number;
+  anomalies: { date: string; shiftName: string; minutes: number }[];
+}[] {
   const dateSet = new Set(dates);
-  const byName = new Map<string, { department: string; totalMin: number }>();
+  const byCode = new Map<string, {
+    name: string; department: string; totalMin: number;
+    anomalies: { date: string; shiftName: string; minutes: number }[];
+  }>();
 
   for (const emp of parsed.employees) {
+    const cur = byCode.get(emp.code) ?? { name: emp.name, department: emp.deptName, totalMin: 0, anomalies: [] };
     for (const rec of emp.records) {
       if (!dateSet.has(rec.date) || !rec.isActive) continue;
-      const minutes = rec.ranges.reduce((s, r) => s + (r.endMin - r.startMin), 0);
-      const cur = byName.get(emp.name) ?? { department: emp.deptName, totalMin: 0 };
-      cur.totalMin += minutes;
-      byName.set(emp.name, cur);
+      for (const r of rec.ranges) {
+        const minutes = r.endMin - r.startMin;
+        if (minutes < 0 || minutes > MAX_PLAUSIBLE_SHIFT_MIN) {
+          cur.anomalies.push({ date: rec.date, shiftName: rec.name, minutes: Math.round(minutes / 60 * 10) / 10 });
+          continue; // excluded from the total — see MAX_PLAUSIBLE_SHIFT_MIN
+        }
+        cur.totalMin += minutes;
+      }
     }
+    byCode.set(emp.code, cur);
   }
 
-  return Array.from(byName.entries())
-    .map(([name, v]) => ({ name, department: v.department, totalHours: Math.round(v.totalMin / 60 * 10) / 10 }))
+  return Array.from(byCode.values())
+    .map(v => ({
+      name: v.name, department: v.department,
+      totalHours: Math.round(v.totalMin / 60 * 10) / 10,
+      anomalies: v.anomalies,
+    }))
     .sort((a, b) => b.totalHours - a.totalHours);
 }
 
