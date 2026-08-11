@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftChunkStarts, bandIndexForStart } from "./workforce/api";
-import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, ShiftBandItem, DeptBandRow } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftChunkStarts, bandIndexForStart, getBandStaffDetail } from "./workforce/api";
+import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, ShiftBandItem, DeptBandRow, BandStaffEntry } from "./workforce/api";
 import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
 import { getPlanByPayrollDept } from "./workforce/planMap";
@@ -284,6 +284,7 @@ export default function WorkforceTimeline() {
   const [selectedMonthKey, setSelectedMonthKey] = useState<string>("");
   const [monthlySummary, setMonthlySummary]     = useState<MonthlySummary | null>(null);
   const [nowClick, setNowClick] = useState<{ x: number; y: number; entries: CurrentStaffEntry[]; date: string } | null>(null);
+  const [bandClick, setBandClick] = useState<{ x: number; y: number; entries: BandStaffEntry[]; date: string; bandLabel: string } | null>(null);
   const [planByDept, setPlanByDept] = useState<Map<string, number>>(new Map());
 
   // OT entry state — independent of the shift-timeline import (per plan: OT is
@@ -591,6 +592,14 @@ export default function WorkforceTimeline() {
     setNowClick({ x, y, entries, date: nowSnapshotDate });
   };
 
+  // เวร KPI card click — same "which date" logic as the NOW-line snapshot
+  // (a month has no single day, so the most recent date in the cycle stands in).
+  const openBandDetail = (bandIndex: number, bandLabel: string, x: number, y: number) => {
+    if (!parsed || !nowSnapshotDate) return;
+    const entries = getBandStaffDetail(parsed, nowSnapshotDate, bandIndex, deptScope);
+    setBandClick({ x, y, entries, date: nowSnapshotDate, bandLabel });
+  };
+
   // ── Import handler ────────────────────────────────────────────────────────────
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -750,11 +759,17 @@ export default function WorkforceTimeline() {
             "band-N" (not the fixed c1/c2/c6 names) so this never collides with the peak-hour
             card's own dedicated CSS below, regardless of how many bands there are. */}
         {bandRows.map((r, i) => (
-          <div key={r.key} className={`hrwt-kpi band-${i}`}>
+          <div key={r.key} className={`hrwt-kpi band-${i}`}
+            onClick={e => parsed && openBandDetail(i, r.label, e.clientX + 14, e.clientY + 14)}
+            title={parsed ? `คลิกเพื่อดูรายชื่อเจ้าหน้าที่ใน${r.label}` : "นำเข้าไฟล์กะก่อนจึงจะดูรายชื่อได้"}
+            style={parsed ? { cursor: "pointer" } : undefined}>
             <div className="ic" style={{ background: `${r.color}22`, color: r.color }}><IcClock/></div>
             <div className="lbl">{r.label} <span style={{ opacity: .7 }}>· {r.sub}</span></div>
             <div className="val">{r.staff}<small>คน{isMonthly ? "/วัน" : ""}</small></div>
-            <div className="foot">{r.percentage}% ของทั้งหมด</div>
+            <div className="foot">
+              {r.percentage}% ของทั้งหมด
+              {parsed && <span style={{ color: "#0038C6", fontWeight: 600 }}> · ดูรายชื่อ →</span>}
+            </div>
           </div>
         ))}
 
@@ -1175,6 +1190,73 @@ export default function WorkforceTimeline() {
                           <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:8, fontSize:11, color:"#475569", padding:"2px 0" }}>
                             <span>{e.name}</span>
                             <span style={{ color:"#94a3b8", textAlign:"right", whiteSpace:"nowrap" }}>{getPositionForName(e.name) ?? "-"}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* เวร card click — who makes up that count, grouped by ฝ่าย → แผนก, with a note on long shifts */}
+      {bandClick && (() => {
+        const byDivision = new Map<string, Map<string, BandStaffEntry[]>>();
+        for (const entry of bandClick.entries) {
+          const div = getDivisionForDept(entry.department);
+          if (!byDivision.has(div)) byDivision.set(div, new Map());
+          const deptMap = byDivision.get(div)!;
+          if (!deptMap.has(entry.department)) deptMap.set(entry.department, []);
+          deptMap.get(entry.department)!.push(entry);
+        }
+        const divisions = Array.from(byDivision.entries()).sort((a, b) => b[1].size - a[1].size);
+        const straddleCount = bandClick.entries.filter(e => e.straddleNote).length;
+        const left = Math.min(bandClick.x, Math.max(window.innerWidth - 400, 0));
+        const top  = Math.min(bandClick.y, Math.max(window.innerHeight - 460, 0));
+
+        return (
+          <div style={{ position:"fixed", left, top, width:380, maxHeight:460, display:"flex", flexDirection:"column", background:"#fff", color:"#1b2a4a", borderRadius:12, border:"1px solid #eaedf5", boxShadow:"0 20px 50px rgba(0,0,0,.35)", zIndex:9999 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 14px", borderBottom:"1px solid #eaedf5" }}>
+              <div style={{ fontWeight:700, fontSize:13 }}>
+                {bandClick.bandLabel} — รวม {bandClick.entries.length} คน
+              </div>
+              <button onClick={() => setBandClick(null)} style={{ border:"none", background:"none", cursor:"pointer", fontSize:18, color:"#94a3b8", lineHeight:1, padding:0 }}>×</button>
+            </div>
+            <div style={{ fontSize:10.5, color:"#94a3b8", padding:"6px 14px 0", lineHeight:1.6 }}>
+              ข้อมูลวันที่ {formatThaiDate(bandClick.date)}
+              {isMonthly && " (วันล่าสุดของรอบเดือนที่เลือก — การ์ดด้านบนเป็นค่าเฉลี่ยทั้งเดือน ตัวเลขจึงไม่เท่ากัน)"}
+              {straddleCount > 0 && (
+                <div style={{ color:"#b8590a", marginTop:3 }}>
+                  ⚠ มี {straddleCount} คนที่เข้างานคาบเกี่ยวกะ (ถูกนับในเวรอื่นด้วย)
+                </div>
+              )}
+            </div>
+            <div style={{ overflowY:"auto", padding:"8px 14px 12px" }}>
+              {bandClick.entries.length === 0 ? (
+                <div style={{ fontSize:12.5, color:"#94a3b8", padding:"12px 0" }}>ไม่มีเจ้าหน้าที่ในเวรนี้</div>
+              ) : divisions.map(([div, deptMap]) => {
+                const divTotal = Array.from(deptMap.values()).reduce((s, arr) => s + arr.length, 0);
+                return (
+                  <div key={div} style={{ marginBottom:10 }}>
+                    <div style={{ fontSize:11.5, fontWeight:700, color:"#0038C6", marginBottom:4 }}>{div} ({divTotal})</div>
+                    {Array.from(deptMap.entries()).sort((a, b) => b[1].length - a[1].length).map(([dept, list]) => (
+                      <div key={dept} style={{ marginBottom:6, paddingLeft:8 }}>
+                        <div style={{ fontSize:12, fontWeight:600, marginBottom:2 }}>{dept} ({list.length} คน)</div>
+                        {list.map((e, i) => (
+                          <div key={i} style={{ fontSize:11, color:"#475569", padding:"2px 0" }}>
+                            <div style={{ display:"flex", justifyContent:"space-between", gap:8 }}>
+                              <span>{e.name}</span>
+                              <span style={{ color:"#94a3b8", textAlign:"right", whiteSpace:"nowrap" }}>{e.rangeLabel}</span>
+                            </div>
+                            {e.straddleNote && (
+                              <div style={{ fontSize:10, color:"#b8590a", background:"#fff7e6", border:"1px dashed #f5c563",
+                                borderRadius:6, padding:"2px 6px", marginTop:2 }}>
+                                ⚠ {e.straddleNote}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

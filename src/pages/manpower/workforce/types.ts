@@ -143,6 +143,19 @@ export interface CurrentStaffEntry {
   rangeLabel: string;   // the shift time period they're working, e.g. "08:00–16:00"
 }
 
+/**
+ * One employee counted inside a specific เวร (used by the เวร KPI card click).
+ * straddleNote is non-empty when this person's shift is long enough to also
+ * land in another เวร (see shiftChunkStarts) — e.g. someone on 08:00–00:00
+ * shows up here under เวรเช้า with a note that they continue into เวรบ่าย too.
+ */
+export interface BandStaffEntry {
+  department: string;
+  name: string;
+  rangeLabel: string;      // the person's FULL shift, e.g. "08:00–00:00" (not just this เวร's chunk)
+  straddleNote: string;    // "" when the shift fits entirely inside this เวร
+}
+
 /** Monthly aggregate — person-day totals for reporting, reuses the same panel shapes as DashboardData */
 export interface MonthlySummary {
   monthLabel: string;

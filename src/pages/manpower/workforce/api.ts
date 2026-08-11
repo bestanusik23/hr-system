@@ -9,17 +9,18 @@ import {
   calculateDashboardData, calculateHourlyForDept, calculateShiftSummaryForDept,
   calculateMonthlySummary, getCurrentStaffDetail,
   calculateShiftBandSummary, calculateBandsByDept, SHIFT_BANDS, shiftChunkStarts, bandIndexForStart,
+  getBandStaffDetail,
 } from "./calculator";
 import type { ParseResult, DashboardData, MonthOption, MonthlySummary } from "./types";
 
 export type { ParseResult, DashboardData, MonthOption, MonthlySummary };
 export type {
   DeptTimelineItem, HourlyPoint, KPIData, ShiftSummaryItem, ShiftBlock, CurrentStaffEntry,
-  ShiftBandItem, DeptBandRow,
+  ShiftBandItem, DeptBandRow, BandStaffEntry,
 } from "./types";
 export {
   getCurrentStaffDetail, calculateShiftBandSummary, calculateBandsByDept,
-  SHIFT_BANDS, shiftChunkStarts, bandIndexForStart,
+  SHIFT_BANDS, shiftChunkStarts, bandIndexForStart, getBandStaffDetail,
 };
 
 const THAI_MONTHS = [

@@ -20,7 +20,7 @@
 import type {
   ParseResult, DashboardData, KPIData, HourlyPoint,
   DeptTimelineItem, ShiftSummaryItem, ShiftBlock, TimeRange, MonthlySummary, CurrentStaffEntry,
-  ShiftBandItem, DeptBandRow,
+  ShiftBandItem, DeptBandRow, BandStaffEntry,
 } from "./types";
 
 // ─── Hourly coverage check ────────────────────────────────────────────────────
@@ -552,4 +552,50 @@ export function getCurrentStaffDetail(parsed: ParseResult, date: string, deptNam
     }
   }
   return result.sort((a, b) => a.department.localeCompare(b.department, "th"));
+}
+
+/**
+ * Every employee whose shift includes at least one 8-hour chunk in `bandIndex`
+ * (an index into SHIFT_BANDS) on `date`, optionally scoped to a set of
+ * departments. Used by the เวร KPI card click, so HR can see who exactly makes
+ * up that count instead of just the number.
+ *
+ * straddleNote is set whenever a person's other chunks fall in a different
+ * เวร too (e.g. a 08:00–00:00 shift showing up under both เวรเช้า and
+ * เวรบ่าย) — this is exactly the situation calculateShiftBandSummary's counts
+ * no longer partition headcount for, so flagging it here lets HR see at a
+ * glance who's a long/split shift rather than two different people.
+ */
+export function getBandStaffDetail(
+  parsed: ParseResult,
+  date: string,
+  bandIndex: number,
+  deptNames?: string[] | null,
+): BandStaffEntry[] {
+  const deptSet = deptNames && deptNames.length > 0 ? new Set(deptNames) : null;
+  const result: BandStaffEntry[] = [];
+
+  for (const emp of parsed.employees) {
+    if (deptSet && !deptSet.has(emp.deptName)) continue;
+    for (const rec of emp.records) {
+      if (rec.date !== date || !rec.isActive || rec.ranges.length === 0) continue;
+
+      const chunkBands = new Set(shiftChunkStarts(rec.ranges).map(bandIndexForStart));
+      if (!chunkBands.has(bandIndex)) continue;
+
+      const otherLabels = SHIFT_BANDS
+        .filter((_, i) => i !== bandIndex && chunkBands.has(i))
+        .map(b => b.label);
+
+      result.push({
+        department: emp.deptName,
+        name: emp.name,
+        rangeLabel: rec.ranges.map(r => formatRangeLabel(r.startMin, r.endMin)).join(" + "),
+        straddleNote: otherLabels.length
+          ? `${rec.ranges.length > 1 ? "กะแยกช่วง" : "กะยาวเกิน 8 ชม."} — นับใน ${otherLabels.join(" และ ")} ด้วย`
+          : "",
+      });
+    }
+  }
+  return result.sort((a, b) => a.department.localeCompare(b.department, "th") || a.name.localeCompare(b.name, "th"));
 }
