@@ -188,23 +188,27 @@ function toRangeSummary(active: ActiveEntry[], registry: Map<string, { startMin:
 // ─── เวรเช้า / บ่าย / ดึก — partition by shift START time ──────────────────────
 
 /**
- * The เวร, split by when a shift STARTS. Boundaries come from the hospital's
- * own definition: เช้า starts 07:00, บ่าย starts 16:00, ดึก starts 00:00 —
- * plus a separate band for the 12-hour 20:00→08:00 night shift, which starts
- * in the evening but is night coverage and would otherwise inflate เวรบ่าย.
+ * The เวร, split by when a shift (or 8-hour chunk of one — see
+ * shiftChunkStarts) STARTS. Boundaries come from the hospital's own
+ * definition: เช้า starts 07:00, บ่าย starts 16:00, ดึก starts 00:00 —
+ * so เวรบ่าย spans the full 16:00–00:00.
  *
- * Classifying by start time (rather than by which hours a shift covers) makes
- * this a true partition: every person lands in exactly one เวร, so the counts
- * always add up to the real headcount. Matching on start AND end time instead
- * would drop anyone whose shift runs long — 08:00–20:00, 09:00–19:00 and
- * 16:00–08:00 all exist in the payroll file and fit no fixed start+end pair —
- * leaving them out of every column.
+ * A 12h night shift starting 20:00 is NOT a special case here: chunking
+ * already splits it into an 8h chunk starting 20:00 (falls in เวรบ่าย,
+ * 16:00–23:59) and a 4h remainder starting 04:00 (falls in เวรดึก), each
+ * counted where it actually falls, with the person flagged via
+ * straddleNote in getBandStaffDetail — no separate 4th band needed.
+ *
+ * Classifying by start time (rather than by which hours a shift covers)
+ * keeps a plain 8h shift a true 1-to-1 match: it lands in exactly one เวร.
+ * Matching on start AND end time instead would drop anyone whose shift runs
+ * long — 08:00–20:00, 09:00–19:00 and 20:00–08:00 all exist in the payroll
+ * file and fit no fixed start+end pair — leaving them out of every column.
  */
 export const SHIFT_BANDS: { key: string; label: string; sub: string; startFrom: number; startTo: number; color: string }[] = [
-  { key: "morning", label: "เวรเช้า",        sub: "เริ่ม 07:00–15:59", startFrom: 420,  startTo: 960,  color: "#3fb96a" },
-  { key: "evening", label: "เวรบ่าย",        sub: "เริ่ม 16:00–19:59", startFrom: 960,  startTo: 1200, color: "#8b6fe0" },
-  { key: "night12", label: "เวรดึก 12 ชม.",  sub: "เริ่ม 20:00–23:59", startFrom: 1200, startTo: 1440, color: "#e8590c" },
-  { key: "night",   label: "เวรดึก",         sub: "เริ่ม 00:00–06:59", startFrom: 0,    startTo: 420,  color: "#1d4ed8" },
+  { key: "morning", label: "เวรเช้า", sub: "เริ่ม 07:00–15:59", startFrom: 420, startTo: 960,  color: "#3fb96a" },
+  { key: "evening", label: "เวรบ่าย", sub: "เริ่ม 16:00–23:59", startFrom: 960, startTo: 1440, color: "#8b6fe0" },
+  { key: "night",   label: "เวรดึก",  sub: "เริ่ม 00:00–06:59", startFrom: 0,   startTo: 420,  color: "#1d4ed8" },
 ];
 
 const CHUNK_MIN = 480; // 1 standard shift = 8 hours
