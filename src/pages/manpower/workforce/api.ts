@@ -9,11 +9,13 @@ import {
   calculateDashboardData, calculateHourlyForDept, calculateShiftSummaryForDept,
   calculateMonthlySummary, getCurrentStaffDetail,
   calculateShiftBandSummary, calculateBandsByDept, SHIFT_BANDS, shiftBandIndices, bandIndexForStart,
-  getBandStaffDetail,
+  getBandStaffDetail, calculateMonthlyHoursPerEmployee,
 } from "./calculator";
-import type { ParseResult, DashboardData, MonthOption, MonthlySummary } from "./types";
+import { getPositionForName } from "./positionMap";
+import { MONTHLY_HOUR_THRESHOLDS, classifyPositionCategory } from "./hoursPolicy";
+import type { ParseResult, DashboardData, MonthOption, MonthlySummary, MonthlyHoursRow } from "./types";
 
-export type { ParseResult, DashboardData, MonthOption, MonthlySummary };
+export type { ParseResult, DashboardData, MonthOption, MonthlySummary, MonthlyHoursRow };
 export type {
   DeptTimelineItem, HourlyPoint, KPIData, ShiftSummaryItem, ShiftBlock, CurrentStaffEntry,
   ShiftBandItem, DeptBandRow, BandStaffEntry,
@@ -140,4 +142,34 @@ export function getAvailableMonths(parsed: ParseResult): MonthOption[] {
 export function calculateMonthly(parsed: ParseResult, month: MonthOption, planByDept?: Map<string, number>): MonthlySummary {
   const summary = calculateMonthlySummary(parsed, month.dates, planByDept);
   return { ...summary, monthLabel: month.label };
+}
+
+/**
+ * Total hours worked this month per employee vs the hospital's announced
+ * threshold for their category (วิชาชีพ / ผู้ช่วยวิชาชีพ) — flags who may need
+ * an OT submission. Position comes from getPositionForName() matching the
+ * payroll name against the manpower plan roster (the shift export itself has
+ * no position column) — that match is NOT 100%; unmatched names still get a
+ * row here (category defaults to "assistant" per the policy's own "ส่วนที่
+ * เหลือคือผู้ช่วยวิชาชีพ" rule) but with position: null, so the UI can call
+ * those out separately instead of silently trusting a guess.
+ */
+export function calculateMonthlyHoursReport(parsed: ParseResult, month: MonthOption): MonthlyHoursRow[] {
+  const hours = calculateMonthlyHoursPerEmployee(parsed, month.dates);
+  const threshold = MONTHLY_HOUR_THRESHOLDS[month.key] ?? null;
+
+  return hours.map(h => {
+    const position = getPositionForName(h.name);
+    const category = classifyPositionCategory(position ?? "");
+    const limit = threshold ? threshold[category] : null;
+    return {
+      name: h.name,
+      department: h.department,
+      position,
+      category,
+      totalHours: h.totalHours,
+      threshold: limit,
+      overHours: limit != null ? Math.max(0, Math.round((h.totalHours - limit) * 10) / 10) : 0,
+    };
+  }).sort((a, b) => b.overHours - a.overHours || b.totalHours - a.totalHours);
 }

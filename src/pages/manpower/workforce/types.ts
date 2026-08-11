@@ -157,6 +157,23 @@ export interface BandStaffEntry {
   startMin: number;        // shift's own start time (0–1439) — sort key for the department list
 }
 
+/**
+ * One employee's total worked hours for a payroll month vs the hospital's
+ * announced monthly-hours threshold, used to flag who may need an OT
+ * submission (the hospital pays ค่าเวร per shift/hour/case, not per-shift OT —
+ * OT only applies once total monthly hours pass this threshold, and even then
+ * the amount is submitted separately, not auto-calculated here).
+ */
+export interface MonthlyHoursRow {
+  name: string;
+  department: string;
+  position: string | null;               // null = getPositionForName() couldn't match this name
+  category: "professional" | "assistant"; // วิชาชีพ / ผู้ช่วยวิชาชีพ — see classifyPositionCategory()
+  totalHours: number;
+  threshold: number | null;               // null = no announced threshold for this month/category
+  overHours: number;                      // max(0, totalHours - threshold), 0 when threshold is null
+}
+
 /** Monthly aggregate — person-day totals for reporting, reuses the same panel shapes as DashboardData */
 export interface MonthlySummary {
   monthLabel: string;

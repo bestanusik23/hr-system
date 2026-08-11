@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
-import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftBandIndices, getBandStaffDetail } from "./workforce/api";
-import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, ShiftBandItem, DeptBandRow, BandStaffEntry } from "./workforce/api";
+import { importWorkforceFile, switchDate, switchDeptView, getAvailableMonths, calculateMonthly, formatThaiDate, todayThai, getCurrentStaffDetail, SHIFT_BANDS, shiftBandIndices, getBandStaffDetail, calculateMonthlyHoursReport } from "./workforce/api";
+import type { ParseResult, DashboardData, DeptTimelineItem, ShiftBlock, HourlyPoint, ShiftSummaryItem, MonthOption, MonthlySummary, CurrentStaffEntry, ShiftBandItem, DeptBandRow, BandStaffEntry, MonthlyHoursRow } from "./workforce/api";
 import { getDivisionForDept, PAYROLL_DEPT_NAMES } from "./workforce/divisionMap";
 import { getPositionForName } from "./workforce/positionMap";
+import { MONTHLY_HOUR_THRESHOLDS } from "./workforce/hoursPolicy";
 import { getPlanByPayrollDept } from "./workforce/planMap";
 import { parseOtWorkbook } from "./workforce/otParser";
 import type { OtParseHit, OtParseSkip } from "./workforce/otParser";
@@ -286,6 +287,7 @@ export default function WorkforceTimeline() {
   const [nowClick, setNowClick] = useState<{ x: number; y: number; entries: CurrentStaffEntry[]; date: string } | null>(null);
   const [bandClick, setBandClick] = useState<{ x: number; y: number; entries: BandStaffEntry[]; date: string; bandLabel: string } | null>(null);
   const [bandFilter, setBandFilter] = useState<string | null>(null); // null = ทั้งหมด; "" = ไม่มีหมายเหตุ; else = exact straddleNote text
+  const [hoursFilter, setHoursFilter] = useState<"over" | "all" | "unknown">("over");
   const [planByDept, setPlanByDept] = useState<Map<string, number>>(new Map());
 
   // OT entry state — independent of the shift-timeline import (per plan: OT is
@@ -462,6 +464,12 @@ export default function WorkforceTimeline() {
     if (!match) return null;
     return calculateMonthly(parsed, match, planByDept).departmentTimeline;
   }, [parsed, otMonth, planByDept]);
+
+  // ชั่วโมงทำงานรวม/เดือน เทียบเกณฑ์วิชาชีพ/ผู้ช่วยวิชาชีพ — มีความหมายเฉพาะโหมดรายเดือน
+  const hoursReport: MonthlyHoursRow[] = useMemo(() => {
+    if (!parsed || viewMode !== "monthly" || !selectedMonth) return [];
+    return calculateMonthlyHoursReport(parsed, selectedMonth);
+  }, [parsed, viewMode, selectedMonth?.key]);
 
   // Dates in scope for the hourly chart / shift summary / department filter:
   // one day in "รายวัน" mode, the whole payroll cycle's dates in "รายเดือน" mode.
@@ -926,6 +934,83 @@ export default function WorkforceTimeline() {
           </table>
         </div>
       </div>
+
+      {/* ── ชั่วโมงทำงานรวม/เดือน เทียบเกณฑ์ — โหมดรายเดือนเท่านั้น ── */}
+      {viewMode === "monthly" && (() => {
+        const monthKey = selectedMonth?.key ?? "";
+        const threshold = MONTHLY_HOUR_THRESHOLDS[monthKey] ?? null;
+        const overRows     = hoursReport.filter(r => r.overHours > 0);
+        const unknownRows  = hoursReport.filter(r => r.position === null);
+        const shownRows    = hoursFilter === "over" ? overRows : hoursFilter === "unknown" ? unknownRows : hoursReport;
+
+        return (
+          <div className="hrwt-panel">
+            <div className="hrwt-panel-head">
+              <h3>⏱️ ชั่วโมงทำงานรวม/เดือน เทียบเกณฑ์ ({selectedMonth?.label ?? "-"})</h3>
+              <div style={{ display: "flex", gap: 6 }}>
+                {([
+                  ["over", `เกินเกณฑ์ (${overRows.length})`],
+                  ["all", `ทั้งหมด (${hoursReport.length})`],
+                  ["unknown", `ไม่ทราบตำแหน่ง (${unknownRows.length})`],
+                ] as const).map(([key, label]) => (
+                  <button key={key}
+                    className={`hrwt-btn ${hoursFilter === key ? "hrwt-btn-primary" : "hrwt-btn-outline"}`}
+                    onClick={() => setHoursFilter(key)}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p style={{ margin: "0 18px 10px", fontSize: 12, color: "#94a3b8", lineHeight: 1.6 }}>
+              {threshold
+                ? <>เกณฑ์เดือนนี้ — วิชาชีพ <b>{threshold.professional}</b> ชม. · ผู้ช่วยวิชาชีพ <b>{threshold.assistant}</b> ชม. ตามประกาศ รพ.
+                   เกินเกณฑ์แล้วเป็นการจ่าย OT ตามยอดที่ส่งไป (ไม่ใช่คำนวณอัตโนมัติ) — ใช้ตารางนี้เทียบกับยอดที่จะส่งเท่านั้น</>
+                : <span style={{ color: "#dc2626" }}>⚠ ยังไม่มีเกณฑ์ประกาศไว้สำหรับเดือนนี้ ({monthKey || "-"}) — ตารางจะแสดงชั่วโมงรวมแต่ไม่คำนวณส่วนเกิน</span>}
+              {" "}ตำแหน่งจับคู่จากชื่อกับแผนกำลังคน หากจับคู่ไม่ได้จะขึ้น "ไม่ทราบตำแหน่ง" (ไม่เดาให้) ตรวจสอบเพิ่มเองได้ที่แท็บ Bar Management → Bar Management
+            </p>
+            <div className="hrwt-tbl-wrap" style={{ maxHeight: 460, padding: "0 18px 16px" }}>
+              <table className="hrwt-tbl">
+                <thead>
+                  <tr>
+                    <th>ชื่อ</th>
+                    <th>แผนก</th>
+                    <th>ตำแหน่ง</th>
+                    <th style={{ textAlign: "right" }}>หมวด</th>
+                    <th style={{ textAlign: "right" }}>ชม.รวม</th>
+                    <th style={{ textAlign: "right" }}>เกณฑ์</th>
+                    <th style={{ textAlign: "right" }}>เกิน (ชม.)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {shownRows.length === 0 ? (
+                    <tr><td colSpan={7} style={{ textAlign: "center", color: "#94a3b8", padding: 16 }}>
+                      {hoursReport.length === 0 ? "ยังไม่มีข้อมูลกะของเดือนนี้" : "ไม่มีรายการตรงเงื่อนไข"}
+                    </td></tr>
+                  ) : shownRows.map(r => (
+                    <tr key={r.name} style={r.overHours > 0 ? { background: "#fffbeb" } : undefined}>
+                      <td>{r.name}</td>
+                      <td>{r.department}</td>
+                      <td>
+                        {r.position ?? (
+                          <span style={{ fontSize: 10.5, color: "#b45309", background: "#fef3c7", borderRadius: 8, padding: "1px 7px", fontWeight: 700 }}>
+                            ไม่ทราบตำแหน่ง
+                          </span>
+                        )}
+                      </td>
+                      <td className="num">{r.category === "professional" ? "วิชาชีพ" : "ผู้ช่วยวิชาชีพ"}</td>
+                      <td className="num">{r.totalHours.toLocaleString("th-TH")}</td>
+                      <td className="num">{r.threshold ?? "—"}</td>
+                      <td className="num" style={{ fontWeight: r.overHours > 0 ? 700 : 400, color: r.overHours > 0 ? "#dc2626" : "#94a3b8" }}>
+                        {r.overHours > 0 ? `+${r.overHours.toLocaleString("th-TH")}` : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── OT vs Bar Chart panel ── */}
       {(() => {

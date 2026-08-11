@@ -538,6 +538,37 @@ export function calculateMonthlySummary(parsed: ParseResult, dates: string[], pl
   };
 }
 
+/**
+ * Total worked hours per employee across `dates` (typically a whole payroll
+ * month) — the raw input for the monthly-hours-vs-threshold report. Deliberately
+ * has no position/category/threshold here: the payroll shift export carries no
+ * position column, so matching a name to a position (and from there to วิชาชีพ /
+ * ผู้ช่วยวิชาชีพ) is done at the UI layer against the manpower plan roster
+ * (see hoursPolicy.ts + positionMap.ts), same as how getPositionForName() is
+ * already used elsewhere — this keeps the engine itself position-agnostic.
+ */
+export function calculateMonthlyHoursPerEmployee(
+  parsed: ParseResult,
+  dates: string[],
+): { name: string; department: string; totalHours: number }[] {
+  const dateSet = new Set(dates);
+  const byName = new Map<string, { department: string; totalMin: number }>();
+
+  for (const emp of parsed.employees) {
+    for (const rec of emp.records) {
+      if (!dateSet.has(rec.date) || !rec.isActive) continue;
+      const minutes = rec.ranges.reduce((s, r) => s + (r.endMin - r.startMin), 0);
+      const cur = byName.get(emp.name) ?? { department: emp.deptName, totalMin: 0 };
+      cur.totalMin += minutes;
+      byName.set(emp.name, cur);
+    }
+  }
+
+  return Array.from(byName.entries())
+    .map(([name, v]) => ({ name, department: v.department, totalHours: Math.round(v.totalMin / 60 * 10) / 10 }))
+    .sort((a, b) => b.totalHours - a.totalHours);
+}
+
 // ─── Real-time snapshot (individual employees, for the NOW-line click) ───────
 
 /**
