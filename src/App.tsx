@@ -20,7 +20,6 @@ import OrderOutPage from "./pages/order/OrderOutPage";
 import InternsPage from "./pages/interns/InternsPage";
 import InternCertVerifyPage from "./pages/interns/InternCertVerifyPage";
 import AnnualEvalPage from "./pages/annualEval/AnnualEvalPage";
-import IsoKpiPage from "./pages/isoKpi/IsoKpiPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -62,7 +61,6 @@ export default function App() {
           <Route path="/workforce-timeline" element={<Navigate to="/bar-management" replace />} />
           <Route path="/order-out" element={<RequireAuth><OrderOutPage /></RequireAuth>} />
           <Route path="/interns" element={<RequireAuth><InternsPage /></RequireAuth>} />
-          <Route path="/iso-kpi" element={<RequireAuth><IsoKpiPage /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

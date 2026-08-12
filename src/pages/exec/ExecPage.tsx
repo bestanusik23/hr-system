@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
+import IsoQualitySection from "./IsoQualitySection";
 
 interface Summary {
   employees: { total: number; probation: number; passed: number; resigned: number; due_eval: number };
@@ -540,6 +541,10 @@ export default function ExecPage() {
             onClick={() => setKpiDetail("training_plan")} />
         </div>
       )}
+
+      {/* ISO 9001 HR quality-objective KPIs (FM-ISO-01-01 to 03) */}
+      <SectionTitle icon="🛡️">วัตถุประสงค์คุณภาพ HR (ISO)</SectionTitle>
+      <IsoQualitySection />
 
       {/* KPI Alert Bar */}
       <SectionTitle icon="⚡">KPI Alert — สถานะระบบ</SectionTitle>

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 
 type KpiKey = "license" | "orientation" | "competency" | "training";
@@ -18,7 +17,7 @@ const KPI_DEFS: KpiDef[] = [
   {
     key: "orientation", label: "ร้อยละของบุคลากรใหม่ที่ผ่านการอบรมปฐมนิเทศ", targetLabel: "100%", targetPct: 100,
     numeratorLabel: "ผ่านการปฐมนิเทศ", denominatorLabel: "พนักงานใหม่เดือนนั้น",
-    formulaNote: "สูตรเดียวกับ KPI “ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ” ใน Executive Dashboard",
+    formulaNote: "สูตรเดียวกับ KPI “ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ” ด้านบน",
   },
   {
     key: "competency", label: "ร้อยละของบุคลากรที่ผ่านการประเมินทดลองงาน (Competency)", targetLabel: "≥ 90%", targetPct: 90,
@@ -28,7 +27,7 @@ const KPI_DEFS: KpiDef[] = [
   {
     key: "training", label: "ร้อยละหลักสูตรที่จัดอบรมได้ตามแผน", targetLabel: "≥ 90%", targetPct: 90,
     numeratorLabel: "จัดจริง (ไม่ยกเลิก)", denominatorLabel: "หลักสูตรตามแผนทั้งหมด",
-    formulaNote: "ปรับหน่วยวัดเป็นรายหลักสูตร (ไม่ใช่รายคน) ให้ตรงกับ KPI แผนอบรมที่มีอยู่แล้วในระบบ",
+    formulaNote: "ปรับหน่วยวัดเป็นรายหลักสูตร (ไม่ใช่รายคน) ให้ตรงกับ KPI แผนอบรมด้านบน",
   },
 ];
 
@@ -50,7 +49,7 @@ function pctColor(pct: number | null, target: number): string {
   return pct >= target ? "#16a34a" : pct >= target - 10 ? "#d97706" : "#dc2626";
 }
 
-function KpiCard({ def, year }: { def: KpiDef; year: number }) {
+function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
   const { user } = useAuth();
   const canEdit = user && ["hr", "admin", "deputyHR"].includes(user.role);
 
@@ -357,15 +356,18 @@ function KpiCard({ def, year }: { def: KpiDef; year: number }) {
   );
 }
 
-export default function IsoKpiPage() {
+/** Embedded in ExecPage — the ISO 9001 (FM-ISO-01-01 to 03) HR quality-objective
+ *  section, with its own year selector since it shows all 12 months at once
+ *  (unlike the single-period "5 ตัวชี้วัด HR KPI" section above it). */
+export default function IsoQualitySection() {
   const [year, setYear] = useState(currentYearBE);
   const yearOptions = Array.from({ length: 4 }, (_, i) => currentYearBE() - i);
 
   return (
-    <PageLayout title="วัตถุประสงค์คุณภาพ HR (ISO)" accent="#0038C6">
+    <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
         <div style={{ fontSize: 12.5, color: "#64748b" }}>
-          ตาม FM-ISO-01-01 ถึง 03 — วัตถุประสงค์คุณภาพแผนกทรัพยากรบุคคล คำนวณสดจากข้อมูลในระบบ ไม่ต้องกรอกยอดเอง
+          ตาม FM-ISO-01-01 ถึง 03 — คำนวณสดจากข้อมูลในระบบ กรอกยอดเองย้อนหลังได้ต่อเดือนหากจำเป็น
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <label style={{ fontSize: 12.5, color: "#6b7794", fontWeight: 600 }}>ปี:</label>
@@ -377,7 +379,7 @@ export default function IsoKpiPage() {
         </div>
       </div>
 
-      {KPI_DEFS.map(def => <KpiCard key={def.key} def={def} year={year} />)}
-    </PageLayout>
+      {KPI_DEFS.map(def => <IsoKpiDetailCard key={def.key} def={def} year={year} />)}
+    </div>
   );
 }
