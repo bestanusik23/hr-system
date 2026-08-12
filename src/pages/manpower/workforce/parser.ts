@@ -9,14 +9,21 @@ import type { Employee, ParseResult, ShiftRecord, TimeRange } from "./types";
 
 // ─── Non-working detection ────────────────────────────────────────────────────
 
-/** Shift codes that mean no work */
-const SKIP_CODES = new Set(["DAY OFF", "OP 01"]);
+/** Shift codes that mean no work — matched case/whitespace-insensitively, see isNonWorking() */
+const SKIP_CODES = new Set(["DAY OFF", "OP 01"].map(c => c.toUpperCase()));
 
 /** Keywords in shift names that indicate non-working time */
 const SKIP_KEYWORDS = ["วันหยุด", "ลาพักร้อน", "ลาป่วย", "ลากิจ", "ลาคลอด", "ลาออก", "ลาประชุม", "ลาอุปสมบท"];
 
+/**
+ * Case/whitespace-insensitive on the code check: a payroll export edited by
+ * hand over time can drift ("Day Off" vs "DAY OFF" vs "day off " with a
+ * trailing space) and a code that fails this check silently falls through to
+ * being treated as a real, hours-earning shift — the safer direction to
+ * over-match on is "flag as non-working", not "count as worked".
+ */
 function isNonWorking(code: string, name: string): boolean {
-  if (SKIP_CODES.has(code.trim())) return true;
+  if (SKIP_CODES.has(code.trim().toUpperCase())) return true;
   return SKIP_KEYWORDS.some(kw => name.includes(kw));
 }
 

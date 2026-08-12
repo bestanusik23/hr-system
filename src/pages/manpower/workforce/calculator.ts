@@ -20,7 +20,7 @@
 import type {
   ParseResult, DashboardData, KPIData, HourlyPoint,
   DeptTimelineItem, ShiftSummaryItem, ShiftBlock, TimeRange, MonthlySummary, CurrentStaffEntry,
-  ShiftBandItem, DeptBandRow, BandStaffEntry,
+  ShiftBandItem, DeptBandRow, BandStaffEntry, ShiftRecord,
 } from "./types";
 
 // ─── Hourly coverage check ────────────────────────────────────────────────────
@@ -564,6 +564,16 @@ const MAX_PLAUSIBLE_SHIFT_MIN = 20 * 60;
  * Any single shift whose parsed duration exceeds MAX_PLAUSIBLE_SHIFT_MIN is
  * excluded from the sum and reported separately via `anomalies`, instead of
  * being added in and silently producing an impossible monthly total.
+ *
+ * Records are grouped by (employee, DATE) before summing, and if ANY record
+ * for a date is non-working (day off, leave, or simply unparseable — see
+ * ShiftRecord.isActive), the WHOLE date counts as 0 hours for that person,
+ * even if another record for that same date looks like a real shift. A
+ * payroll report can legitimately contain more than one row per person per
+ * date (the same person listed under more than one department section — see
+ * the grouping-by-code note above), and when those disagree about whether a
+ * date was worked, undercounting is the safe failure mode here, not trusting
+ * whichever row happened to look like a shift.
  */
 export function calculateMonthlyHoursPerEmployee(
   parsed: ParseResult,
@@ -574,33 +584,45 @@ export function calculateMonthlyHoursPerEmployee(
 }[] {
   const dateSet = new Set(dates);
   const byCode = new Map<string, {
-    name: string; department: string; totalMin: number;
-    anomalies: { date: string; shiftName: string; minutes: number }[];
+    name: string; department: string; recordsByDate: Map<string, ShiftRecord[]>;
   }>();
 
   for (const emp of parsed.employees) {
-    const cur = byCode.get(emp.code) ?? { name: emp.name, department: emp.deptName, totalMin: 0, anomalies: [] };
+    const cur = byCode.get(emp.code) ?? { name: emp.name, department: emp.deptName, recordsByDate: new Map() };
     for (const rec of emp.records) {
-      if (!dateSet.has(rec.date) || !rec.isActive) continue;
-      for (const r of rec.ranges) {
-        const minutes = r.endMin - r.startMin;
-        if (minutes < 0 || minutes > MAX_PLAUSIBLE_SHIFT_MIN) {
-          cur.anomalies.push({ date: rec.date, shiftName: rec.name, minutes: Math.round(minutes / 60 * 10) / 10 });
-          continue; // excluded from the total — see MAX_PLAUSIBLE_SHIFT_MIN
-        }
-        cur.totalMin += minutes;
-      }
+      if (!dateSet.has(rec.date)) continue;
+      const arr = cur.recordsByDate.get(rec.date) ?? [];
+      arr.push(rec);
+      cur.recordsByDate.set(rec.date, arr);
     }
     byCode.set(emp.code, cur);
   }
 
-  return Array.from(byCode.values())
-    .map(v => ({
-      name: v.name, department: v.department,
-      totalHours: Math.round(v.totalMin / 60 * 10) / 10,
-      anomalies: v.anomalies,
-    }))
-    .sort((a, b) => b.totalHours - a.totalHours);
+  const results: { name: string; department: string; totalHours: number;
+    anomalies: { date: string; shiftName: string; minutes: number }[] }[] = [];
+
+  for (const v of byCode.values()) {
+    let totalMin = 0;
+    const anomalies: { date: string; shiftName: string; minutes: number }[] = [];
+
+    for (const recs of v.recordsByDate.values()) {
+      if (recs.some(r => !r.isActive)) continue; // date has a day-off/leave/unparseable record — skip the whole date
+      for (const rec of recs) {
+        for (const r of rec.ranges) {
+          const minutes = r.endMin - r.startMin;
+          if (minutes < 0 || minutes > MAX_PLAUSIBLE_SHIFT_MIN) {
+            anomalies.push({ date: rec.date, shiftName: rec.name, minutes: Math.round(minutes / 60 * 10) / 10 });
+            continue; // excluded from the total — see MAX_PLAUSIBLE_SHIFT_MIN
+          }
+          totalMin += minutes;
+        }
+      }
+    }
+
+    results.push({ name: v.name, department: v.department, totalHours: Math.round(totalMin / 60 * 10) / 10, anomalies });
+  }
+
+  return results.sort((a, b) => b.totalHours - a.totalHours);
 }
 
 // ─── Real-time snapshot (individual employees, for the NOW-line click) ───────
