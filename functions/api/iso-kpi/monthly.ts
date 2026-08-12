@@ -55,7 +55,6 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           AND tc.course LIKE '%ปฐมนิเทศ%'
           AND COALESCE(tc.is_cancelled,0) = 0
           AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
-          AND tc.course_date <= e.start_date
       `).bind(pStart, pEnd).first<{ n: number }>();
       denominator = denom?.n ?? 0; numerator = num?.n ?? 0;
     }

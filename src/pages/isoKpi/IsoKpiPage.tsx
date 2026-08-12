@@ -16,9 +16,9 @@ const KPI_DEFS: KpiDef[] = [
     formulaNote: "อิงจากข้อมูลใบประกอบวิชาชีพในทะเบียนพนักงาน (เมนู Manpower › ใบประกอบ/ทะเบียนรถ)",
   },
   {
-    key: "orientation", label: "ร้อยละของบุคลากรใหม่ที่ได้รับการปฐมนิเทศก่อนเริ่มงาน", targetLabel: "100%", targetPct: 100,
-    numeratorLabel: "ปฐมนิเทศก่อนวันเริ่มงาน", denominatorLabel: "พนักงานใหม่เดือนนั้น",
-    formulaNote: "นับเฉพาะการอบรมหลักสูตร “ปฐมนิเทศ” ที่วันที่อบรม ≤ วันที่เริ่มงาน",
+    key: "orientation", label: "ร้อยละของบุคลากรใหม่ที่ผ่านการอบรมปฐมนิเทศ", targetLabel: "100%", targetPct: 100,
+    numeratorLabel: "ผ่านการปฐมนิเทศ", denominatorLabel: "พนักงานใหม่เดือนนั้น",
+    formulaNote: "สูตรเดียวกับ KPI “ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ” ใน Executive Dashboard",
   },
   {
     key: "competency", label: "ร้อยละของบุคลากรที่ผ่านการประเมินทดลองงาน (Competency)", targetLabel: "≥ 90%", targetPct: 90,
