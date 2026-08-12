@@ -34,6 +34,12 @@ const IcAward = () => (
     <path d="M15.5 13.5L17 22l-5-3-5 3 1.5-8.5"/>
   </svg>
 );
+const IcShieldCheck = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <path d="M9 12l2 2 4-4"/>
+  </svg>
+);
 const IcBook = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -189,6 +195,12 @@ const SYSTEMS: SystemCard[] = [
     title: "ประเมินผลการปฏิบัติงานประจำปี",
     desc: "สร้างรอบประเมินประจำปี ให้คะแนนตามลำดับผู้ประเมิน สรุปผลและออกเอกสาร แยกจากการประเมินทดลองงาน",
     roles: ["hr","head","deputy","deputyHR","admin"],
+  },
+  {
+    key: "iso-kpi", no: "15", icon: <IcShieldCheck />,
+    title: "วัตถุประสงค์คุณภาพ HR (ISO)",
+    desc: "ติดตามตัวชี้วัดคุณภาพแผนก HR ตาม FM-ISO-01-01 ถึง 03 รายเดือน พร้อมบันทึกการวิเคราะห์และแก้ไข",
+    roles: ["hr","deputyHR","admin"],
   },
 ];
 
