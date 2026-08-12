@@ -34,7 +34,7 @@ const KPI_DEFS: KpiDef[] = [
 
 const MONTH_LABELS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
 
-interface MonthRow { month: number; numerator: number; denominator: number; pct: number | null }
+interface MonthRow { month: number; numerator: number; denominator: number; pct: number | null; source: "manual" | "computed" }
 interface ActionEntry {
   id: number; kpi_key: KpiKey; year: number; month: number;
   root_cause: string; corrective_action: string; responsible: string;
@@ -66,19 +66,57 @@ function KpiCard({ def, year }: { def: KpiDef; year: number }) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
+  // Manual per-month backfill (for periods before this tracking existed)
+  const [editingMonth, setEditingMonth] = useState<number | null>(null);
+  const [editNum, setEditNum] = useState("");
+  const [editDen, setEditDen] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
   function loadActions() {
     fetch(`/api/iso-kpi/actions?kpi=${def.key}&year=${year}`).then(r => r.json())
       .then((d: { ok: boolean; actions?: ActionEntry[] }) => { if (d.ok) setActions(d.actions ?? []); });
   }
 
-  useEffect(() => {
+  function loadMonths() {
     setLoading(true);
-    fetch(`/api/iso-kpi/monthly?kpi=${def.key}&year=${year}`).then(r => r.json())
+    return fetch(`/api/iso-kpi/monthly?kpi=${def.key}&year=${year}`).then(r => r.json())
       .then((d: { ok: boolean; months?: MonthRow[] }) => { if (d.ok) setMonths(d.months ?? null); })
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadMonths();
     loadActions();
+    setEditingMonth(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [def.key, year]);
+
+  function startEdit(m: MonthRow) {
+    setEditingMonth(m.month);
+    setEditNum(String(m.numerator));
+    setEditDen(String(m.denominator));
+  }
+
+  async function saveEdit(month: number) {
+    const num = Number(editNum), den = Number(editDen);
+    if (!Number.isFinite(num) || !Number.isFinite(den) || num < 0 || den < 0) return;
+    setEditSaving(true);
+    await fetch("/api/iso-kpi/monthly", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kpi: def.key, year, month, numerator: num, denominator: den }),
+    });
+    setEditSaving(false);
+    setEditingMonth(null);
+    loadMonths();
+  }
+
+  async function clearOverride(month: number) {
+    setEditSaving(true);
+    await fetch(`/api/iso-kpi/monthly?kpi=${def.key}&year=${year}&month=${month}`, { method: "DELETE" });
+    setEditSaving(false);
+    setEditingMonth(null);
+    loadMonths();
+  }
 
   const yearTotal = months
     ? { num: months.reduce((s, m) => s + m.numerator, 0), den: months.reduce((s, m) => s + m.denominator, 0) }
@@ -171,17 +209,62 @@ function KpiCard({ def, year }: { def: KpiDef; year: number }) {
               <tbody>
                 <tr>
                   <td style={{ padding: "5px 8px", color: "#64748b" }}>{def.numeratorLabel}</td>
-                  {(months ?? []).map(m => <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>{m.numerator}</td>)}
+                  {(months ?? []).map(m => (
+                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
+                      {editingMonth === m.month ? (
+                        <input type="number" min={0} value={editNum} onChange={e => setEditNum(e.target.value)}
+                          style={{ width: 44, padding: "2px 3px", borderRadius: 4, border: "1.5px solid #c4cfee", textAlign: "center", fontFamily: "inherit", fontSize: 11 }} />
+                      ) : m.numerator}
+                    </td>
+                  ))}
                 </tr>
                 <tr style={{ background: "#f8faff" }}>
                   <td style={{ padding: "5px 8px", color: "#64748b" }}>{def.denominatorLabel}</td>
-                  {(months ?? []).map(m => <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>{m.denominator}</td>)}
+                  {(months ?? []).map(m => (
+                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
+                      {editingMonth === m.month ? (
+                        <input type="number" min={0} value={editDen} onChange={e => setEditDen(e.target.value)}
+                          style={{ width: 44, padding: "2px 3px", borderRadius: 4, border: "1.5px solid #c4cfee", textAlign: "center", fontFamily: "inherit", fontSize: 11 }} />
+                      ) : m.denominator}
+                    </td>
+                  ))}
                 </tr>
                 <tr>
                   <td style={{ padding: "5px 8px", fontWeight: 700, color: "#0a1628" }}>ร้อยละ</td>
                   {(months ?? []).map(m => (
-                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center", fontWeight: 700, color: pctColor(m.pct, def.targetPct) }}>
-                      {m.pct === null ? "—" : `${m.pct}%`}
+                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
+                      {editingMonth === m.month ? (
+                        <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
+                          <button onClick={() => saveEdit(m.month)} disabled={editSaving}
+                            title="บันทึก" style={{ border: "none", background: "#16a34a", color: "#fff", borderRadius: 4,
+                              width: 18, height: 18, fontSize: 10, cursor: "pointer", lineHeight: 1 }}>✓</button>
+                          <button onClick={() => setEditingMonth(null)} disabled={editSaving}
+                            title="ยกเลิก" style={{ border: "none", background: "#94a3b8", color: "#fff", borderRadius: 4,
+                              width: 18, height: 18, fontSize: 10, cursor: "pointer", lineHeight: 1 }}>✕</button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                          <span style={{ fontWeight: 700, color: pctColor(m.pct, def.targetPct) }}>
+                            {m.pct === null ? "—" : `${m.pct}%`}
+                          </span>
+                          {canEdit && (
+                            <button onClick={() => startEdit(m)} title="กรอกยอดเอง"
+                              style={{ border: "none", background: "none", color: "#94a3b8", cursor: "pointer", fontSize: 10, padding: 0 }}>✎</button>
+                          )}
+                          {m.source === "manual" && (
+                            <button onClick={() => clearOverride(m.month)} title="ล้างค่าที่กรอกเอง กลับไปใช้ค่าคำนวณอัตโนมัติ"
+                              style={{ border: "none", background: "none", color: "#0038C6", cursor: "pointer", fontSize: 9, padding: 0 }}>↺</button>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td></td>
+                  {(months ?? []).map(m => (
+                    <td key={m.month} style={{ padding: "1px 6px", textAlign: "center", fontSize: 9, color: "#d97706" }}>
+                      {m.source === "manual" ? "กรอกเอง" : ""}
                     </td>
                   ))}
                 </tr>
