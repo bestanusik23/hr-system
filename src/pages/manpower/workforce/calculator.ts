@@ -607,7 +607,18 @@ export function calculateMonthlyHoursPerEmployee(
 
     for (const recs of v.recordsByDate.values()) {
       if (recs.some(r => !r.isActive)) continue; // date has a day-off/leave/unparseable record — skip the whole date
+
+      // ตัดรายการที่ "ช่วงเวลากะ" ซ้ำกันเป๊ะออกให้เหลือแค่ 1 รายการต่อวัน — คนคนเดียวที่ถูกบันทึกไว้
+      // ใต้มากกว่าหนึ่งแผนก (ดูหมายเหตุ grouping by code ด้านบน) มักมีแถวกะเดียวกันซ้ำคนละแผนกใน
+      // วันเดียวกัน นับซ้ำแบบนี้ทำให้ยอดพองขึ้นเป็นทวีคูณ ไม่ใช่แค่คลาดเคลื่อนเล็กน้อย — เทียบกันที่
+      // ช่วงเวลาที่ parse ได้จริง (ไม่ใช่ข้อความรหัส/ชื่อกะดิบ) เพราะสองแผนกอาจพิมพ์ข้อความกะห่อหุ้ม
+      // ไม่ตรงกันเป๊ะแม้จะหมายถึงกะเดียวกัน — ยังคงนับแยกกันตามปกติถ้าเป็นกะคนละช่วงเวลาจริง ๆ ในวันเดียวกัน
+      // (เช่น กะเช้า + เรียกมาเสริมกะบ่าย)
+      const seen = new Set<string>();
       for (const rec of recs) {
+        const dupKey = rec.ranges.map(r => `${r.startMin}-${r.endMin}`).join(",");
+        if (seen.has(dupKey)) continue;
+        seen.add(dupKey);
         for (const r of rec.ranges) {
           const minutes = r.endMin - r.startMin;
           if (minutes < 0 || minutes > MAX_PLAUSIBLE_SHIFT_MIN) {
