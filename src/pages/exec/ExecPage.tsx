@@ -334,7 +334,7 @@ export default function ExecPage() {
     const resigns = kpiData.resign_list;
     const withOverride = (key: KpiKey, pct: number | null, detail: string) => {
       const ov = kpiData.overrides[key];
-      return ov ? { pct: ov.pct, detail: ov.detail || `${detail} (กรอกเอง)` } : { pct, detail };
+      return ov ? { pct: ov.pct, detail: ov.detail || "ข้อมูลบันทึกด้วยตนเอง" } : { pct, detail };
     };
     const kpiRows: { label: string; pct: number | null; detail: string }[] = [
       { label: "ร้อยละพนักงานลาออก",
@@ -571,7 +571,7 @@ export default function ExecPage() {
         // where the live figure doesn't reflect what HR knows actually happened.
         const disp = (key: KpiKey, pct: number | null, sub: string): { pct: number | null; sub: string; overridden: boolean } => {
           const ov = kpiData.overrides[key];
-          return ov ? { pct: ov.pct, sub: ov.detail || sub, overridden: true } : { pct, sub, overridden: false };
+          return ov ? { pct: ov.pct, sub: ov.detail || "ข้อมูลบันทึกด้วยตนเอง", overridden: true } : { pct, sub, overridden: false };
         };
         const turnoverD = disp("turnover", kpiData.turnover.pct, `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`);
         const evalCoverageD = disp("eval_coverage", kpiData.eval_coverage.pct, kpiData.eval_coverage.total > 0
