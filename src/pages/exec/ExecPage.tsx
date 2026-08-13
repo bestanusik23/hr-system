@@ -40,7 +40,7 @@ interface KpiSummary {
   probation_pass_list: { eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }[];
   training_plan_list: { id: number; course: string; course_date: string | null; status: string; is_cancelled: boolean }[];
   license: { pct: number | null; valid: number; total: number };
-  license_list: { id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: boolean }[];
+  license_list: { id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: boolean; excluded: boolean }[];
 }
 
 type KpiKey = "turnover" | "eval_coverage" | "orientation" | "satisfaction" | "probation_pass" | "training_plan" | "license";
@@ -264,12 +264,29 @@ export default function ExecPage() {
 
   useEffect(() => { load(); }, []);
 
-  useEffect(() => {
+  function loadKpiData() {
     setKpiLoading(true);
-    fetch(`/api/exec/kpi?period=${kpiPeriodType}&value=${kpiValue}`).then(r => r.json())
+    return fetch(`/api/exec/kpi?period=${kpiPeriodType}&value=${kpiValue}`).then(r => r.json())
       .then((d: { ok: boolean } & KpiSummary) => { if (d.ok) setKpiData(d); })
       .finally(() => setKpiLoading(false));
+  }
+
+  useEffect(() => {
+    loadKpiData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kpiPeriodType, kpiValue]);
+
+  const [licenseExclToggling, setLicenseExclToggling] = useState<number | null>(null);
+  async function toggleLicenseExclusion(employeeId: number, currentlyExcluded: boolean) {
+    setLicenseExclToggling(employeeId);
+    await fetch(`/api/exec/license-exclusions${currentlyExcluded ? `?employee_id=${employeeId}` : ""}`, {
+      method: currentlyExcluded ? "DELETE" : "POST",
+      headers: currentlyExcluded ? undefined : { "Content-Type": "application/json" },
+      body: currentlyExcluded ? undefined : JSON.stringify({ employee_id: employeeId }),
+    });
+    await loadKpiData();
+    setLicenseExclToggling(null);
+  }
 
   const yearOptions = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
@@ -941,9 +958,22 @@ export default function ExecPage() {
           rows = kpiData.license_list.length === 0
             ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีตำแหน่งที่ต้องมีใบประกอบวิชาชีพ</td></tr>
             : kpiData.license_list.map(r => (
-              <tr key={r.id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+              <tr key={r.id} style={r.excluded ? { opacity: 0.5 } : undefined}>
+                <td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
                 <td style={tdStyle}>{r.license_expiry ? fmtShortDate(r.license_expiry) : "ไม่มีข้อมูล"}</td>
-                <td style={tdStyle}>{badge(r.valid, "ยังไม่หมดอายุ", "หมดอายุ/ไม่มีข้อมูล")}</td></tr>
+                <td style={tdStyle}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {r.excluded
+                      ? <span style={{ padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#f1f5f9", color: "#64748b" }}>ไม่นับใน KPI นี้</span>
+                      : badge(r.valid, "ยังไม่หมดอายุ", "หมดอายุ/ไม่มีข้อมูล")}
+                    <button onClick={() => toggleLicenseExclusion(r.id, r.excluded)} disabled={licenseExclToggling === r.id}
+                      style={{ border: "1px solid #c4cfee", background: "#fff", borderRadius: 5, padding: "2px 8px",
+                        fontSize: 10.5, color: "#475569", cursor: licenseExclToggling === r.id ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                      {licenseExclToggling === r.id ? "…" : r.excluded ? "นับกลับเข้า KPI" : "ไม่ต้องนับ"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ));
         }
 

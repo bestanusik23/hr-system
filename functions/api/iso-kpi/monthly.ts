@@ -57,11 +57,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       numerator = 0; denominator = 0;
 
       if (kpi === "license") {
+        // Kept in sync with /api/exec/kpi.ts's license computation, including
+        // the same iso_kpi_license_exclusions exception list.
+        const notExcluded = "id NOT IN (SELECT employee_id FROM iso_kpi_license_exclusions)";
         const denom = await db.prepare(
-          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}`
+          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${notExcluded}`
         ).first<{ n: number }>();
         const num = await db.prepare(
-          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND license_expiry IS NOT NULL AND license_expiry >= ?`
+          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${notExcluded} AND license_expiry IS NOT NULL AND license_expiry >= ?`
         ).bind(pEnd).first<{ n: number }>();
         denominator = denom?.n ?? 0; numerator = num?.n ?? 0;
       }

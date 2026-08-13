@@ -103,11 +103,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   // require one (nurses/pharmacists/med techs/radiologic techs/medical
   // physicists/doctors, see licensedPositions.ts), how many have a
   // license_expiry that's still valid as of the end of this period.
+  // Employees HR has explicitly excluded (iso_kpi_license_exclusions — the
+  // position filter is a heuristic and occasionally catches someone HR
+  // doesn't want tracked here) are dropped from both sides.
+  const NOT_EXCLUDED = "id NOT IN (SELECT employee_id FROM iso_kpi_license_exclusions)";
   const licenseTotal = await db.prepare(
-    `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}`
+    `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${NOT_EXCLUDED}`
   ).first<{ n: number }>();
   const licenseValid = await db.prepare(
-    `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND license_expiry IS NOT NULL AND license_expiry >= ?`
+    `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${NOT_EXCLUDED} AND license_expiry IS NOT NULL AND license_expiry >= ?`
   ).bind(pEnd).first<{ n: number }>();
   const licenseTotalN = licenseTotal?.n ?? 0;
   const licenseValidN = licenseValid?.n ?? 0;
@@ -159,12 +163,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     FROM training_courses WHERE course_date >= ? AND course_date <= ? ORDER BY course_date ASC
   `).bind(pStart, pEnd).all<{ id: number; course: string; course_date: string | null; status: string; is_cancelled: number }>();
 
+  // Shows everyone the filter matched, including exclusions (flagged, not
+  // dropped) so HR can review and toggle them back in from this same list.
   const licenseList = await db.prepare(`
     SELECT id, full_name, position, license_number, license_expiry,
-      (license_expiry IS NOT NULL AND license_expiry >= ?) AS valid
+      (license_expiry IS NOT NULL AND license_expiry >= ?) AS valid,
+      (id IN (SELECT employee_id FROM iso_kpi_license_exclusions)) AS excluded
     FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}
-    ORDER BY valid ASC, license_expiry ASC
-  `).bind(pEnd).all<{ id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: number }>();
+    ORDER BY excluded ASC, valid ASC, license_expiry ASC
+  `).bind(pEnd).all<{ id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: number; excluded: number }>();
 
   return Response.json({
     ok: true,
@@ -183,7 +190,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     satisfaction_list: satisfactionList.results ?? [],
     probation_pass_list: probationPassList.results ?? [],
     training_plan_list: (trainingPlanList.results ?? []).map(r => ({ ...r, is_cancelled: !!r.is_cancelled })),
-    license_list: (licenseList.results ?? []).map(r => ({ ...r, valid: !!r.valid })),
+    license_list: (licenseList.results ?? []).map(r => ({ ...r, valid: !!r.valid, excluded: !!r.excluded })),
   });
 };
 
