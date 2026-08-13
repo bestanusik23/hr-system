@@ -1,6 +1,7 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 import { LICENSED_POSITION_FILTER } from "../../lib/licensedPositions";
+import { ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END } from "../../lib/assumedCompliance";
 
 // GET /api/exec/kpi?period=month&value=2026-07   (or period=year&value=2026)
 // Returns the 5 core HR KPIs for the selected period.
@@ -57,19 +58,23 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   // Match attendees by emp_code first (accurate), falling back to trimmed full-name — same pattern
   // already used in functions/api/training/registrations.ts — because training_attendees.employee_id
   // is never actually written by any insert/update path in the training module (confirmed dead column).
+  // Hires who started within the assumed-compliant window (see assumedCompliance.ts) count as
+  // oriented automatically, matching the ISO KPI grid, so the two sections never disagree.
   const oriented = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) AS n
     FROM employees e
-    JOIN training_attendees ta ON (
-      (ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code)
-      OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name))
-    )
-    JOIN training_courses tc ON tc.id = ta.course_id
     WHERE e.start_date >= ? AND e.start_date <= ?
-      AND tc.course LIKE '%ปฐมนิเทศ%'
-      AND COALESCE(tc.is_cancelled,0) = 0
-      AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
-  `).bind(pStart, pEnd).first<{ n: number }>();
+      AND (
+        (e.start_date >= ? AND e.start_date <= ?)
+        OR EXISTS (
+          SELECT 1 FROM training_attendees ta JOIN training_courses tc ON tc.id = ta.course_id
+          WHERE ((ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code) OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name)))
+            AND tc.course LIKE '%ปฐมนิเทศ%'
+            AND COALESCE(tc.is_cancelled,0) = 0
+            AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
+        )
+      )
+  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
   const orientedN  = oriented?.n ?? 0;
   const orientationPct = newHireN > 0 ? round1(orientedN / newHireN * 100) : null;
 
@@ -142,14 +147,17 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const orientationList = await db.prepare(`
     SELECT e.id, e.full_name, e.position, e.start_date,
-      EXISTS(
-        SELECT 1 FROM training_attendees ta JOIN training_courses tc ON tc.id = ta.course_id
-        WHERE ((ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code) OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name)))
-          AND tc.course LIKE '%ปฐมนิเทศ%' AND COALESCE(tc.is_cancelled,0) = 0
-          AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
+      (
+        (e.start_date >= ? AND e.start_date <= ?)
+        OR EXISTS(
+          SELECT 1 FROM training_attendees ta JOIN training_courses tc ON tc.id = ta.course_id
+          WHERE ((ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code) OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name)))
+            AND tc.course LIKE '%ปฐมนิเทศ%' AND COALESCE(tc.is_cancelled,0) = 0
+            AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
+        )
       ) AS oriented
     FROM employees e WHERE e.start_date >= ? AND e.start_date <= ? ORDER BY e.start_date ASC
-  `).bind(pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; oriented: number }>();
+  `).bind(ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END, pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; oriented: number }>();
 
   const satisfactionList = await db.prepare(`
     SELECT tc.id AS course_id, tc.course, tc.course_date,

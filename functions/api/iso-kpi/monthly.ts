@@ -1,17 +1,12 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 import { LICENSED_POSITION_FILTER } from "../../lib/licensedPositions";
+import { isAssumedCompliantMonth } from "../../lib/assumedCompliance";
 
 const KPI_KEYS = ["license", "orientation", "competency", "training"];
 
-// Jan–Jun 2569: per HR, treat every new hire in this window as having
-// completed orientation/probation-competency in full — the underlying
-// training/evaluation records for that period predate consistent data
-// entry, so computing live here would understate compliance HR already
-// knows happened. Numerator is forced to equal the (real) denominator
-// instead of being computed from training_attendees/evaluations.
 function isAssumedCompliantPeriod(kpi: string, yearBE: number, month: number): boolean {
-  return (kpi === "orientation" || kpi === "competency") && yearBE === 2569 && month >= 1 && month <= 6;
+  return (kpi === "orientation" || kpi === "competency") && isAssumedCompliantMonth(yearBE, month);
 }
 
 // GET /api/iso-kpi/monthly?year=2569&kpi=license|orientation|competency|training
