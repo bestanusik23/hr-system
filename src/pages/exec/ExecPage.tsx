@@ -39,9 +39,11 @@ interface KpiSummary {
   satisfaction_list: { course_id: number; course: string; course_date: string | null; avg_pct: number; n: number }[];
   probation_pass_list: { eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }[];
   training_plan_list: { id: number; course: string; course_date: string | null; status: string; is_cancelled: boolean }[];
+  license: { pct: number | null; valid: number; total: number };
+  license_list: { id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: boolean }[];
 }
 
-type KpiKey = "turnover" | "eval_coverage" | "orientation" | "satisfaction" | "probation_pass" | "training_plan";
+type KpiKey = "turnover" | "eval_coverage" | "orientation" | "satisfaction" | "probation_pass" | "training_plan" | "license";
 
 const REPORT_DOC_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
 const DEFAULT_ACK = { name: "อนุสิกข์  ทองแผ่น", title: "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ" };
@@ -269,25 +271,6 @@ export default function ExecPage() {
       .finally(() => setKpiLoading(false));
   }, [kpiPeriodType, kpiValue]);
 
-  // License-compliance KPI for the printed report — lives on the ISO endpoint
-  // (12 months at a time), so pick out the month/year currently selected above.
-  const [licenseKpi, setLicenseKpi] = useState<{ numerator: number; denominator: number; pct: number | null } | null>(null);
-  useEffect(() => {
-    const yearBE = (kpiPeriodType === "month" ? Number(kpiMonth.slice(0, 4)) : Number(kpiYear)) + 543;
-    fetch(`/api/iso-kpi/monthly?kpi=license&year=${yearBE}`).then(r => r.json())
-      .then((d: { ok: boolean; months?: { month: number; numerator: number; denominator: number; pct: number | null }[] }) => {
-        if (!d.ok || !d.months) { setLicenseKpi(null); return; }
-        if (kpiPeriodType === "month") {
-          const mo = Number(kpiMonth.slice(5, 7));
-          setLicenseKpi(d.months.find(x => x.month === mo) ?? null);
-        } else {
-          // Yearly view: use the latest month that actually has people to count.
-          const withData = d.months.filter(x => x.denominator > 0);
-          setLicenseKpi(withData.length > 0 ? withData[withData.length - 1] : null);
-        }
-      }).catch(() => setLicenseKpi(null));
-  }, [kpiPeriodType, kpiMonth, kpiYear]);
-
   const yearOptions = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
   function printMonthlyExecReport() {
@@ -311,9 +294,9 @@ export default function ExecPage() {
         detail: kpiData.training_plan.total > 0
           ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
           : "ยังไม่มีแผนอบรมในช่วงนี้" },
-      { label: "ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง", pct: licenseKpi?.pct ?? null,
-        detail: licenseKpi && licenseKpi.denominator > 0
-          ? `ใบฯ ไม่หมดอายุ ${licenseKpi.numerator} / ตำแหน่งที่ต้องมีใบฯ ${licenseKpi.denominator} คน`
+      { label: "ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง", pct: kpiData.license.pct,
+        detail: kpiData.license.total > 0
+          ? `ใบฯ ไม่หมดอายุ ${kpiData.license.valid} / ตำแหน่งที่ต้องมีใบฯ ${kpiData.license.total} คน`
           : "ไม่มีข้อมูลใบประกอบวิชาชีพในช่วงนี้" },
     ];
 
@@ -562,6 +545,12 @@ export default function ExecPage() {
               ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
               : "ยังไม่มีแผนอบรมในช่วงนี้"}
             onClick={() => setKpiDetail("training_plan")} />
+          <KpiCard label="ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง" icon="🪪"
+            pct={kpiData.license.pct} color={pctColorHigh(kpiData.license.pct)}
+            sub={kpiData.license.total > 0
+              ? `ใบฯ ไม่หมดอายุ ${kpiData.license.valid} / ตำแหน่งที่ต้องมีใบฯ ${kpiData.license.total} คน`
+              : "ไม่มีตำแหน่งที่ต้องมีใบประกอบวิชาชีพ"}
+            onClick={() => setKpiDetail("license")} />
         </div>
       )}
 
@@ -888,6 +877,7 @@ export default function ExecPage() {
           satisfaction:    { title: "ความพึงพอใจของผู้เข้าอบรม แยกตามหลักสูตร", icon: "⭐", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
           probation_pass:  { title: "ผลการประเมินทดลองงาน (รอบสุดท้าย) ที่อนุมัติในช่วงนี้", icon: "📝", modulePath: "/eval", moduleLabel: "ไปที่ระบบประเมินผล →" },
           training_plan:   { title: "หลักสูตรอบรมตามแผนในช่วงนี้", icon: "📚", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
+          license:         { title: "ใบประกอบวิชาชีพ ตำแหน่งที่ต้องมี", icon: "🪪", modulePath: "/manpower", moduleLabel: "ไปที่ระบบอัตรากำลัง →" },
         };
         const cfg = CONFIG[kpiDetail];
         const thStyle: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontWeight: 700,
@@ -939,13 +929,21 @@ export default function ExecPage() {
                 <td style={tdStyle}>{fmtShortDate(r.updated_at.slice(0, 10))}</td>
                 <td style={tdStyle}>{badge(r.decision === "บรรจุเป็นพนักงานประจำ", r.decision ?? "—", r.decision ?? "—")}</td></tr>
             ));
-        } else {
+        } else if (kpiDetail === "training_plan") {
           rows = kpiData.training_plan_list.length === 0
             ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ยังไม่มีแผนอบรมในช่วงนี้</td></tr>
             : kpiData.training_plan_list.map(r => (
               <tr key={r.id}><td style={tdStyle}>{r.course}</td>
                 <td style={tdStyle}>{r.course_date ? fmtShortDate(r.course_date) : "—"}</td>
                 <td style={tdStyle}>{r.is_cancelled ? badge(false, "", "ยกเลิก") : badge(r.status === "done", "จัดแล้ว", r.status)}</td></tr>
+            ));
+        } else {
+          rows = kpiData.license_list.length === 0
+            ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีตำแหน่งที่ต้องมีใบประกอบวิชาชีพ</td></tr>
+            : kpiData.license_list.map(r => (
+              <tr key={r.id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+                <td style={tdStyle}>{r.license_expiry ? fmtShortDate(r.license_expiry) : "ไม่มีข้อมูล"}</td>
+                <td style={tdStyle}>{badge(r.valid, "ยังไม่หมดอายุ", "หมดอายุ/ไม่มีข้อมูล")}</td></tr>
             ));
         }
 
@@ -955,6 +953,7 @@ export default function ExecPage() {
           kpiDetail === "training_plan"   ? ["หลักสูตร", "วันที่อบรม", "สถานะ"] :
           kpiDetail === "eval_coverage"   ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "สถานะประเมิน"] :
           kpiDetail === "orientation"     ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "สถานะปฐมนิเทศ"] :
+          kpiDetail === "license"         ? ["ชื่อ-นามสกุล", "วันหมดอายุใบฯ", "สถานะ"] :
                                              ["ชื่อ-นามสกุล", "วันที่อนุมัติ", "ผลการประเมิน"];
 
         return (

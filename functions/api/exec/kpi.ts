@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { LICENSED_POSITION_FILTER } from "../../lib/licensedPositions";
 
 // GET /api/exec/kpi?period=month&value=2026-07   (or period=year&value=2026)
 // Returns the 5 core HR KPIs for the selected period.
@@ -98,6 +99,20 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const trainingCancelledN = trainingCounts?.cancelled ?? 0;
   const trainingPlanPct    = trainingPlannedN > 0 ? round1(trainingActualN / trainingPlannedN * 100) : null;
 
+  // 7) ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง — of staff in positions that
+  // require one (nurses/pharmacists/med techs/radiologic techs/medical
+  // physicists/doctors, see licensedPositions.ts), how many have a
+  // license_expiry that's still valid as of the end of this period.
+  const licenseTotal = await db.prepare(
+    `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}`
+  ).first<{ n: number }>();
+  const licenseValid = await db.prepare(
+    `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND license_expiry IS NOT NULL AND license_expiry >= ?`
+  ).bind(pEnd).first<{ n: number }>();
+  const licenseTotalN = licenseTotal?.n ?? 0;
+  const licenseValidN = licenseValid?.n ?? 0;
+  const licensePct = licenseTotalN > 0 ? round1(licenseValidN / licenseTotalN * 100) : null;
+
   // Lists — new hires / resignations in period, for the printable monthly report
   const newHireList = await db.prepare(
     "SELECT full_name, position, start_date FROM employees WHERE start_date >= ? AND start_date <= ? ORDER BY start_date ASC"
@@ -144,6 +159,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     FROM training_courses WHERE course_date >= ? AND course_date <= ? ORDER BY course_date ASC
   `).bind(pStart, pEnd).all<{ id: number; course: string; course_date: string | null; status: string; is_cancelled: number }>();
 
+  const licenseList = await db.prepare(`
+    SELECT id, full_name, position, license_number, license_expiry,
+      (license_expiry IS NOT NULL AND license_expiry >= ?) AS valid
+    FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}
+    ORDER BY valid ASC, license_expiry ASC
+  `).bind(pEnd).all<{ id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: number }>();
+
   return Response.json({
     ok: true,
     period_label: label,
@@ -153,6 +175,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },
     probation_pass: { pct: probationPassPct, passed: evalPassedN, total: evalTotalN },
     training_plan:  { pct: trainingPlanPct, actual: trainingActualN, cancelled: trainingCancelledN, total: trainingPlannedN },
+    license:        { pct: licensePct, valid: licenseValidN, total: licenseTotalN },
     new_hire_list: newHireList.results ?? [],
     resign_list: resignList.results ?? [],
     eval_coverage_list: (evalCoverageList.results ?? []).map(r => ({ ...r, has_eval: !!r.has_eval })),
@@ -160,6 +183,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     satisfaction_list: satisfactionList.results ?? [],
     probation_pass_list: probationPassList.results ?? [],
     training_plan_list: (trainingPlanList.results ?? []).map(r => ({ ...r, is_cancelled: !!r.is_cancelled })),
+    license_list: (licenseList.results ?? []).map(r => ({ ...r, valid: !!r.valid })),
   });
 };
 
