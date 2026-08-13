@@ -26,6 +26,9 @@ interface Summary {
 interface KpiSummary {
   ok: boolean;
   period_label: string;
+  period_type: "month" | "year";
+  period_value: string;
+  overrides: Partial<Record<KpiKey, { pct: number; detail: string }>>;
   turnover:       { pct: number; resigned: number; headcount: number };
   eval_coverage:  { pct: number | null; received: number; total: number };
   orientation:    { pct: number | null; passed: number; total: number };
@@ -288,6 +291,39 @@ export default function ExecPage() {
     setLicenseExclToggling(null);
   }
 
+  const [overridePct, setOverridePct] = useState("");
+  const [overrideDetail, setOverrideDetail] = useState("");
+  const [overrideSaving, setOverrideSaving] = useState(false);
+  useEffect(() => {
+    if (!kpiDetail || !kpiData) return;
+    const ov = kpiData.overrides[kpiDetail];
+    setOverridePct(ov ? String(ov.pct) : "");
+    setOverrideDetail(ov ? ov.detail : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpiDetail]);
+
+  async function saveKpiOverride() {
+    if (!kpiDetail || !kpiData) return;
+    const pct = Number(overridePct);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) { alert("ร้อยละต้องอยู่ระหว่าง 0-100"); return; }
+    setOverrideSaving(true);
+    await fetch("/api/exec/kpi-override", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kpi_key: kpiDetail, period_type: kpiData.period_type, period_value: kpiData.period_value, pct, detail: overrideDetail }),
+    });
+    await loadKpiData();
+    setOverrideSaving(false);
+  }
+
+  async function clearKpiOverride() {
+    if (!kpiDetail || !kpiData) return;
+    setOverrideSaving(true);
+    await fetch(`/api/exec/kpi-override?kpi_key=${kpiDetail}&period_type=${kpiData.period_type}&period_value=${encodeURIComponent(kpiData.period_value)}`, { method: "DELETE" });
+    await loadKpiData();
+    setOverridePct(""); setOverrideDetail("");
+    setOverrideSaving(false);
+  }
+
   const yearOptions = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
   function printMonthlyExecReport() {
@@ -296,25 +332,29 @@ export default function ExecPage() {
 
     const hires   = kpiData.new_hire_list;
     const resigns = kpiData.resign_list;
+    const withOverride = (key: KpiKey, pct: number | null, detail: string) => {
+      const ov = kpiData.overrides[key];
+      return ov ? { pct: ov.pct, detail: ov.detail || `${detail} (กรอกเอง)` } : { pct, detail };
+    };
     const kpiRows: { label: string; pct: number | null; detail: string }[] = [
-      { label: "ร้อยละพนักงานลาออก", pct: kpiData.turnover.pct,
-        detail: `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน` },
-      { label: "ร้อยละพนักงานใหม่ที่ได้รับการประเมิน", pct: kpiData.eval_coverage.pct,
-        detail: kpiData.eval_coverage.total > 0 ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้" },
-      { label: "ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ", pct: kpiData.orientation.pct,
-        detail: kpiData.orientation.total > 0 ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้" },
-      { label: "ร้อยละความพึงพอใจของผู้ได้รับการอบรม", pct: kpiData.satisfaction.pct,
-        detail: kpiData.satisfaction.responses > 0 ? `จาก ${kpiData.satisfaction.responses} คำตอบ` : "ยังไม่มีการตอบแบบสอบถาม" },
-      { label: "ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน", pct: kpiData.probation_pass.pct,
-        detail: kpiData.probation_pass.total > 0 ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน` : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้" },
-      { label: "ร้อยละที่อบรมตามแผน", pct: kpiData.training_plan.pct,
-        detail: kpiData.training_plan.total > 0
+      { label: "ร้อยละพนักงานลาออก",
+        ...withOverride("turnover", kpiData.turnover.pct, `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`) },
+      { label: "ร้อยละพนักงานใหม่ที่ได้รับการประเมิน",
+        ...withOverride("eval_coverage", kpiData.eval_coverage.pct, kpiData.eval_coverage.total > 0 ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้") },
+      { label: "ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ",
+        ...withOverride("orientation", kpiData.orientation.pct, kpiData.orientation.total > 0 ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้") },
+      { label: "ร้อยละความพึงพอใจของผู้ได้รับการอบรม",
+        ...withOverride("satisfaction", kpiData.satisfaction.pct, kpiData.satisfaction.responses > 0 ? `จาก ${kpiData.satisfaction.responses} คำตอบ` : "ยังไม่มีการตอบแบบสอบถาม") },
+      { label: "ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน",
+        ...withOverride("probation_pass", kpiData.probation_pass.pct, kpiData.probation_pass.total > 0 ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน` : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้") },
+      { label: "ร้อยละที่อบรมตามแผน",
+        ...withOverride("training_plan", kpiData.training_plan.pct, kpiData.training_plan.total > 0
           ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
-          : "ยังไม่มีแผนอบรมในช่วงนี้" },
-      { label: "ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง", pct: kpiData.license.pct,
-        detail: kpiData.license.total > 0
+          : "ยังไม่มีแผนอบรมในช่วงนี้") },
+      { label: "ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง",
+        ...withOverride("license", kpiData.license.pct, kpiData.license.total > 0
           ? `ใบฯ ไม่หมดอายุ ${kpiData.license.valid} / ตำแหน่งที่ต้องมีใบฯ ${kpiData.license.total} คน`
-          : "ไม่มีข้อมูลใบประกอบวิชาชีพในช่วงนี้" },
+          : "ไม่มีข้อมูลใบประกอบวิชาชีพในช่วงนี้") },
     ];
 
     // Shrink type density as content grows, so the report reliably fits one landscape A4 page.
@@ -525,52 +565,69 @@ export default function ExecPage() {
       </div>
       {kpiLoading || !kpiData ? (
         <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด KPI…</div>
-      ) : (
+      ) : (() => {
+        // A saved exec_kpi_overrides row for this exact period replaces the
+        // live-computed pct/sub for that one card — used to backfill periods
+        // where the live figure doesn't reflect what HR knows actually happened.
+        const disp = (key: KpiKey, pct: number | null, sub: string): { pct: number | null; sub: string; overridden: boolean } => {
+          const ov = kpiData.overrides[key];
+          return ov ? { pct: ov.pct, sub: ov.detail || sub, overridden: true } : { pct, sub, overridden: false };
+        };
+        const turnoverD = disp("turnover", kpiData.turnover.pct, `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`);
+        const evalCoverageD = disp("eval_coverage", kpiData.eval_coverage.pct, kpiData.eval_coverage.total > 0
+          ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน`
+          : "ไม่มีพนักงานใหม่ในช่วงนี้");
+        const orientationD = disp("orientation", kpiData.orientation.pct, kpiData.orientation.total > 0
+          ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน`
+          : "ไม่มีพนักงานใหม่ในช่วงนี้");
+        const satisfactionD = disp("satisfaction", kpiData.satisfaction.pct, kpiData.satisfaction.responses > 0
+          ? `จาก ${kpiData.satisfaction.responses} คำตอบ`
+          : "ยังไม่มีการตอบแบบสอบถาม");
+        const probationPassD = disp("probation_pass", kpiData.probation_pass.pct, kpiData.probation_pass.total > 0
+          ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน`
+          : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้");
+        const trainingPlanD = disp("training_plan", kpiData.training_plan.pct, kpiData.training_plan.total > 0
+          ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
+          : "ยังไม่มีแผนอบรมในช่วงนี้");
+        const licenseD = disp("license", kpiData.license.pct, kpiData.license.total > 0
+          ? `ใบฯ ไม่หมดอายุ ${kpiData.license.valid} / ตำแหน่งที่ต้องมีใบฯ ${kpiData.license.total} คน`
+          : "ไม่มีตำแหน่งที่ต้องมีใบประกอบวิชาชีพ");
+        const overrideNote = (o: boolean) => o ? " (กรอกเอง)" : "";
+
+        return (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
           gap: 14, marginBottom: 28 }}>
-          <KpiCard label="ร้อยละพนักงานลาออก" icon="📉"
-            pct={kpiData.turnover.pct} color={pctColorLow(kpiData.turnover.pct)}
-            sub={`ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`}
+          <KpiCard label={`ร้อยละพนักงานลาออก${overrideNote(turnoverD.overridden)}`} icon="📉"
+            pct={turnoverD.pct} color={pctColorLow(turnoverD.pct ?? 0)}
+            sub={turnoverD.sub}
             onClick={() => setKpiDetail("turnover")} />
-          <KpiCard label="ร้อยละพนักงานใหม่ที่ได้รับการประเมิน" icon="📋"
-            pct={kpiData.eval_coverage.pct} color={pctColorHigh(kpiData.eval_coverage.pct)}
-            sub={kpiData.eval_coverage.total > 0
-              ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน`
-              : "ไม่มีพนักงานใหม่ในช่วงนี้"}
+          <KpiCard label={`ร้อยละพนักงานใหม่ที่ได้รับการประเมิน${overrideNote(evalCoverageD.overridden)}`} icon="📋"
+            pct={evalCoverageD.pct} color={pctColorHigh(evalCoverageD.pct)}
+            sub={evalCoverageD.sub}
             onClick={() => setKpiDetail("eval_coverage")} />
-          <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ" icon="🧑‍🏫"
-            pct={kpiData.orientation.pct} color={pctColorHigh(kpiData.orientation.pct)}
-            sub={kpiData.orientation.total > 0
-              ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน`
-              : "ไม่มีพนักงานใหม่ในช่วงนี้"}
+          <KpiCard label={`ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ${overrideNote(orientationD.overridden)}`} icon="🧑‍🏫"
+            pct={orientationD.pct} color={pctColorHigh(orientationD.pct)}
+            sub={orientationD.sub}
             onClick={() => setKpiDetail("orientation")} />
-          <KpiCard label="ร้อยละความพึงพอใจของผู้ได้รับการอบรม" icon="⭐"
-            pct={kpiData.satisfaction.pct} color={pctColorHigh(kpiData.satisfaction.pct)}
-            sub={kpiData.satisfaction.responses > 0
-              ? `จาก ${kpiData.satisfaction.responses} คำตอบ`
-              : "ยังไม่มีการตอบแบบสอบถาม"}
+          <KpiCard label={`ร้อยละความพึงพอใจของผู้ได้รับการอบรม${overrideNote(satisfactionD.overridden)}`} icon="⭐"
+            pct={satisfactionD.pct} color={pctColorHigh(satisfactionD.pct)}
+            sub={satisfactionD.sub}
             onClick={() => setKpiDetail("satisfaction")} />
-          <KpiCard label="ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน" icon="📝"
-            pct={kpiData.probation_pass.pct} color={pctColorHigh(kpiData.probation_pass.pct)}
-            sub={kpiData.probation_pass.total > 0
-              ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน`
-              : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้"}
+          <KpiCard label={`ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน${overrideNote(probationPassD.overridden)}`} icon="📝"
+            pct={probationPassD.pct} color={pctColorHigh(probationPassD.pct)}
+            sub={probationPassD.sub}
             onClick={() => setKpiDetail("probation_pass")} />
-          <KpiCard label="ร้อยละที่อบรมตามแผน" icon="📚"
-            pct={kpiData.training_plan.pct} color={pctColorHigh(kpiData.training_plan.pct)}
-            sub={kpiData.training_plan.total > 0
-              ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
-              : "ยังไม่มีแผนอบรมในช่วงนี้"}
+          <KpiCard label={`ร้อยละที่อบรมตามแผน${overrideNote(trainingPlanD.overridden)}`} icon="📚"
+            pct={trainingPlanD.pct} color={pctColorHigh(trainingPlanD.pct)}
+            sub={trainingPlanD.sub}
             onClick={() => setKpiDetail("training_plan")} />
-          <KpiCard label="ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง" icon="🪪"
-            pct={kpiData.license.pct} color={pctColorHigh(kpiData.license.pct)}
-            sub={kpiData.license.total > 0
-              ? `ใบฯ ไม่หมดอายุ ${kpiData.license.valid} / ตำแหน่งที่ต้องมีใบฯ ${kpiData.license.total} คน`
-              : "ไม่มีตำแหน่งที่ต้องมีใบประกอบวิชาชีพ"}
+          <KpiCard label={`ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง${overrideNote(licenseD.overridden)}`} icon="🪪"
+            pct={licenseD.pct} color={pctColorHigh(licenseD.pct)}
+            sub={licenseD.sub}
             onClick={() => setKpiDetail("license")} />
         </div>
-      )}
-
+        );
+      })()}
       {/* ISO 9001 HR quality-objective KPIs (FM-ISO-01-01 to 03) */}
       <SectionTitle icon="🛡️">วัตถุประสงค์คุณภาพ HR (ISO)</SectionTitle>
       <IsoQualitySection />
@@ -1007,6 +1064,33 @@ export default function ExecPage() {
                   <tbody>{rows}</tbody>
                 </table>
               </div>
+
+              <div style={{ marginTop: 14, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>
+                  กรอกข้อมูลย้อนหลัง (แทนค่าที่คำนวณสด สำหรับช่วง {kpiData.period_label})
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <input type="number" min={0} max={100} step="0.1" value={overridePct}
+                    onChange={e => setOverridePct(e.target.value)} placeholder="ร้อยละ"
+                    style={{ width: 90, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
+                  <input type="text" value={overrideDetail} onChange={e => setOverrideDetail(e.target.value)}
+                    placeholder="รายละเอียด (ไม่บังคับ)"
+                    style={{ flex: 1, minWidth: 140, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
+                  <button onClick={saveKpiOverride} disabled={overrideSaving || overridePct === ""}
+                    style={{ padding: "7px 14px", borderRadius: 6, background: "#0038C6", color: "#fff",
+                      border: "none", fontWeight: 700, fontSize: 12.5, cursor: overrideSaving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                    {overrideSaving ? "…" : "บันทึก"}
+                  </button>
+                  {kpiData.overrides[kpiDetail] && (
+                    <button onClick={clearKpiOverride} disabled={overrideSaving}
+                      style={{ padding: "7px 14px", borderRadius: 6, background: "#fff", color: "#dc2626",
+                        border: "1px solid #fecaca", fontWeight: 700, fontSize: 12.5, cursor: overrideSaving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                      ล้างค่า (ใช้ค่าคำนวณสด)
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
                 <a href={cfg.modulePath} style={{ padding: "9px 18px", borderRadius: 7, background: "#0038C6",
                   color: "#fff", fontWeight: 700, fontSize: 13, textDecoration: "none" }}>

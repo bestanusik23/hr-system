@@ -21,6 +21,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const db = ctx.env.HR_DB;
 
+  // Manual backfill per KPI card, for this exact period — see exec_kpi_overrides.
+  // The frontend shows these instead of the live-computed figures when present.
+  const overrideRows = await db.prepare(
+    "SELECT kpi_key, pct, detail FROM exec_kpi_overrides WHERE period_type = ? AND period_value = ?"
+  ).bind(period, value).all<{ kpi_key: string; pct: number; detail: string }>();
+  const overrides: Record<string, { pct: number; detail: string }> = {};
+  for (const r of overrideRows.results ?? []) overrides[r.kpi_key] = { pct: r.pct, detail: r.detail };
+
   // 1) ร้อยละพนักงานลาออก — resigned in period / current total headcount (matches Manpower dashboard's formula)
   const resigned = await db.prepare(
     "SELECT COUNT(*) AS n FROM employees WHERE resign_date >= ? AND resign_date <= ?"
@@ -176,6 +184,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   return Response.json({
     ok: true,
     period_label: label,
+    period_type: period,
+    period_value: value,
+    overrides,
     turnover:       { pct: turnoverPct, resigned: resigned?.n ?? 0, headcount: hcNow },
     eval_coverage:  { pct: evalCoveragePct, received: evalReceivedN, total: newHireN },
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
