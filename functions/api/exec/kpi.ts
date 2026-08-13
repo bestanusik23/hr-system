@@ -85,15 +85,27 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const satisfactionPct = survey?.pct ?? null;
   const satisfactionN   = survey?.n ?? 0;
 
-  // 5) ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลการปฏิบัติงาน — final (round 90) probation evaluations decided in period
-  const evalTotal = await db.prepare(
-    "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND date(updated_at) >= ? AND date(updated_at) <= ?"
-  ).bind(pStart, pEnd).first<{ n: number }>();
-  const evalPassed = await db.prepare(
-    "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND decision = 'บรรจุเป็นพนักงานประจำ' AND date(updated_at) >= ? AND date(updated_at) <= ?"
-  ).bind(pStart, pEnd).first<{ n: number }>();
-  const evalTotalN  = evalTotal?.n ?? 0;
-  const evalPassedN = evalPassed?.n ?? 0;
+  // 5) ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลการปฏิบัติงาน — final (round 90) probation evaluations decided in period.
+  // Hires who started within the assumed-compliant window count as passed automatically (matching the
+  // ISO "Competency" KPI), attributed to whichever period their start_date falls in; their real
+  // evaluations (if any) are excluded from the live count below so they aren't counted twice.
+  const autoProbation = await db.prepare(
+    "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ? AND start_date >= ? AND start_date <= ?"
+  ).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
+  const autoProbationN = autoProbation?.n ?? 0;
+  const evalTotal = await db.prepare(`
+    SELECT COUNT(*) AS n FROM evaluations ev JOIN employees e ON e.id = ev.employee_id
+    WHERE ev.round = 90 AND ev.status = 'approved' AND date(ev.updated_at) >= ? AND date(ev.updated_at) <= ?
+      AND NOT (e.start_date >= ? AND e.start_date <= ?)
+  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
+  const evalPassed = await db.prepare(`
+    SELECT COUNT(*) AS n FROM evaluations ev JOIN employees e ON e.id = ev.employee_id
+    WHERE ev.round = 90 AND ev.status = 'approved' AND ev.decision = 'บรรจุเป็นพนักงานประจำ'
+      AND date(ev.updated_at) >= ? AND date(ev.updated_at) <= ?
+      AND NOT (e.start_date >= ? AND e.start_date <= ?)
+  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
+  const evalTotalN  = autoProbationN + (evalTotal?.n ?? 0);
+  const evalPassedN = autoProbationN + (evalPassed?.n ?? 0);
   const probationPassPct = evalTotalN > 0 ? round1(evalPassedN / evalTotalN * 100) : null;
 
   // 6) ร้อยละที่อบรมตามแผน — course-count based: หลักสูตรที่จัดจริง (status='done', not cancelled)
@@ -171,8 +183,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     SELECT ev.id AS eval_id, e.id AS employee_id, e.full_name, e.position, ev.decision, ev.updated_at
     FROM evaluations ev JOIN employees e ON e.id = ev.employee_id
     WHERE ev.round = 90 AND ev.status = 'approved' AND date(ev.updated_at) >= ? AND date(ev.updated_at) <= ?
+      AND NOT (e.start_date >= ? AND e.start_date <= ?)
     ORDER BY ev.updated_at ASC
-  `).bind(pStart, pEnd).all<{ eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }>();
+  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).all<{ eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }>();
+  const assumedProbationList = await db.prepare(`
+    SELECT id AS employee_id, full_name, position, start_date
+    FROM employees WHERE start_date >= ? AND start_date <= ? AND start_date >= ? AND start_date <= ?
+    ORDER BY start_date ASC
+  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).all<{ employee_id: number; full_name: string; position: string | null; start_date: string }>();
 
   const trainingPlanList = await db.prepare(`
     SELECT id, course, course_date, status, COALESCE(is_cancelled,0) AS is_cancelled
@@ -188,6 +206,17 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}
     ORDER BY excluded ASC, valid ASC, license_expiry ASC
   `).bind(pEnd).all<{ id: number; full_name: string; position: string | null; license_number: string | null; license_expiry: string | null; valid: number; excluded: number }>();
+
+  // Merge real evaluation rows with virtual "assumed compliant" rows (no real evaluation exists yet,
+  // or it's being overridden by the Jan-Jun 2569 policy) so the drill-down list total matches evalTotalN.
+  const ASSUMED_PROBATION_LABEL = "ถือว่าผ่าน (ข้อมูลย้อนหลัง ม.ค.-มิ.ย. 69)";
+  const probationPassListMerged = [
+    ...(probationPassList.results ?? []),
+    ...(assumedProbationList.results ?? []).map(r => ({
+      eval_id: -r.employee_id, employee_id: r.employee_id, full_name: r.full_name,
+      position: r.position, decision: ASSUMED_PROBATION_LABEL, updated_at: r.start_date,
+    })),
+  ].sort((a, b) => a.updated_at.localeCompare(b.updated_at));
 
   return Response.json({
     ok: true,
@@ -207,7 +236,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     eval_coverage_list: (evalCoverageList.results ?? []).map(r => ({ ...r, has_eval: !!r.has_eval })),
     orientation_list: (orientationList.results ?? []).map(r => ({ ...r, oriented: !!r.oriented })),
     satisfaction_list: satisfactionList.results ?? [],
-    probation_pass_list: probationPassList.results ?? [],
+    probation_pass_list: probationPassListMerged,
     training_plan_list: (trainingPlanList.results ?? []).map(r => ({ ...r, is_cancelled: !!r.is_cancelled })),
     license_list: (licenseList.results ?? []).map(r => ({ ...r, valid: !!r.valid, excluded: !!r.excluded })),
   });

@@ -1001,7 +1001,7 @@ export default function ExecPage() {
             : kpiData.probation_pass_list.map(r => (
               <tr key={r.eval_id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
                 <td style={tdStyle}>{fmtShortDate(r.updated_at.slice(0, 10))}</td>
-                <td style={tdStyle}>{badge(r.decision === "บรรจุเป็นพนักงานประจำ", r.decision ?? "—", r.decision ?? "—")}</td></tr>
+                <td style={tdStyle}>{badge(r.decision === "บรรจุเป็นพนักงานประจำ" || (r.decision?.startsWith("ถือว่าผ่าน") ?? false), r.decision ?? "—", r.decision ?? "—")}</td></tr>
             ));
         } else if (kpiDetail === "training_plan") {
           rows = kpiData.training_plan_list.length === 0
