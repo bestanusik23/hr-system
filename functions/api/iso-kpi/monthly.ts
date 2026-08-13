@@ -3,6 +3,44 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
 const KPI_KEYS = ["license", "orientation", "competency", "training"];
 
+// Positions required to hold a professional license: nurses, pharmacists,
+// medical technologists, radiologic technologists, medical physicists, and
+// doctors of any specialty.
+//
+// Two classes of false match this filter has to avoid, both verified against
+// real position titles in this hospital's data:
+//   - assistant roles, written either "ผู้ช่วย..." or abbreviated "ผช."
+//   - non-clinical job titles that merely contain the word "แพทย์"
+//     (เครื่องมือแพทย์ = medical equipment, องค์กรแพทย์ = medical staff org,
+//      ประสานงานแพทย์ = doctor liaison) — these are not doctors.
+const LICENSED_POSITION_FILTER = `(
+  position NOT LIKE '%ผู้ช่วย%' AND position NOT LIKE '%ผช.%'
+  AND (
+    position LIKE '%พยาบาล%'
+    OR position LIKE '%เภสัชกร%'
+    OR position LIKE '%เทคนิคการแพทย์%'
+    OR position LIKE '%รังสีเทคนิค%'
+    OR position LIKE '%ฟิสิกส์%'
+    OR (
+      position LIKE '%แพทย์%'
+      AND position NOT LIKE '%เทคนิคการแพทย์%'
+      AND position NOT LIKE '%เครื่องมือแพทย์%'
+      AND position NOT LIKE '%องค์กรแพทย์%'
+      AND position NOT LIKE '%ประสานงานแพทย์%'
+    )
+  )
+)`;
+
+// Jan–Jun 2569: per HR, treat every new hire in this window as having
+// completed orientation/probation-competency in full — the underlying
+// training/evaluation records for that period predate consistent data
+// entry, so computing live here would understate compliance HR already
+// knows happened. Numerator is forced to equal the (real) denominator
+// instead of being computed from training_attendees/evaluations.
+function isAssumedCompliantPeriod(kpi: string, yearBE: number, month: number): boolean {
+  return (kpi === "orientation" || kpi === "competency") && yearBE === 2569 && month >= 1 && month <= 6;
+}
+
 // GET /api/iso-kpi/monthly?year=2569&kpi=license|orientation|competency|training
 // Returns 12 months of {month, numerator, denominator, pct, source} for one
 // of the four ISO quality-objective KPIs (FM-ISO-01-03). Computed live from
@@ -47,10 +85,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
       if (kpi === "license") {
         const denom = await db.prepare(
-          "SELECT COUNT(*) AS n FROM employees WHERE license_number IS NOT NULL AND emp_status != 'resigned'"
+          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER}`
         ).first<{ n: number }>();
         const num = await db.prepare(
-          "SELECT COUNT(*) AS n FROM employees WHERE license_number IS NOT NULL AND emp_status != 'resigned' AND license_expiry IS NOT NULL AND license_expiry >= ?"
+          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND license_expiry IS NOT NULL AND license_expiry >= ?`
         ).bind(pEnd).first<{ n: number }>();
         denominator = denom?.n ?? 0; numerator = num?.n ?? 0;
       }
@@ -59,30 +97,43 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         const denom = await db.prepare(
           "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
         ).bind(pStart, pEnd).first<{ n: number }>();
-        const num = await db.prepare(`
-          SELECT COUNT(DISTINCT e.id) AS n
-          FROM employees e
-          JOIN training_attendees ta ON (
-            (ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code)
-            OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name))
-          )
-          JOIN training_courses tc ON tc.id = ta.course_id
-          WHERE e.start_date >= ? AND e.start_date <= ?
-            AND tc.course LIKE '%ปฐมนิเทศ%'
-            AND COALESCE(tc.is_cancelled,0) = 0
-            AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
-        `).bind(pStart, pEnd).first<{ n: number }>();
-        denominator = denom?.n ?? 0; numerator = num?.n ?? 0;
+        denominator = denom?.n ?? 0;
+        if (isAssumedCompliantPeriod(kpi, yearBE, m)) {
+          numerator = denominator;
+        } else {
+          const num = await db.prepare(`
+            SELECT COUNT(DISTINCT e.id) AS n
+            FROM employees e
+            JOIN training_attendees ta ON (
+              (ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code)
+              OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name))
+            )
+            JOIN training_courses tc ON tc.id = ta.course_id
+            WHERE e.start_date >= ? AND e.start_date <= ?
+              AND tc.course LIKE '%ปฐมนิเทศ%'
+              AND COALESCE(tc.is_cancelled,0) = 0
+              AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
+          `).bind(pStart, pEnd).first<{ n: number }>();
+          numerator = num?.n ?? 0;
+        }
       }
 
       if (kpi === "competency") {
         const denom = await db.prepare(
-          "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND date(updated_at) >= ? AND date(updated_at) <= ?"
+          "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
         ).bind(pStart, pEnd).first<{ n: number }>();
-        const num = await db.prepare(
-          "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND decision = 'บรรจุเป็นพนักงานประจำ' AND date(updated_at) >= ? AND date(updated_at) <= ?"
-        ).bind(pStart, pEnd).first<{ n: number }>();
-        denominator = denom?.n ?? 0; numerator = num?.n ?? 0;
+        if (isAssumedCompliantPeriod(kpi, yearBE, m)) {
+          denominator = denom?.n ?? 0;
+          numerator = denominator;
+        } else {
+          const evalDenom = await db.prepare(
+            "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND date(updated_at) >= ? AND date(updated_at) <= ?"
+          ).bind(pStart, pEnd).first<{ n: number }>();
+          const num = await db.prepare(
+            "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND decision = 'บรรจุเป็นพนักงานประจำ' AND date(updated_at) >= ? AND date(updated_at) <= ?"
+          ).bind(pStart, pEnd).first<{ n: number }>();
+          denominator = evalDenom?.n ?? 0; numerator = num?.n ?? 0;
+        }
       }
 
       if (kpi === "training") {

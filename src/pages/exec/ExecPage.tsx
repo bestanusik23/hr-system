@@ -269,6 +269,25 @@ export default function ExecPage() {
       .finally(() => setKpiLoading(false));
   }, [kpiPeriodType, kpiValue]);
 
+  // License-compliance KPI for the printed report — lives on the ISO endpoint
+  // (12 months at a time), so pick out the month/year currently selected above.
+  const [licenseKpi, setLicenseKpi] = useState<{ numerator: number; denominator: number; pct: number | null } | null>(null);
+  useEffect(() => {
+    const yearBE = (kpiPeriodType === "month" ? Number(kpiMonth.slice(0, 4)) : Number(kpiYear)) + 543;
+    fetch(`/api/iso-kpi/monthly?kpi=license&year=${yearBE}`).then(r => r.json())
+      .then((d: { ok: boolean; months?: { month: number; numerator: number; denominator: number; pct: number | null }[] }) => {
+        if (!d.ok || !d.months) { setLicenseKpi(null); return; }
+        if (kpiPeriodType === "month") {
+          const mo = Number(kpiMonth.slice(5, 7));
+          setLicenseKpi(d.months.find(x => x.month === mo) ?? null);
+        } else {
+          // Yearly view: use the latest month that actually has people to count.
+          const withData = d.months.filter(x => x.denominator > 0);
+          setLicenseKpi(withData.length > 0 ? withData[withData.length - 1] : null);
+        }
+      }).catch(() => setLicenseKpi(null));
+  }, [kpiPeriodType, kpiMonth, kpiYear]);
+
   const yearOptions = Array.from({ length: 6 }, (_, i) => String(new Date().getFullYear() - i));
 
   function printMonthlyExecReport() {
@@ -292,6 +311,10 @@ export default function ExecPage() {
         detail: kpiData.training_plan.total > 0
           ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
           : "ยังไม่มีแผนอบรมในช่วงนี้" },
+      { label: "ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง", pct: licenseKpi?.pct ?? null,
+        detail: licenseKpi && licenseKpi.denominator > 0
+          ? `ใบฯ ไม่หมดอายุ ${licenseKpi.numerator} / ตำแหน่งที่ต้องมีใบฯ ${licenseKpi.denominator} คน`
+          : "ไม่มีข้อมูลใบประกอบวิชาชีพในช่วงนี้" },
     ];
 
     // Shrink type density as content grows, so the report reliably fits one landscape A4 page.
