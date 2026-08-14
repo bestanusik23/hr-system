@@ -32,9 +32,13 @@ const KPI_DEFS: KpiDef[] = [
 ];
 
 const MONTH_LABELS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-// Fixed width for the table's row-label column, so the bar chart above it can reserve
-// the exact same space and its bars land under the right month column.
+// The bar chart (flex, auto-stretching columns) and the table below it (auto table
+// layout, content-sized columns) used two different width algorithms, so their column
+// boundaries never actually lined up even with matching left-edge spacing. Both now use
+// these exact same fixed pixel widths instead, inside one shared scroll container, so a
+// given month occupies the identical horizontal slot in both and they scroll together.
 const ROW_LABEL_WIDTH = 170;
+const MONTH_COL_WIDTH = 40;
 
 interface MonthRow { month: number; numerator: number; denominator: number; pct: number | null; source: "manual" | "computed" }
 interface ActionEntry {
@@ -188,14 +192,19 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
         <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>กำลังโหลด…</div>
       ) : (
         <>
-          {/* Monthly bar chart — the leading spacer keeps each bar aligned under its
-              column in the table below, which reserves ROW_LABEL_WIDTH for row labels. */}
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 100, marginTop: 14, marginBottom: 4, position: "relative" }}>
+          {/* Bar chart and table share one scroll container and identical fixed column
+              widths (ROW_LABEL_WIDTH / MONTH_COL_WIDTH), so a given month always occupies
+              the same horizontal slot in both and they scroll together in lock-step. */}
+          <div style={{ overflowX: "auto", marginTop: 14 }}>
+          {(() => {
+            const totalWidth = ROW_LABEL_WIDTH + (months?.length ?? 12) * MONTH_COL_WIDTH;
+            return (<>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 0, height: 100, marginBottom: 4, position: "relative", width: totalWidth }}>
             <div style={{ position: "absolute", left: ROW_LABEL_WIDTH, right: 0,
               bottom: `${(def.targetPct / maxBar) * 100}%`, borderTop: "1.5px dashed #c4cfee", zIndex: 1 }} />
             <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
             {(months ?? []).map(m => (
-              <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", position: "relative", zIndex: 2 }}>
+              <div key={m.month} style={{ width: MONTH_COL_WIDTH, flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", position: "relative", zIndex: 2 }}>
                 {m.pct !== null && (
                   <div style={{ fontSize: 9, color: pctColor(m.pct, def.targetPct), fontWeight: 700, marginBottom: 2 }}>{m.pct}</div>
                 )}
@@ -208,14 +217,12 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
             ))}
           </div>
 
-          {/* Monthly detail table */}
-          <div style={{ overflowX: "auto", marginTop: 10 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
+          <table style={{ width: totalWidth, tableLayout: "fixed", borderCollapse: "collapse", fontSize: 11.5, marginTop: 10 }}>
               <thead>
                 <tr style={{ background: "#f4f7ff" }}>
                   <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 700, color: "#475569", width: ROW_LABEL_WIDTH }}>เดือน</th>
                   {(months ?? []).map(m => (
-                    <th key={m.month} style={{ padding: "6px 6px", textAlign: "center", fontWeight: 700, color: "#475569" }}>{MONTH_LABELS[m.month - 1]}</th>
+                    <th key={m.month} style={{ padding: "6px 6px", textAlign: "center", fontWeight: 700, color: "#475569", width: MONTH_COL_WIDTH }}>{MONTH_LABELS[m.month - 1]}</th>
                   ))}
                 </tr>
               </thead>
@@ -223,10 +230,10 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
                 <tr>
                   <td style={{ padding: "5px 8px", color: "#64748b", width: ROW_LABEL_WIDTH }}>{def.numeratorLabel}</td>
                   {(months ?? []).map(m => (
-                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
+                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center", width: MONTH_COL_WIDTH }}>
                       {editingMonth === m.month ? (
                         <input type="number" min={0} value={editNum} onChange={e => setEditNum(e.target.value)}
-                          style={{ width: 44, padding: "2px 3px", borderRadius: 4, border: "1.5px solid #c4cfee", textAlign: "center", fontFamily: "inherit", fontSize: 11 }} />
+                          style={{ width: 34, padding: "2px 3px", borderRadius: 4, border: "1.5px solid #c4cfee", textAlign: "center", fontFamily: "inherit", fontSize: 11 }} />
                       ) : m.numerator}
                     </td>
                   ))}
@@ -234,10 +241,10 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
                 <tr style={{ background: "#f8faff" }}>
                   <td style={{ padding: "5px 8px", color: "#64748b", width: ROW_LABEL_WIDTH }}>{def.denominatorLabel}</td>
                   {(months ?? []).map(m => (
-                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
+                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center", width: MONTH_COL_WIDTH }}>
                       {editingMonth === m.month ? (
                         <input type="number" min={0} value={editDen} onChange={e => setEditDen(e.target.value)}
-                          style={{ width: 44, padding: "2px 3px", borderRadius: 4, border: "1.5px solid #c4cfee", textAlign: "center", fontFamily: "inherit", fontSize: 11 }} />
+                          style={{ width: 34, padding: "2px 3px", borderRadius: 4, border: "1.5px solid #c4cfee", textAlign: "center", fontFamily: "inherit", fontSize: 11 }} />
                       ) : m.denominator}
                     </td>
                   ))}
@@ -245,7 +252,7 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
                 <tr>
                   <td style={{ padding: "5px 8px", fontWeight: 700, color: "#0a1628", width: ROW_LABEL_WIDTH }}>ร้อยละ</td>
                   {(months ?? []).map(m => (
-                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
+                    <td key={m.month} style={{ padding: "5px 6px", textAlign: "center", width: MONTH_COL_WIDTH }}>
                       {editingMonth === m.month ? (
                         <div style={{ display: "flex", gap: 2, justifyContent: "center" }}>
                           <button onClick={() => saveEdit(m.month)} disabled={editSaving}
@@ -274,15 +281,17 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
                   ))}
                 </tr>
                 <tr>
-                  <td></td>
+                  <td style={{ width: ROW_LABEL_WIDTH }}></td>
                   {(months ?? []).map(m => (
-                    <td key={m.month} style={{ padding: "1px 6px", textAlign: "center", fontSize: 9, color: "#d97706" }}>
+                    <td key={m.month} style={{ padding: "1px 6px", textAlign: "center", fontSize: 9, color: "#d97706", width: MONTH_COL_WIDTH }}>
                       {m.source === "manual" ? "กรอกเอง" : ""}
                     </td>
                   ))}
                 </tr>
               </tbody>
-            </table>
+          </table>
+            </>);
+          })()}
           </div>
 
           {/* CAR / CQI log */}
