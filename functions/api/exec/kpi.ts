@@ -105,7 +105,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const trainingPlanPct    = trainingResult.pct;
 
   // 7) ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง — shared with the ISO "license" KPI; see hrKpiFormulas.ts.
-  const licenseResult = await computeLicense(db, pEnd);
+  const licenseResult = await computeLicense(db, pStart, pEnd);
   const licenseTotalN = licenseResult.denominator;
   const licenseValidN = licenseResult.numerator;
   const licensePct = licenseResult.pct;

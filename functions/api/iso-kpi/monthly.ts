@@ -45,7 +45,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       // periodBounds.ts) so the two dashboards always report identical numbers.
       const { pStart, pEnd } = monthBounds(yearCE, m);
       let result: { numerator: number; denominator: number };
-      if (kpi === "license")          result = await computeLicense(db, pEnd);
+      if (kpi === "license")          result = await computeLicense(db, pStart, pEnd);
       else if (kpi === "orientation") result = await computeOrientation(db, pStart, pEnd);
       else if (kpi === "competency")  result = await computeProbationPass(db, pStart, pEnd);
       else                            result = await computeTrainingPlan(db, pStart, pEnd);

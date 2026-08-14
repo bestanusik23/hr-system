@@ -76,10 +76,17 @@ export async function computeProbationPass(db: D1Database, pStart: string, pEnd:
   return toPct(autoN + (passed?.n ?? 0), autoN + (total?.n ?? 0));
 }
 
-// ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง, as of pEnd — a snapshot metric,
-// so it only needs the period's end date, not a range. Employees HR has
-// explicitly excluded (iso_kpi_license_exclusions) are dropped from both sides.
-export async function computeLicense(db: D1Database, pEnd: string): Promise<KpiResult> {
+// ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง, as of pEnd — a snapshot metric, so it
+// only needs the period's end date, not a range, to compute. That also means — unlike
+// the flow-based KPIs above, which are naturally empty for a period with no data yet —
+// it would happily project a real-looking percentage for a period that hasn't started,
+// since license validity vs. a future date is defined either way. If the period hasn't
+// started yet (pStart is still in the future), report "not yet available" instead of a
+// premature forward-looking number. Employees HR has explicitly excluded
+// (iso_kpi_license_exclusions) are dropped from both sides.
+export async function computeLicense(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
+  const today = new Date().toISOString().slice(0, 10);
+  if (pStart > today) return { numerator: 0, denominator: 0, pct: null };
   const notExcluded = "id NOT IN (SELECT employee_id FROM iso_kpi_license_exclusions)";
   const denom = await db.prepare(
     `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${notExcluded}`

@@ -32,6 +32,9 @@ const KPI_DEFS: KpiDef[] = [
 ];
 
 const MONTH_LABELS = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+// Fixed width for the table's row-label column, so the bar chart above it can reserve
+// the exact same space and its bars land under the right month column.
+const ROW_LABEL_WIDTH = 170;
 
 interface MonthRow { month: number; numerator: number; denominator: number; pct: number | null; source: "manual" | "computed" }
 interface ActionEntry {
@@ -185,10 +188,12 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
         <div style={{ padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13 }}>กำลังโหลด…</div>
       ) : (
         <>
-          {/* Monthly bar chart */}
+          {/* Monthly bar chart — the leading spacer keeps each bar aligned under its
+              column in the table below, which reserves ROW_LABEL_WIDTH for row labels. */}
           <div style={{ display: "flex", alignItems: "flex-end", gap: 4, height: 100, marginTop: 14, marginBottom: 4, position: "relative" }}>
-            <div style={{ position: "absolute", left: 0, right: 0,
+            <div style={{ position: "absolute", left: ROW_LABEL_WIDTH, right: 0,
               bottom: `${(def.targetPct / maxBar) * 100}%`, borderTop: "1.5px dashed #c4cfee", zIndex: 1 }} />
+            <div style={{ width: ROW_LABEL_WIDTH, flexShrink: 0 }} />
             {(months ?? []).map(m => (
               <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", height: "100%", position: "relative", zIndex: 2 }}>
                 {m.pct !== null && (
@@ -208,7 +213,7 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11.5 }}>
               <thead>
                 <tr style={{ background: "#f4f7ff" }}>
-                  <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 700, color: "#475569" }}>เดือน</th>
+                  <th style={{ padding: "6px 8px", textAlign: "left", fontWeight: 700, color: "#475569", width: ROW_LABEL_WIDTH }}>เดือน</th>
                   {(months ?? []).map(m => (
                     <th key={m.month} style={{ padding: "6px 6px", textAlign: "center", fontWeight: 700, color: "#475569" }}>{MONTH_LABELS[m.month - 1]}</th>
                   ))}
@@ -216,7 +221,7 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
               </thead>
               <tbody>
                 <tr>
-                  <td style={{ padding: "5px 8px", color: "#64748b" }}>{def.numeratorLabel}</td>
+                  <td style={{ padding: "5px 8px", color: "#64748b", width: ROW_LABEL_WIDTH }}>{def.numeratorLabel}</td>
                   {(months ?? []).map(m => (
                     <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
                       {editingMonth === m.month ? (
@@ -227,7 +232,7 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
                   ))}
                 </tr>
                 <tr style={{ background: "#f8faff" }}>
-                  <td style={{ padding: "5px 8px", color: "#64748b" }}>{def.denominatorLabel}</td>
+                  <td style={{ padding: "5px 8px", color: "#64748b", width: ROW_LABEL_WIDTH }}>{def.denominatorLabel}</td>
                   {(months ?? []).map(m => (
                     <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
                       {editingMonth === m.month ? (
@@ -238,7 +243,7 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
                   ))}
                 </tr>
                 <tr>
-                  <td style={{ padding: "5px 8px", fontWeight: 700, color: "#0a1628" }}>ร้อยละ</td>
+                  <td style={{ padding: "5px 8px", fontWeight: 700, color: "#0a1628", width: ROW_LABEL_WIDTH }}>ร้อยละ</td>
                   {(months ?? []).map(m => (
                     <td key={m.month} style={{ padding: "5px 6px", textAlign: "center" }}>
                       {editingMonth === m.month ? (
