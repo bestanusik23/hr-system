@@ -117,10 +117,19 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
     loadMonths();
   }
 
+  // License is a snapshot metric — every month re-measures the same ~40 people, so
+  // summing numerator/denominator across 12 months (like the flow-based KPIs below,
+  // where each month is a distinct cohort of new hires/courses) would average stale
+  // past snapshots into "today's" figure and disagree with the Exec Dashboard's live
+  // card, which always shows the current period. Use the latest available month instead.
+  const isSnapshotKpi = def.key === "license";
   const yearTotal = months
     ? { num: months.reduce((s, m) => s + m.numerator, 0), den: months.reduce((s, m) => s + m.denominator, 0) }
     : null;
   const yearPct = yearTotal && yearTotal.den > 0 ? Math.round((yearTotal.num / yearTotal.den) * 1000) / 10 : null;
+  const latestMonth = months ? [...months].reverse().find(m => m.pct !== null) : undefined;
+  const headlinePct   = isSnapshotKpi ? (latestMonth?.pct ?? null) : yearPct;
+  const headlineLabel = isSnapshotKpi ? "ข้อมูลล่าสุด" : "สะสมทั้งปี";
 
   const maxBar = Math.max(...(months?.map(m => m.pct ?? 0) ?? [0]), def.targetPct, 10);
 
@@ -158,16 +167,16 @@ function IsoKpiDetailCard({ def, year }: { def: KpiDef; year: number }) {
 
   return (
     <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #dce4f5",
-      borderTop: `4px solid ${pctColor(yearPct, def.targetPct)}`, padding: "20px 22px", marginBottom: 20 }}>
+      borderTop: `4px solid ${pctColor(headlinePct, def.targetPct)}`, padding: "20px 22px", marginBottom: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 10, marginBottom: 4 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 800, color: "#0a1628" }}>{def.label}</div>
           <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 2 }}>{def.formulaNote}</div>
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 11, color: "#94a3b8" }}>เป้าหมาย {def.targetLabel} · สะสมทั้งปี</div>
-          <div style={{ fontSize: 26, fontWeight: 900, color: pctColor(yearPct, def.targetPct) }}>
-            {yearPct === null ? "—" : `${yearPct}%`}
+          <div style={{ fontSize: 11, color: "#94a3b8" }}>เป้าหมาย {def.targetLabel} · {headlineLabel}</div>
+          <div style={{ fontSize: 26, fontWeight: 900, color: pctColor(headlinePct, def.targetPct) }}>
+            {headlinePct === null ? "—" : `${headlinePct}%`}
           </div>
         </div>
       </div>

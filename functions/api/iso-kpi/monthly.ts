@@ -1,13 +1,9 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
-import { LICENSED_POSITION_FILTER } from "../../lib/licensedPositions";
-import { isAssumedCompliantMonth } from "../../lib/assumedCompliance";
+import { monthBounds } from "../../lib/periodBounds";
+import { computeOrientation, computeProbationPass, computeLicense, computeTrainingPlan } from "../../lib/hrKpiFormulas";
 
 const KPI_KEYS = ["license", "orientation", "competency", "training"];
-
-function isAssumedCompliantPeriod(kpi: string, yearBE: number, month: number): boolean {
-  return (kpi === "orientation" || kpi === "competency") && isAssumedCompliantMonth(yearBE, month);
-}
 
 // GET /api/iso-kpi/monthly?year=2569&kpi=license|orientation|competency|training
 // Returns 12 months of {month, numerator, denominator, pct, source} for one
@@ -45,76 +41,15 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       numerator = override.numerator; denominator = override.denominator; source = "manual";
     } else {
       source = "computed";
-      const mm      = String(m).padStart(2, "0");
-      const pStart  = `${yearCE}-${mm}-01`;
-      const lastDay = new Date(yearCE, m, 0).getDate();
-      const pEnd    = `${yearCE}-${mm}-${String(lastDay).padStart(2, "0")}`;
-      numerator = 0; denominator = 0;
-
-      if (kpi === "license") {
-        // Kept in sync with /api/exec/kpi.ts's license computation, including
-        // the same iso_kpi_license_exclusions exception list.
-        const notExcluded = "id NOT IN (SELECT employee_id FROM iso_kpi_license_exclusions)";
-        const denom = await db.prepare(
-          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${notExcluded}`
-        ).first<{ n: number }>();
-        const num = await db.prepare(
-          `SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned' AND ${LICENSED_POSITION_FILTER} AND ${notExcluded} AND license_expiry IS NOT NULL AND license_expiry >= ?`
-        ).bind(pEnd).first<{ n: number }>();
-        denominator = denom?.n ?? 0; numerator = num?.n ?? 0;
-      }
-
-      if (kpi === "orientation") {
-        const denom = await db.prepare(
-          "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
-        ).bind(pStart, pEnd).first<{ n: number }>();
-        denominator = denom?.n ?? 0;
-        if (isAssumedCompliantPeriod(kpi, yearBE, m)) {
-          numerator = denominator;
-        } else {
-          const num = await db.prepare(`
-            SELECT COUNT(DISTINCT e.id) AS n
-            FROM employees e
-            JOIN training_attendees ta ON (
-              (ta.emp_code IS NOT NULL AND ta.emp_code = e.emp_code)
-              OR (ta.emp_code IS NULL AND TRIM(ta.name) = TRIM(e.full_name))
-            )
-            JOIN training_courses tc ON tc.id = ta.course_id
-            WHERE e.start_date >= ? AND e.start_date <= ?
-              AND tc.course LIKE '%ปฐมนิเทศ%'
-              AND COALESCE(tc.is_cancelled,0) = 0
-              AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
-          `).bind(pStart, pEnd).first<{ n: number }>();
-          numerator = num?.n ?? 0;
-        }
-      }
-
-      if (kpi === "competency") {
-        const denom = await db.prepare(
-          "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
-        ).bind(pStart, pEnd).first<{ n: number }>();
-        if (isAssumedCompliantPeriod(kpi, yearBE, m)) {
-          denominator = denom?.n ?? 0;
-          numerator = denominator;
-        } else {
-          const evalDenom = await db.prepare(
-            "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND date(updated_at) >= ? AND date(updated_at) <= ?"
-          ).bind(pStart, pEnd).first<{ n: number }>();
-          const num = await db.prepare(
-            "SELECT COUNT(*) AS n FROM evaluations WHERE round = 90 AND status = 'approved' AND decision = 'บรรจุเป็นพนักงานประจำ' AND date(updated_at) >= ? AND date(updated_at) <= ?"
-          ).bind(pStart, pEnd).first<{ n: number }>();
-          denominator = evalDenom?.n ?? 0; numerator = num?.n ?? 0;
-        }
-      }
-
-      if (kpi === "training") {
-        const counts = await db.prepare(`
-          SELECT COUNT(*) AS planned_total,
-            SUM(CASE WHEN COALESCE(is_cancelled,0)=0 AND status='done' THEN 1 ELSE 0 END) AS actual_done
-          FROM training_courses WHERE course_date >= ? AND course_date <= ?
-        `).bind(pStart, pEnd).first<{ planned_total: number; actual_done: number }>();
-        denominator = counts?.planned_total ?? 0; numerator = counts?.actual_done ?? 0;
-      }
+      // Same period bounds and formulas as /api/exec/kpi.ts (see hrKpiFormulas.ts /
+      // periodBounds.ts) so the two dashboards always report identical numbers.
+      const { pStart, pEnd } = monthBounds(yearCE, m);
+      let result: { numerator: number; denominator: number };
+      if (kpi === "license")          result = await computeLicense(db, pEnd);
+      else if (kpi === "orientation") result = await computeOrientation(db, pStart, pEnd);
+      else if (kpi === "competency")  result = await computeProbationPass(db, pStart, pEnd);
+      else                            result = await computeTrainingPlan(db, pStart, pEnd);
+      numerator = result.numerator; denominator = result.denominator;
     }
 
     const pct = denominator > 0 ? Math.round((numerator / denominator) * 1000) / 10 : null;

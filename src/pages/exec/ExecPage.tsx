@@ -28,7 +28,7 @@ interface KpiSummary {
   period_label: string;
   period_type: "month" | "year";
   period_value: string;
-  overrides: Partial<Record<KpiKey, { pct: number; detail: string }>>;
+  overrides: Partial<Record<KpiKey, { pct: number; detail: string; numerator?: number; denominator?: number }>>;
   turnover:       { pct: number; resigned: number; headcount: number };
   eval_coverage:  { pct: number | null; received: number; total: number };
   orientation:    { pct: number | null; passed: number; total: number };
@@ -47,6 +47,10 @@ interface KpiSummary {
 }
 
 type KpiKey = "turnover" | "eval_coverage" | "orientation" | "satisfaction" | "probation_pass" | "training_plan" | "license";
+
+// These 4 also appear on the ISO KPI grid (FM-ISO-01 to 03) and share its override
+// storage when viewed by month — see functions/lib/hrKpiFormulas.ts.
+const SHARED_ISO_KPI_KEYS: KpiKey[] = ["license", "orientation", "probation_pass", "training_plan"];
 
 const REPORT_DOC_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
 const DEFAULT_ACK = { name: "อนุสิกข์  ทองแผ่น", title: "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ" };
@@ -293,24 +297,43 @@ export default function ExecPage() {
 
   const [overridePct, setOverridePct] = useState("");
   const [overrideDetail, setOverrideDetail] = useState("");
+  const [overrideNum, setOverrideNum] = useState("");
+  const [overrideDen, setOverrideDen] = useState("");
   const [overrideSaving, setOverrideSaving] = useState(false);
+  // license/orientation/probation_pass/training_plan, viewed by month, share their
+  // backfill storage with the ISO KPI grid — which stores numerator/denominator, not a
+  // flat percentage — so the edit form for those asks for numerator/denominator instead.
+  const isSharedMonthOverride = !!kpiDetail && kpiData?.period_type === "month" && SHARED_ISO_KPI_KEYS.includes(kpiDetail);
   useEffect(() => {
     if (!kpiDetail || !kpiData) return;
     const ov = kpiData.overrides[kpiDetail];
     setOverridePct(ov ? String(ov.pct) : "");
-    setOverrideDetail(ov ? ov.detail : "");
+    setOverrideDetail(ov && ov.numerator === undefined ? ov.detail : "");
+    setOverrideNum(ov?.numerator !== undefined ? String(ov.numerator) : "");
+    setOverrideDen(ov?.denominator !== undefined ? String(ov.denominator) : "");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [kpiDetail]);
 
   async function saveKpiOverride() {
     if (!kpiDetail || !kpiData) return;
-    const pct = Number(overridePct);
-    if (!Number.isFinite(pct) || pct < 0 || pct > 100) { alert("ร้อยละต้องอยู่ระหว่าง 0-100"); return; }
     setOverrideSaving(true);
-    await fetch("/api/exec/kpi-override", {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kpi_key: kpiDetail, period_type: kpiData.period_type, period_value: kpiData.period_value, pct, detail: overrideDetail }),
-    });
+    if (isSharedMonthOverride) {
+      const numerator = Number(overrideNum), denominator = Number(overrideDen);
+      if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || numerator < 0 || denominator < 0) {
+        alert("ตัวเลขต้องเป็นจำนวนบวก"); setOverrideSaving(false); return;
+      }
+      await fetch("/api/exec/kpi-override", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kpi_key: kpiDetail, period_type: kpiData.period_type, period_value: kpiData.period_value, numerator, denominator }),
+      });
+    } else {
+      const pct = Number(overridePct);
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) { alert("ร้อยละต้องอยู่ระหว่าง 0-100"); setOverrideSaving(false); return; }
+      await fetch("/api/exec/kpi-override", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kpi_key: kpiDetail, period_type: kpiData.period_type, period_value: kpiData.period_value, pct, detail: overrideDetail }),
+      });
+    }
     await loadKpiData();
     setOverrideSaving(false);
   }
@@ -320,7 +343,7 @@ export default function ExecPage() {
     setOverrideSaving(true);
     await fetch(`/api/exec/kpi-override?kpi_key=${kpiDetail}&period_type=${kpiData.period_type}&period_value=${encodeURIComponent(kpiData.period_value)}`, { method: "DELETE" });
     await loadKpiData();
-    setOverridePct(""); setOverrideDetail("");
+    setOverridePct(""); setOverrideDetail(""); setOverrideNum(""); setOverrideDen("");
     setOverrideSaving(false);
   }
 
@@ -1068,15 +1091,31 @@ export default function ExecPage() {
               <div style={{ marginTop: 14, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 8 }}>
                   กรอกข้อมูลย้อนหลัง (แทนค่าที่คำนวณสด สำหรับช่วง {kpiData.period_label})
+                  {isSharedMonthOverride && <span style={{ color: "#0038C6" }}> — ใช้ร่วมกับตาราง ISO ด้านล่าง</span>}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <input type="number" min={0} max={100} step="0.1" value={overridePct}
-                    onChange={e => setOverridePct(e.target.value)} placeholder="ร้อยละ"
-                    style={{ width: 90, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
-                  <input type="text" value={overrideDetail} onChange={e => setOverrideDetail(e.target.value)}
-                    placeholder="รายละเอียด (ไม่บังคับ)"
-                    style={{ flex: 1, minWidth: 140, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
-                  <button onClick={saveKpiOverride} disabled={overrideSaving || overridePct === ""}
+                  {isSharedMonthOverride ? (
+                    <>
+                      <input type="number" min={0} value={overrideNum}
+                        onChange={e => setOverrideNum(e.target.value)} placeholder="จำนวนที่ผ่าน/นับได้"
+                        style={{ width: 130, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
+                      <span style={{ color: "#94a3b8" }}>/</span>
+                      <input type="number" min={0} value={overrideDen}
+                        onChange={e => setOverrideDen(e.target.value)} placeholder="จำนวนทั้งหมด"
+                        style={{ width: 130, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
+                    </>
+                  ) : (
+                    <>
+                      <input type="number" min={0} max={100} step="0.1" value={overridePct}
+                        onChange={e => setOverridePct(e.target.value)} placeholder="ร้อยละ"
+                        style={{ width: 90, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
+                      <input type="text" value={overrideDetail} onChange={e => setOverrideDetail(e.target.value)}
+                        placeholder="รายละเอียด (ไม่บังคับ)"
+                        style={{ flex: 1, minWidth: 140, padding: "7px 9px", borderRadius: 6, border: "1px solid #cbd5e1", fontSize: 13, fontFamily: "inherit" }} />
+                    </>
+                  )}
+                  <button onClick={saveKpiOverride}
+                    disabled={overrideSaving || (isSharedMonthOverride ? (overrideNum === "" || overrideDen === "") : overridePct === "")}
                     style={{ padding: "7px 14px", borderRadius: 6, background: "#0038C6", color: "#fff",
                       border: "none", fontWeight: 700, fontSize: 12.5, cursor: overrideSaving ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
                     {overrideSaving ? "…" : "บันทึก"}
