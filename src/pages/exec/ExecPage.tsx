@@ -551,10 +551,10 @@ export default function ExecPage() {
         </div>
       </div>
 
-      {/* 5 ตัวชี้วัด HR KPI */}
+      {/* 7 ตัวชี้วัด HR KPI */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
         flexWrap: "wrap", gap: 10, marginBottom: 12, marginTop: 6 }}>
-        <SectionTitle icon="🎯">5 ตัวชี้วัด HR KPI{kpiData ? ` — ${kpiData.period_label}` : ""}</SectionTitle>
+        <SectionTitle icon="🎯">7 ตัวชี้วัด HR KPI{kpiData ? ` — ${kpiData.period_label}` : ""}</SectionTitle>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
             {(["month", "year"] as const).map(t => (
