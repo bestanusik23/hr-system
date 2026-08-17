@@ -111,3 +111,42 @@ export async function computeTrainingPlan(db: D1Database, pStart: string, pEnd: 
   const result = toPct(counts?.actual_done ?? 0, counts?.planned_total ?? 0);
   return { ...result, cancelled: counts?.cancelled ?? 0 };
 }
+
+// The 3 Exec-only KPIs (no ISO equivalent) — factored out alongside the 4 shared ones
+// above purely so /api/exec/kpi.ts and /api/exec/kpi-yearly.ts share one implementation
+// instead of two copies that could drift.
+
+// ร้อยละพนักงานลาออก — resigned in period / CURRENT total headcount (not headcount as of
+// the period), matching the Manpower dashboard's own turnover formula.
+export async function computeTurnover(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
+  const resigned = await db.prepare(
+    "SELECT COUNT(*) AS n FROM employees WHERE resign_date >= ? AND resign_date <= ?"
+  ).bind(pStart, pEnd).first<{ n: number }>();
+  const headcountNow = await db.prepare(
+    "SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned'"
+  ).first<{ n: number }>();
+  const hcNow = headcountNow?.n ?? 0;
+  return { numerator: resigned?.n ?? 0, denominator: hcNow, pct: hcNow > 0 ? round1((resigned?.n ?? 0) / hcNow * 100) : 0 };
+}
+
+// ร้อยละพนักงานใหม่ที่ได้รับการประเมิน — new hires in period with at least one evaluation record.
+export async function computeEvalCoverage(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
+  const total = await db.prepare(
+    "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
+  ).bind(pStart, pEnd).first<{ n: number }>();
+  const received = await db.prepare(`
+    SELECT COUNT(DISTINCT e.id) AS n FROM employees e JOIN evaluations ev ON ev.employee_id = e.id
+    WHERE e.start_date >= ? AND e.start_date <= ?
+  `).bind(pStart, pEnd).first<{ n: number }>();
+  return toPct(received?.n ?? 0, total?.n ?? 0);
+}
+
+// ร้อยละความพึงพอใจของผู้ที่ได้รับการอบรม — average survey score, not a ratio, so pct is
+// computed directly by the DB rather than via toPct(); "denominator" holds the response
+// count purely so callers that expect {numerator,denominator,pct} have something to show.
+export async function computeSatisfaction(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
+  const survey = await db.prepare(
+    "SELECT ROUND(AVG((q1+q2+q3+q4+q5)*5.0),1) AS pct, COUNT(*) AS n FROM training_surveys WHERE date(submitted_at) >= ? AND date(submitted_at) <= ?"
+  ).bind(pStart, pEnd).first<{ pct: number | null; n: number }>();
+  return { numerator: survey?.n ?? 0, denominator: survey?.n ?? 0, pct: survey?.pct ?? null };
+}

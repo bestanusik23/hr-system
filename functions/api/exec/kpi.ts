@@ -3,7 +3,10 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 import { LICENSED_POSITION_FILTER } from "../../lib/licensedPositions";
 import { ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END } from "../../lib/assumedCompliance";
 import { monthBounds } from "../../lib/periodBounds";
-import { computeOrientation, computeProbationPass, computeLicense, computeTrainingPlan, ISO_TO_EXEC_KPI_KEY } from "../../lib/hrKpiFormulas";
+import {
+  computeOrientation, computeProbationPass, computeLicense, computeTrainingPlan,
+  computeTurnover, computeEvalCoverage, computeSatisfaction, ISO_TO_EXEC_KPI_KEY,
+} from "../../lib/hrKpiFormulas";
 
 // GET /api/exec/kpi?period=month&value=2026-07   (or period=year&value=2026)
 // Returns the 5 core HR KPIs for the selected period.
@@ -55,41 +58,25 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   ).bind(period, value).all<{ kpi_key: string; pct: number; detail: string }>();
   for (const r of overrideRows.results ?? []) overrides[r.kpi_key] = { pct: r.pct, detail: r.detail };
 
-  // 1) ร้อยละพนักงานลาออก — resigned in period / current total headcount (matches Manpower dashboard's formula)
-  const resigned = await db.prepare(
-    "SELECT COUNT(*) AS n FROM employees WHERE resign_date >= ? AND resign_date <= ?"
-  ).bind(pStart, pEnd).first<{ n: number }>();
-  const headcountNow = await db.prepare(
-    "SELECT COUNT(*) AS n FROM employees WHERE emp_status != 'resigned'"
-  ).first<{ n: number }>();
-  const hcNow = headcountNow?.n ?? 0;
-  const turnoverPct = hcNow > 0 ? round1((resigned?.n ?? 0) / hcNow * 100) : 0;
+  // 1) ร้อยละพนักงานลาออก — see hrKpiFormulas.ts.
+  const turnoverResult = await computeTurnover(db, pStart, pEnd);
+  const turnoverPct = turnoverResult.pct;
 
-  // 2) ร้อยละพนักงานใหม่ที่ได้รับการประเมิน — new hires in period with at least one evaluation record (any round/status)
-  const newHires = await db.prepare(
-    "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
-  ).bind(pStart, pEnd).first<{ n: number }>();
-  const newHireN = newHires?.n ?? 0;
-  const evalReceived = await db.prepare(`
-    SELECT COUNT(DISTINCT e.id) AS n
-    FROM employees e
-    JOIN evaluations ev ON ev.employee_id = e.id
-    WHERE e.start_date >= ? AND e.start_date <= ?
-  `).bind(pStart, pEnd).first<{ n: number }>();
-  const evalReceivedN   = evalReceived?.n ?? 0;
-  const evalCoveragePct = newHireN > 0 ? round1(evalReceivedN / newHireN * 100) : null;
+  // 2) ร้อยละพนักงานใหม่ที่ได้รับการประเมิน — see hrKpiFormulas.ts.
+  const evalCoverageResult = await computeEvalCoverage(db, pStart, pEnd);
+  const newHireN = evalCoverageResult.denominator;
+  const evalReceivedN = evalCoverageResult.numerator;
+  const evalCoveragePct = evalCoverageResult.pct;
 
   // 3) ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ — shared with the ISO "orientation" KPI; see hrKpiFormulas.ts.
   const orientationResult = await computeOrientation(db, pStart, pEnd);
   const orientedN = orientationResult.numerator;
   const orientationPct = orientationResult.pct;
 
-  // 4) ร้อยละความพึงพอใจของผู้ที่ได้รับการอบรม — survey responses submitted in period (q1-q5, 1-4 scale → 0-100%)
-  const survey = await db.prepare(
-    "SELECT ROUND(AVG((q1+q2+q3+q4+q5)*5.0),1) AS pct, COUNT(*) AS n FROM training_surveys WHERE date(submitted_at) >= ? AND date(submitted_at) <= ?"
-  ).bind(pStart, pEnd).first<{ pct: number | null; n: number }>();
-  const satisfactionPct = survey?.pct ?? null;
-  const satisfactionN   = survey?.n ?? 0;
+  // 4) ร้อยละความพึงพอใจของผู้ที่ได้รับการอบรม — see hrKpiFormulas.ts.
+  const satisfactionResult = await computeSatisfaction(db, pStart, pEnd);
+  const satisfactionPct = satisfactionResult.pct;
+  const satisfactionN   = satisfactionResult.numerator;
 
   // 5) ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลการปฏิบัติงาน — shared with the ISO "competency" KPI; see hrKpiFormulas.ts.
   const probationResult = await computeProbationPass(db, pStart, pEnd);
@@ -192,7 +179,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     period_type: period,
     period_value: value,
     overrides,
-    turnover:       { pct: turnoverPct, resigned: resigned?.n ?? 0, headcount: hcNow },
+    turnover:       { pct: turnoverPct, resigned: turnoverResult.numerator, headcount: turnoverResult.denominator },
     eval_coverage:  { pct: evalCoveragePct, received: evalReceivedN, total: newHireN },
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },

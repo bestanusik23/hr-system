@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 import IsoQualitySection from "./IsoQualitySection";
+import ExecYearlyOverview from "./ExecYearlyOverview";
 
 interface Summary {
   employees: { total: number; probation: number; passed: number; resigned: number; due_eval: number };
@@ -238,6 +239,9 @@ export default function ExecPage() {
   const [lastFetch, setLastFetch] = useState<Date | null>(null);
 
   // HR KPI section (5 core metrics, selectable period)
+  // "overview" (12-month trend per KPI) is the landing view; "month"/"year" show the
+  // existing single-period card grid + drill-down + print report.
+  const [kpiViewMode, setKpiViewMode]     = useState<"overview" | "month" | "year">("overview");
   const [kpiPeriodType, setKpiPeriodType] = useState<"month" | "year">("month");
   const [kpiMonth, setKpiMonth]           = useState(currentYM);
   const [kpiYear, setKpiYear]             = useState(() => String(new Date().getFullYear()));
@@ -554,20 +558,20 @@ export default function ExecPage() {
       {/* 7 ตัวชี้วัด HR KPI */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
         flexWrap: "wrap", gap: 10, marginBottom: 12, marginTop: 6 }}>
-        <SectionTitle icon="🎯">7 ตัวชี้วัด HR KPI{kpiData ? ` — ${kpiData.period_label}` : ""}</SectionTitle>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <SectionTitle icon="🎯">7 ตัวชี้วัด HR KPI{kpiViewMode !== "overview" && kpiData ? ` — ${kpiData.period_label}` : ""}</SectionTitle>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", background: "#f1f5f9", borderRadius: 8, padding: 3 }}>
-            {(["month", "year"] as const).map(t => (
-              <button key={t} onClick={() => setKpiPeriodType(t)}
+            {([["overview", "ภาพรวมรายปี"], ["month", "รายเดือน"], ["year", "รายปี"]] as const).map(([t, label]) => (
+              <button key={t} onClick={() => { setKpiViewMode(t); if (t !== "overview") setKpiPeriodType(t); }}
                 style={{ padding: "6px 14px", borderRadius: 6, border: "none", fontFamily: "inherit",
-                  fontSize: 12, fontWeight: kpiPeriodType === t ? 700 : 400, cursor: "pointer",
-                  background: kpiPeriodType === t ? "#0038C6" : "transparent",
-                  color: kpiPeriodType === t ? "#fff" : "#64748b" }}>
-                {t === "month" ? "รายเดือน" : "รายปี"}
+                  fontSize: 12, fontWeight: kpiViewMode === t ? 700 : 400, cursor: "pointer",
+                  background: kpiViewMode === t ? "#0038C6" : "transparent",
+                  color: kpiViewMode === t ? "#fff" : "#64748b" }}>
+                {label}
               </button>
             ))}
           </div>
-          {kpiPeriodType === "month" ? (
+          {kpiViewMode !== "overview" && (kpiPeriodType === "month" ? (
             <input type="month" value={kpiMonth} onChange={e => setKpiMonth(e.target.value)}
               style={{ padding: "7px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
                 fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff" }} />
@@ -577,16 +581,20 @@ export default function ExecPage() {
                 fontSize: 13, fontFamily: "inherit", outline: "none", background: "#fff", cursor: "pointer" }}>
               {yearOptions.map(y => <option key={y} value={y}>{Number(y) + 543}</option>)}
             </select>
+          ))}
+          {kpiViewMode !== "overview" && (
+            <button onClick={openPrintDialog} disabled={!kpiData}
+              style={{ padding: "7px 16px", borderRadius: 7, border: "none",
+                background: kpiData ? "#0038C6" : "#c4cfee", color: "#fff", fontWeight: 700, fontSize: 12,
+                cursor: kpiData ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+              🖨️ พิมพ์รายงานประจำเดือน
+            </button>
           )}
-          <button onClick={openPrintDialog} disabled={!kpiData}
-            style={{ padding: "7px 16px", borderRadius: 7, border: "none",
-              background: kpiData ? "#0038C6" : "#c4cfee", color: "#fff", fontWeight: 700, fontSize: 12,
-              cursor: kpiData ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
-            🖨️ พิมพ์รายงานประจำเดือน
-          </button>
         </div>
       </div>
-      {kpiLoading || !kpiData ? (
+      {kpiViewMode === "overview" ? (
+        <ExecYearlyOverview />
+      ) : kpiLoading || !kpiData ? (
         <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด KPI…</div>
       ) : (() => {
         // A saved exec_kpi_overrides row for this exact period replaces the
