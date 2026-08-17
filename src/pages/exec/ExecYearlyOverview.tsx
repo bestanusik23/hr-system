@@ -219,40 +219,14 @@ export default function ExecYearlyOverview() {
             </div>
           </div>
 
-          <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #e6ecfb", padding: "16px 18px", overflowX: "auto" }}>
-            <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0a1628", marginBottom: 12 }}>เปรียบเทียบรายเดือนทั้ง 7 ตัวชี้วัด</div>
-            <table style={{ borderCollapse: "collapse", fontSize: 11.5, minWidth: 900 }}>
-              <thead>
-                <tr style={{ background: "#f4f7ff" }}>
-                  <th style={{ padding: "6px 10px", textAlign: "left", fontWeight: 700, color: "#475569", position: "sticky", left: 0, background: "#f4f7ff" }}>ตัวชี้วัด</th>
-                  {MONTH_LABELS.map(l => <th key={l} style={{ padding: "6px 8px", textAlign: "center", fontWeight: 700, color: "#475569" }}>{l}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {KPI_DEFS.map((def, ri) => {
-                  const months = data.kpis[def.key];
-                  return (
-                    <tr key={def.key} style={{ background: ri % 2 === 1 ? "#f8faff" : "#fff" }}>
-                      <td style={{ padding: "6px 10px", color: "#334155", fontWeight: 600, whiteSpace: "nowrap",
-                        position: "sticky", left: 0, background: ri % 2 === 1 ? "#f8faff" : "#fff" }}>{def.icon} {def.label}</td>
-                      {months.map((m, i) => {
-                        const prevM = i > 0 ? months[i - 1] : null;
-                        const delta = m.pct !== null && prevM?.pct != null ? round1(m.pct - prevM.pct) : null;
-                        const improved = delta !== null && (def.lowerIsBetter ? delta < 0 : delta > 0);
-                        return (
-                          <td key={m.month} style={{ padding: "6px 8px", textAlign: "center", color: pctColor(m.pct, def.target, def.lowerIsBetter), fontWeight: 700 }}>
-                            {m.pct === null ? "—" : `${m.pct}%`}
-                            {delta !== null && Math.abs(delta) >= 0.05 && (
-                              <span style={{ color: improved ? "#16a34a" : "#dc2626", fontWeight: 400 }}> {delta > 0 ? "▲" : "▼"}</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {KPI_DEFS.map(def => (
+              <div key={def.key} style={{ background: "#fff", borderRadius: 16, border: "1px solid #e6ecfb",
+                padding: "18px 20px", boxShadow: "0 1px 3px rgba(10,22,56,.06)" }}>
+                <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0a1628", marginBottom: 14 }}>{def.icon} {def.label}</div>
+                <DetailChart def={def} months={data.kpis[def.key]} />
+              </div>
+            ))}
           </div>
         </>
       )}
