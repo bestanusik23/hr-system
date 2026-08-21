@@ -146,15 +146,8 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   }
 
   function printMonthlyReport() {
-    const monthPrefix  = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-    const monthCourses = courses
-      .filter(c => c.course_date?.startsWith(monthPrefix))
+    const monthCourses = [...kpiCourses]
       .sort((a, b) => (a.course_date ?? "") < (b.course_date ?? "") ? -1 : 1);
-
-    const totalTargetM = monthCourses.reduce((a, c) => a + c.target, 0);
-    const totalActualM = monthCourses.reduce((a, c) => a + c.actual, 0);
-    const doneM        = monthCourses.filter(c => c.status === "done").length;
-    const pctM         = totalTargetM > 0 ? Math.round(totalActualM / totalTargetM * 100) : 0;
     const monthTitle   = `${MONTHS_TH[calMonth]} ${calYear + 543}`;
 
     setShowPrintDialog(false);
@@ -208,9 +201,9 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
 </div>
 <div class="kpis">
   <div class="kpi"><b>${monthCourses.length}</b><span>หลักสูตรทั้งหมด</span></div>
-  <div class="kpi"><b>${totalTargetM}</b><span>เป้าหมายผู้เข้าอบรม</span></div>
-  <div class="kpi"><b>${doneM}</b><span>จัดอบรมแล้ว</span></div>
-  <div class="kpi"><b>${pctM}%</b><span>% Completion</span></div>
+  <div class="kpi"><b>${totalTarget}</b><span>เป้าหมายผู้เข้าอบรม</span></div>
+  <div class="kpi"><b>${done}</b><span>จัดอบรมแล้ว</span></div>
+  <div class="kpi"><b>${pct}%</b><span>% Completion</span></div>
 </div>
 <table>
 <thead><tr><th>#</th><th>รหัส</th><th>ชื่อหลักสูตร</th><th>ประเภท</th><th>วันที่</th><th>เวลา</th><th>สถานที่</th><th>วิทยากร</th><th>เป้า</th><th>จริง</th><th>สถานะ</th></tr></thead>
@@ -245,10 +238,15 @@ ${monthCourses.length === 0
     setTimeout(() => win.print(), 400);
   }
 
-  const totalTarget = courses.reduce((a, c) => a + c.target, 0);
-  const totalActual = courses.reduce((a, c) => a + c.actual, 0);
-  const done        = courses.filter(c => c.status === "done").length;
+  // KPI cards count only the selected month (defaults to current month); pick a
+  // different month via the selector above the cards to see historical numbers.
+  const kpiMonthPrefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
+  const kpiCourses  = courses.filter(c => c.course_date?.startsWith(kpiMonthPrefix));
+  const totalTarget = kpiCourses.reduce((a, c) => a + c.target, 0);
+  const totalActual = kpiCourses.reduce((a, c) => a + c.actual, 0);
+  const done        = kpiCourses.filter(c => c.status === "done").length;
   const pct         = totalTarget > 0 ? Math.round(totalActual / totalTarget * 100) : 0;
+  const isCurrentMonth = calMonth === new Date().getMonth() && calYear === new Date().getFullYear();
 
   // Calendar helpers
   const DAYS    = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -277,10 +275,33 @@ ${monthCourses.length === 0
 
   return (
     <div>
+      {/* KPI period selector */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8",
+          textTransform: "uppercase", letterSpacing: "0.06em" }}>📊 สรุปประจำเดือน</span>
+        <button onClick={() => {
+          if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+          else setCalMonth(m => m - 1);
+        }} style={{ ...navBtn, padding: "3px 10px", fontSize: 12 }}>←</button>
+        <span style={{ fontWeight: 700, fontSize: 13, color: "#0a1628", minWidth: 108, textAlign: "center" }}>
+          {MONTHS_TH[calMonth]} {calYear + 543}
+        </span>
+        <button onClick={() => {
+          if (calMonth === 11) { setCalMonth(0); setCalYear(y => y + 1); }
+          else setCalMonth(m => m + 1);
+        }} style={{ ...navBtn, padding: "3px 10px", fontSize: 12 }}>→</button>
+        {!isCurrentMonth && (
+          <button onClick={() => { setCalMonth(new Date().getMonth()); setCalYear(new Date().getFullYear()); }}
+            style={{ ...navBtn, padding: "3px 10px", fontSize: 11, color: "#16a34a", borderColor: "#bbf7d0" }}>
+            เดือนนี้
+          </button>
+        )}
+      </div>
+
       {/* KPI */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {[
-          { label: "หลักสูตรทั้งหมด",      value: courses.length, color: "#0038C6" },
+          { label: "หลักสูตรเดือนนี้",      value: kpiCourses.length, color: "#0038C6" },
           { label: "เป้าหมายผู้เข้าอบรม",  value: totalTarget,    color: "#1d4ed8" },
           { label: "จัดอบรมแล้ว",           value: done,           color: "#16a34a" },
           { label: "% Completion",          value: `${pct}%`,     color: pct >= 80 ? "#16a34a" : pct >= 50 ? "#d97706" : "#dc2626" },
