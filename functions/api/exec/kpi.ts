@@ -158,7 +158,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         COALESCE(is_cancelled,0)=1
         AND EXISTS (
           SELECT 1 FROM training_courses tc2
-          WHERE tc2.course = tc.course AND tc2.id <> tc.id
+          WHERE TRIM(tc2.course) = TRIM(tc.course) AND tc2.id <> tc.id
             AND COALESCE(tc2.is_cancelled,0)=0 AND tc2.status = 'done'
             AND strftime('%Y-%m', tc2.course_date) = strftime('%Y-%m', tc.course_date)
         )
