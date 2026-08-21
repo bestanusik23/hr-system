@@ -106,7 +106,7 @@ export async function computeTrainingPlan(db: D1Database, pStart: string, pEnd: 
       SUM(CASE WHEN COALESCE(is_cancelled,0)=0 AND status='done' THEN 1 ELSE 0 END) AS actual_done,
       SUM(CASE WHEN COALESCE(is_cancelled,0)=1 THEN 1 ELSE 0 END) AS cancelled
     FROM training_courses
-    WHERE course_date >= ? AND course_date <= ?
+    WHERE course_date >= ? AND course_date <= ? AND course NOT LIKE '%(สำเนา)%'
   `).bind(pStart, pEnd).first<{ planned_total: number; actual_done: number; cancelled: number }>();
   const result = toPct(counts?.actual_done ?? 0, counts?.planned_total ?? 0);
   return { ...result, cancelled: counts?.cancelled ?? 0 };

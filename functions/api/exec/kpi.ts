@@ -149,7 +149,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   const trainingPlanList = await db.prepare(`
     SELECT id, course, course_date, status, COALESCE(is_cancelled,0) AS is_cancelled
-    FROM training_courses WHERE course_date >= ? AND course_date <= ? ORDER BY course_date ASC
+    FROM training_courses
+    WHERE course_date >= ? AND course_date <= ? AND course NOT LIKE '%(สำเนา)%'
+    ORDER BY course_date ASC
   `).bind(pStart, pEnd).all<{ id: number; course: string; course_date: string | null; status: string; is_cancelled: number }>();
 
   // Shows everyone the filter matched, including exclusions (flagged, not

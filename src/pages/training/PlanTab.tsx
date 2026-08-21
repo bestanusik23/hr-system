@@ -240,8 +240,9 @@ ${monthCourses.length === 0
 
   // KPI cards count only the selected month (defaults to current month); pick a
   // different month via the selector above the cards to see historical numbers.
+  // Duplicated courses ("(สำเนา)", made via the ⎘ duplicate button) don't count either.
   const kpiMonthPrefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-  const kpiCourses  = courses.filter(c => c.course_date?.startsWith(kpiMonthPrefix));
+  const kpiCourses  = courses.filter(c => c.course_date?.startsWith(kpiMonthPrefix) && !c.course.includes("(สำเนา)"));
   const totalTarget = kpiCourses.reduce((a, c) => a + c.target, 0);
   const totalActual = kpiCourses.reduce((a, c) => a + c.actual, 0);
   const done        = kpiCourses.filter(c => c.status === "done").length;
