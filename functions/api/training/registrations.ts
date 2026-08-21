@@ -19,8 +19,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
           LIMIT 1)
        ) AS emp_code,
        COALESCE(
-         ta.department,
-         -- 1st priority: match by emp_code (accurate, handles name prefix variations)
+         -- 1st priority: live department/division from Manpower, matched by emp_code
+         -- (accurate, handles name prefix variations). Read live rather than the
+         -- snapshot on ta.department so a later transfer in Manpower is reflected here
+         -- too, instead of the attendee list staying frozen at registration time.
          (SELECT COALESCE(d.name, dv.name)
           FROM employees e
           LEFT JOIN departments d  ON d.id  = e.department_id
@@ -29,14 +31,17 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
             AND ta.emp_code IS NOT NULL
             AND e.emp_status NOT IN ('resigned','terminated')
           LIMIT 1),
-         -- 2nd priority: match by name (for QR walk-ins without emp_code)
+         -- 2nd priority: live lookup by name (for QR walk-ins without emp_code)
          (SELECT COALESCE(d.name, dv.name)
           FROM employees e
           LEFT JOIN departments d  ON d.id  = e.department_id
           LEFT JOIN divisions  dv ON dv.id = e.division_id
           WHERE TRIM(e.full_name) = TRIM(ta.name)
             AND e.emp_status NOT IN ('resigned','terminated')
-          LIMIT 1)
+          LIMIT 1),
+         -- 3rd: fall back to whatever was captured at registration (e.g. non-employee
+         -- participant, or an employee no longer in Manpower)
+         ta.department
        ) AS department
      FROM training_attendees ta
      WHERE ta.course_id = ?
