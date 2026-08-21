@@ -200,7 +200,10 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
                   <th style={th}>อายุงาน</th>
                   <th style={th}>หัวหน้างาน</th>
                   <th style={th}>สถานะ</th>
-                  {canEdit && <th style={{ ...th, textAlign: "center" }}>จัดการ</th>}
+                  {canEdit && (
+                    <th style={{ ...th, textAlign: "center", position: "sticky", right: 0,
+                      background: "#f8fafc", boxShadow: "-2px 0 4px rgba(0,0,0,.06)" }}>จัดการ</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -225,7 +228,8 @@ export default function MasterList({ onChanged }: { onChanged: () => void }) {
                           padding: "3px 10px", fontSize: 11, fontWeight: 700 }}>{badge.label}</span>
                       </td>
                       {canEdit && (
-                        <td style={{ ...td, textAlign: "center" }}>
+                        <td style={{ ...td, textAlign: "center", position: "sticky", right: 0,
+                          background: i % 2 ? "#fafbff" : "#fff", boxShadow: "-2px 0 4px rgba(0,0,0,.06)" }}>
                           <button onClick={() => setEditing(e)} title="แก้ไข"
                             style={{ background: "#f1f5f9", border: "none", borderRadius: 7, padding: "5px 9px",
                               cursor: "pointer", fontSize: 13, marginRight: 4 }}>✏️</button>

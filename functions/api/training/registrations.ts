@@ -18,6 +18,25 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
             AND e.emp_status NOT IN ('resigned','terminated')
           LIMIT 1)
        ) AS emp_code,
+       -- Live name/position from Manpower when matched by emp_code, so a later name
+       -- (e.g. prefix) or position correction there shows up here too instead of the
+       -- attendee list staying frozen at whatever was captured at registration.
+       -- Only possible when emp_code is known — no live source to correct a QR
+       -- walk-in's free-text name from.
+       COALESCE(
+         (SELECT e.full_name FROM employees e
+          WHERE e.emp_code = ta.emp_code AND ta.emp_code IS NOT NULL
+            AND e.emp_status NOT IN ('resigned','terminated')
+          LIMIT 1),
+         ta.name
+       ) AS name,
+       COALESCE(
+         (SELECT e.position FROM employees e
+          WHERE e.emp_code = ta.emp_code AND ta.emp_code IS NOT NULL
+            AND e.emp_status NOT IN ('resigned','terminated')
+          LIMIT 1),
+         ta.position
+       ) AS position,
        COALESCE(
          -- 1st priority: live department/division from Manpower, matched by emp_code
          -- (accurate, handles name prefix variations). Read live rather than the
