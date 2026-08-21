@@ -99,14 +99,26 @@ export async function computeLicense(db: D1Database, pStart: string, pEnd: strin
 
 // ร้อยละที่อบรมตามแผน — course-count based: หลักสูตรที่จัดจริง (status='done', not
 // cancelled) vs. หลักสูตรที่วางแผนไว้ทั้งหมดในช่วงนี้ (every course row for the period).
+// A cancelled row is dropped entirely (both sides) when the same course name was
+// actually held (status='done', not cancelled) elsewhere in the same calendar month —
+// that's a reschedule, not a missed plan, so it shouldn't count against the KPI.
 export async function computeTrainingPlan(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult & { cancelled: number }> {
   const counts = await db.prepare(`
     SELECT
       COUNT(*) AS planned_total,
       SUM(CASE WHEN COALESCE(is_cancelled,0)=0 AND status='done' THEN 1 ELSE 0 END) AS actual_done,
       SUM(CASE WHEN COALESCE(is_cancelled,0)=1 THEN 1 ELSE 0 END) AS cancelled
-    FROM training_courses
+    FROM training_courses tc
     WHERE course_date >= ? AND course_date <= ? AND course NOT LIKE '%(สำเนา)%'
+      AND NOT (
+        COALESCE(is_cancelled,0)=1
+        AND EXISTS (
+          SELECT 1 FROM training_courses tc2
+          WHERE tc2.course = tc.course AND tc2.id <> tc.id
+            AND COALESCE(tc2.is_cancelled,0)=0 AND tc2.status = 'done'
+            AND strftime('%Y-%m', tc2.course_date) = strftime('%Y-%m', tc.course_date)
+        )
+      )
   `).bind(pStart, pEnd).first<{ planned_total: number; actual_done: number; cancelled: number }>();
   const result = toPct(counts?.actual_done ?? 0, counts?.planned_total ?? 0);
   return { ...result, cancelled: counts?.cancelled ?? 0 };

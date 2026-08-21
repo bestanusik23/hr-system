@@ -147,10 +147,22 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     ORDER BY start_date ASC
   `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).all<{ employee_id: number; full_name: string; position: string | null; start_date: string }>();
 
+  // Same "resolved by reschedule" rule as computeTrainingPlan (see hrKpiFormulas.ts) —
+  // drop a cancelled row once its topic was actually held elsewhere in the same month,
+  // so this list stays consistent with the % above it.
   const trainingPlanList = await db.prepare(`
     SELECT id, course, course_date, status, COALESCE(is_cancelled,0) AS is_cancelled
-    FROM training_courses
+    FROM training_courses tc
     WHERE course_date >= ? AND course_date <= ? AND course NOT LIKE '%(สำเนา)%'
+      AND NOT (
+        COALESCE(is_cancelled,0)=1
+        AND EXISTS (
+          SELECT 1 FROM training_courses tc2
+          WHERE tc2.course = tc.course AND tc2.id <> tc.id
+            AND COALESCE(tc2.is_cancelled,0)=0 AND tc2.status = 'done'
+            AND strftime('%Y-%m', tc2.course_date) = strftime('%Y-%m', tc.course_date)
+        )
+      )
     ORDER BY course_date ASC
   `).bind(pStart, pEnd).all<{ id: number; course: string; course_date: string | null; status: string; is_cancelled: number }>();
 

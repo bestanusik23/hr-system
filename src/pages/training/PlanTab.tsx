@@ -242,7 +242,9 @@ ${monthCourses.length === 0
   // different month via the selector above the cards to see historical numbers.
   // Duplicated courses ("(สำเนา)", made via the ⎘ duplicate button) don't count either.
   const kpiMonthPrefix = `${calYear}-${String(calMonth + 1).padStart(2, "0")}`;
-  const kpiCourses  = courses.filter(c => c.course_date?.startsWith(kpiMonthPrefix) && !c.course.includes("(สำเนา)"));
+  // Month-only (keeps duplicates visible so they can still be edited/deleted from the list).
+  const monthCourses = courses.filter(c => c.course_date?.startsWith(kpiMonthPrefix));
+  const kpiCourses  = monthCourses.filter(c => !c.course.includes("(สำเนา)"));
   const totalTarget = kpiCourses.reduce((a, c) => a + c.target, 0);
   const totalActual = kpiCourses.reduce((a, c) => a + c.actual, 0);
   const done        = kpiCourses.filter(c => c.status === "done").length;
@@ -374,9 +376,9 @@ ${monthCourses.length === 0
       {viewMode === "list" && (
         loading ? (
           <div style={{ textAlign: "center", padding: 60, color: "#94a3b8" }}>กำลังโหลด…</div>
-        ) : courses.length === 0 ? (
+        ) : monthCourses.length === 0 ? (
           <div style={{ textAlign: "center", padding: 60, background: "#fff",
-            borderRadius: 8, border: "1px solid #dce4f5", color: "#94a3b8" }}>ไม่มีหลักสูตร</div>
+            borderRadius: 8, border: "1px solid #dce4f5", color: "#94a3b8" }}>ไม่มีหลักสูตรในเดือนนี้</div>
         ) : (
           <div style={{ background: "#fff", borderRadius: 8, border: "1px solid #dce4f5", overflow: "hidden" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -390,7 +392,7 @@ ${monthCourses.length === 0
                 </tr>
               </thead>
               <tbody>
-                {courses.map((c, i) => (
+                {monthCourses.map((c, i) => (
                   <tr key={c.id} style={{ borderBottom: "1px solid #f0f5ff",
                     background: c.is_cancelled ? "#fff5f5" : i % 2 === 0 ? "#fff" : "#fafcff",
                     opacity: c.is_cancelled ? 0.8 : 1 }}>
