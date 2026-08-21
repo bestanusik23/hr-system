@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 export interface MasterEmployee {
-  id: number; emp_code: string | null; full_name: string; name_en: string | null;
+  id: number; emp_code: string | null; prefix: string | null; full_name: string; name_en: string | null;
   position: string | null;
   start_date: string | null; emp_status: string;
   emp_type: string | null; supervisor: string | null;
@@ -16,6 +16,7 @@ interface Division { id: number; name: string; }
 interface Department { id: number; division_id: number; name: string; }
 
 export const EMP_TYPES = ["พนักงานประจำ", "สัญญาจ้าง", "สัญญาทุน 5 ปี", "Part time", "รายวัน", "ฝึกงาน"];
+export const NAME_PREFIXES = ["นาย", "นาง", "นางสาว", "นพ.", "พญ.", "ทพ.", "ทพญ.", "ภก.", "ภญ."];
 
 const inp: React.CSSProperties = {
   width: "100%", padding: "9px 12px", borderRadius: 7, border: "1.5px solid #c4cfee",
@@ -39,6 +40,7 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
   const [divisions, setDivs]   = useState<Division[]>([]);
   const [departments, setDeps] = useState<Department[]>([]);
   const [empCode, setEmpCode]  = useState(employee.emp_code ?? "");
+  const [prefix, setPrefix]    = useState(employee.prefix ?? "");
   const [fullName, setName]    = useState(employee.full_name);
   const [nameEn, setNameEn]    = useState(employee.name_en ?? "");
   const [position, setPos]     = useState(employee.position ?? "");
@@ -69,6 +71,7 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
       method: "PUT", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         emp_code: empCode || null,
+        prefix: prefix || null,
         full_name: fullName, name_en: nameEn || null,
         position: position || null,
         department_id: deptId || null, division_id: divId || null, start_date: startDate || null,
@@ -98,6 +101,11 @@ export default function MasterEmployeeForm({ employee, onClose, onSaved }: Props
         <Field label="รหัสพนักงาน" hint="Format: EMP0001 (กรอกเพื่อแก้ไข, ระบบออกให้อัตโนมัติเมื่อเพิ่มใหม่)">
           <input value={empCode} onChange={e => setEmpCode(e.target.value.toUpperCase())} style={{ ...inp, fontFamily: "monospace", fontWeight: 700, color: "#0038c6" }}
             placeholder="EMP0001" />
+        </Field>
+        <Field label="คำนำหน้าชื่อ">
+          <input value={prefix} onChange={e => setPrefix(e.target.value)} style={inp}
+            list="name-prefixes" placeholder="เลือกหรือพิมพ์…" />
+          <datalist id="name-prefixes">{NAME_PREFIXES.map(p => <option key={p} value={p} />)}</datalist>
         </Field>
         <Field label="ชื่อ-นามสกุล (ไทย) *">
           <input value={fullName} onChange={e => setName(e.target.value)} style={inp} />

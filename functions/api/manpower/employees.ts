@@ -12,7 +12,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const q      = (url.searchParams.get("q") ?? "").trim();
 
   let sql = `
-    SELECT e.id, e.emp_code, e.full_name, e.position, e.start_date, e.emp_status,
+    SELECT e.id, e.emp_code, e.prefix, e.full_name, e.position, e.start_date, e.emp_status,
            e.emp_type, e.probation_days, e.probation_end_date, e.remark,
            e.resign_date, e.resign_reason, e.resign_type,
            e.color, e.initial, e.department_id, e.division_id,

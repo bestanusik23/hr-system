@@ -28,7 +28,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const b = await ctx.request.json() as Record<string, unknown>;
   const {
     full_name, name_en, position, department_id, division_id, start_date,
-    emp_status, emp_type, supervisor, probation_days, remark, emp_code,
+    emp_status, emp_type, supervisor, probation_days, remark, emp_code, prefix,
   } = b;
 
   if (!full_name) return Response.json({ ok: false, error: "กรุณากรอกชื่อพนักงาน" }, { status: 400 });
@@ -52,13 +52,13 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
       UPDATE employees SET
         full_name=?, name_en=?, position=?, department_id=?, division_id=?,
         start_date=?, emp_status=?, emp_type=?, supervisor=?,
-        probation_days=?, probation_end_date=?, remark=?, emp_code=?,
+        probation_days=?, probation_end_date=?, remark=?, emp_code=?, prefix=?,
         updated_at=datetime('now')
       WHERE id=?
     `).bind(
       full_name, (name_en as string) || null, position ?? null, department_id ?? null, division_id ?? null,
       start_date ?? null, emp_status ?? "probation", emp_type ?? null, supervisor ?? null,
-      days, probEnd?.d ?? null, remark ?? null, emp_code || null, id,
+      days, probEnd?.d ?? null, remark ?? null, emp_code || null, (prefix as string) || null, id,
     ).run();
   } catch {
     // Fallback without emp_code if column doesn't exist yet
@@ -98,7 +98,7 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
 
   const ALLOWED_STATUSES = ["probation", "passed", "transferred"];
   const SETTABLE_FIELDS = [
-    "full_name", "position", "division_id", "department_id", "remark",
+    "full_name", "prefix", "position", "division_id", "department_id", "remark",
     "license_number", "license_expiry", "car_plate_1", "car_plate_2", "moto_plate_1", "moto_plate_2",
   ];
 
