@@ -123,7 +123,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
             AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
         )
       ) AS oriented
-    FROM employees e WHERE e.start_date >= ? AND e.start_date <= ? ORDER BY e.start_date ASC
+    FROM employees e
+    WHERE e.start_date >= ? AND e.start_date <= ? AND e.emp_status != 'transferred'
+    ORDER BY e.start_date ASC
   `).bind(ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END, pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; oriented: number }>();
 
   const satisfactionList = await db.prepare(`

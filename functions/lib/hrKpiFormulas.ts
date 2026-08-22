@@ -31,15 +31,18 @@ function toPct(numerator: number, denominator: number): KpiResult {
 // assumed-compliant window (see assumedCompliance.ts) count as oriented
 // automatically — the underlying training records for that window predate
 // consistent data entry — regardless of whether a real completion record exists.
+// emp_status='transferred' is excluded from both sides: a department/position
+// move can leave start_date sitting inside the period even though the person
+// isn't a new hire, and orientation isn't something an existing employee redoes.
 export async function computeOrientation(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
   const denom = await db.prepare(
-    "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ?"
+    "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ? AND emp_status != 'transferred'"
   ).bind(pStart, pEnd).first<{ n: number }>();
   const denominator = denom?.n ?? 0;
   const num = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) AS n
     FROM employees e
-    WHERE e.start_date >= ? AND e.start_date <= ?
+    WHERE e.start_date >= ? AND e.start_date <= ? AND e.emp_status != 'transferred'
       AND (
         (e.start_date >= ? AND e.start_date <= ?)
         OR EXISTS (
