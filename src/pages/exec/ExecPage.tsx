@@ -39,7 +39,7 @@ interface KpiSummary {
   new_hire_list: { full_name: string; position: string | null; start_date: string }[];
   resign_list: { full_name: string; position: string | null; resign_date: string; resign_reason: string | null }[];
   eval_coverage_list: { id: number; full_name: string; position: string | null; start_date: string; has_eval: boolean }[];
-  orientation_list: { id: number; full_name: string; position: string | null; start_date: string; oriented: boolean }[];
+  orientation_list: { id: number; full_name: string; position: string | null; start_date: string; oriented: boolean; excluded: boolean }[];
   satisfaction_list: { course_id: number; course: string; course_date: string | null; avg_pct: number; n: number }[];
   probation_pass_list: { eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }[];
   training_plan_list: { id: number; course: string; course_date: string | null; status: string; is_cancelled: boolean }[];
@@ -297,6 +297,18 @@ export default function ExecPage() {
     });
     await loadKpiData();
     setLicenseExclToggling(null);
+  }
+
+  const [orientationExclToggling, setOrientationExclToggling] = useState<number | null>(null);
+  async function toggleOrientationExclusion(employeeId: number, currentlyExcluded: boolean) {
+    setOrientationExclToggling(employeeId);
+    await fetch(`/api/exec/orientation-exclusions${currentlyExcluded ? `?employee_id=${employeeId}` : ""}`, {
+      method: currentlyExcluded ? "DELETE" : "POST",
+      headers: currentlyExcluded ? undefined : { "Content-Type": "application/json" },
+      body: currentlyExcluded ? undefined : JSON.stringify({ employee_id: employeeId }),
+    });
+    await loadKpiData();
+    setOrientationExclToggling(null);
   }
 
   const [overridePct, setOverridePct] = useState("");
@@ -1014,9 +1026,22 @@ export default function ExecPage() {
           rows = kpiData.orientation_list.length === 0
             ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีพนักงานใหม่ในช่วงนี้</td></tr>
             : kpiData.orientation_list.map(r => (
-              <tr key={r.id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
+              <tr key={r.id} style={r.excluded ? { opacity: 0.5 } : undefined}>
+                <td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
                 <td style={tdStyle}>{fmtShortDate(r.start_date)}</td>
-                <td style={tdStyle}>{badge(r.oriented, "ผ่านแล้ว", "ยังไม่ผ่าน")}</td></tr>
+                <td style={tdStyle}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    {r.excluded
+                      ? <span style={{ padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#f1f5f9", color: "#64748b" }}>ไม่นับใน KPI นี้</span>
+                      : badge(r.oriented, "ผ่านแล้ว", "ยังไม่ผ่าน")}
+                    <button onClick={() => toggleOrientationExclusion(r.id, r.excluded)} disabled={orientationExclToggling === r.id}
+                      style={{ border: "1px solid #c4cfee", background: "#fff", borderRadius: 5, padding: "2px 8px",
+                        fontSize: 10.5, color: "#475569", cursor: orientationExclToggling === r.id ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+                      {orientationExclToggling === r.id ? "…" : r.excluded ? "นับกลับเข้า KPI" : "ไม่ใช่พนักงานใหม่ (ย้าย/เปลี่ยนตำแหน่ง)"}
+                    </button>
+                  </div>
+                </td>
+              </tr>
             ));
         } else if (kpiDetail === "satisfaction") {
           rows = kpiData.satisfaction_list.length === 0

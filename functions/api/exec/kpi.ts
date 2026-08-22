@@ -122,11 +122,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
             AND tc.course LIKE '%ปฐมนิเทศ%' AND COALESCE(tc.is_cancelled,0) = 0
             AND (ta.attendance_status = 'completed' OR ta.result = 'ผ่าน')
         )
-      ) AS oriented
+      ) AS oriented,
+      (e.id IN (SELECT employee_id FROM iso_kpi_orientation_exclusions)) AS excluded
     FROM employees e
     WHERE e.start_date >= ? AND e.start_date <= ? AND e.emp_status != 'transferred'
     ORDER BY e.start_date ASC
-  `).bind(ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END, pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; oriented: number }>();
+  `).bind(ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END, pStart, pEnd).all<{ id: number; full_name: string; position: string | null; start_date: string; oriented: number; excluded: number }>();
 
   const satisfactionList = await db.prepare(`
     SELECT tc.id AS course_id, tc.course, tc.course_date,
@@ -205,7 +206,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     new_hire_list: newHireList.results ?? [],
     resign_list: resignList.results ?? [],
     eval_coverage_list: (evalCoverageList.results ?? []).map(r => ({ ...r, has_eval: !!r.has_eval })),
-    orientation_list: (orientationList.results ?? []).map(r => ({ ...r, oriented: !!r.oriented })),
+    orientation_list: (orientationList.results ?? []).map(r => ({ ...r, oriented: !!r.oriented, excluded: !!r.excluded })),
     satisfaction_list: satisfactionList.results ?? [],
     probation_pass_list: probationPassListMerged,
     training_plan_list: (trainingPlanList.results ?? []).map(r => ({ ...r, is_cancelled: !!r.is_cancelled })),

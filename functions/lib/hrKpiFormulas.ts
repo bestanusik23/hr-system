@@ -34,15 +34,20 @@ function toPct(numerator: number, denominator: number): KpiResult {
 // emp_status='transferred' is excluded from both sides: a department/position
 // move can leave start_date sitting inside the period even though the person
 // isn't a new hire, and orientation isn't something an existing employee redoes.
+// iso_kpi_orientation_exclusions covers the same situation when the move
+// wasn't recorded through the formal Transfer workflow (emp_status stayed
+// e.g. 'probation'), so HR can flag it manually instead — see
+// iso_kpi_license_exclusions for the same pattern on the license KPI.
+const NOT_ORIENTATION_EXCLUDED = "id NOT IN (SELECT employee_id FROM iso_kpi_orientation_exclusions)";
 export async function computeOrientation(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
   const denom = await db.prepare(
-    "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ? AND emp_status != 'transferred'"
+    `SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ? AND emp_status != 'transferred' AND ${NOT_ORIENTATION_EXCLUDED}`
   ).bind(pStart, pEnd).first<{ n: number }>();
   const denominator = denom?.n ?? 0;
   const num = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) AS n
     FROM employees e
-    WHERE e.start_date >= ? AND e.start_date <= ? AND e.emp_status != 'transferred'
+    WHERE e.start_date >= ? AND e.start_date <= ? AND e.emp_status != 'transferred' AND e.${NOT_ORIENTATION_EXCLUDED}
       AND (
         (e.start_date >= ? AND e.start_date <= ?)
         OR EXISTS (
