@@ -203,7 +203,7 @@ export default function PlanTab({ canEdit, onNavigate }: Props) {
   <div class="kpi"><b>${monthCourses.length}</b><span>หลักสูตรทั้งหมด</span></div>
   <div class="kpi"><b>${totalTarget}</b><span>เป้าหมายผู้เข้าอบรม</span></div>
   <div class="kpi"><b>${done}</b><span>จัดอบรมแล้ว</span></div>
-  <div class="kpi"><b>${pct}%</b><span>% Completion</span></div>
+  <div class="kpi"><b>${pct}%</b><span>% หลักสูตรที่จัดสำเร็จตามแผน</span></div>
 </div>
 <table>
 <thead><tr><th>#</th><th>รหัส</th><th>ชื่อหลักสูตร</th><th>ประเภท</th><th>วันที่</th><th>เวลา</th><th>สถานที่</th><th>วิทยากร</th><th>เป้า</th><th>จริง</th><th>สถานะ</th></tr></thead>
@@ -246,9 +246,10 @@ ${monthCourses.length === 0
   const monthCourses = courses.filter(c => c.course_date?.startsWith(kpiMonthPrefix));
   const kpiCourses  = monthCourses.filter(c => !c.course.includes("(สำเนา)"));
   const totalTarget = kpiCourses.reduce((a, c) => a + c.target, 0);
-  const totalActual = kpiCourses.reduce((a, c) => a + c.actual, 0);
   const done        = kpiCourses.filter(c => c.status === "done").length;
-  const pct         = totalTarget > 0 ? Math.round(totalActual / totalTarget * 100) : 0;
+  // % of this month's planned courses actually held — not an attendee fill rate, so a
+  // course that ran under-subscribed still counts as a success here.
+  const pct         = kpiCourses.length > 0 ? Math.round(done / kpiCourses.length * 100) : 0;
   const isCurrentMonth = calMonth === new Date().getMonth() && calYear === new Date().getFullYear();
 
   // Calendar helpers
@@ -307,7 +308,7 @@ ${monthCourses.length === 0
           { label: "หลักสูตรเดือนนี้",      value: kpiCourses.length, color: "#0038C6" },
           { label: "เป้าหมายผู้เข้าอบรม",  value: totalTarget,    color: "#1d4ed8" },
           { label: "จัดอบรมแล้ว",           value: done,           color: "#16a34a" },
-          { label: "% Completion",          value: `${pct}%`,     color: pct >= 80 ? "#16a34a" : pct >= 50 ? "#d97706" : "#dc2626" },
+          { label: "% หลักสูตรที่จัดสำเร็จตามแผน", value: `${pct}%`,     color: pct >= 80 ? "#16a34a" : pct >= 50 ? "#d97706" : "#dc2626" },
         ].map(s => (
           <div key={s.label} style={{ background: "#fff", borderRadius: 8, padding: "16px 20px",
             border: "1px solid #dce4f5", borderLeft: "4px solid #0038C6" }}>
