@@ -81,8 +81,9 @@ export default function EmployeeForm({ employee, onClose, onSaved }: Props) {
       const url    = employee ? `/api/eval/employees/${employee.id}` : "/api/eval/employees";
       const method = employee ? "PUT" : "POST";
       const r = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const d = await r.json() as { ok: boolean; error?: string };
+      const d = await r.json() as { ok: boolean; error?: string; warning?: string };
       if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
+      if (d.warning) alert(d.warning);
       onSaved();
     } catch {
       setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่");

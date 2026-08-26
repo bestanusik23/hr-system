@@ -52,7 +52,11 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
       if (msg.includes("UNIQUE") || msg.includes("unique")) {
         return Response.json({ ok: false, error: "รหัสพนักงานนี้มีอยู่แล้วในระบบ กรุณาใช้รหัสอื่น" }, { status: 409 });
       }
-      // Retry without optional columns that may not exist yet
+      // Retry without optional columns that may not exist yet. This used to swallow the
+      // real error and report ok:true regardless — which meant a genuine (non-"missing
+      // column") failure here silently dropped eval_rounds/license/etc. while the UI
+      // showed a normal save success. Now the fallback still saves what it can, but the
+      // caller is told which fields didn't make it and why, instead of a false "saved".
       await ctx.env.HR_DB.prepare(`
         UPDATE employees SET emp_code=?, full_name=?, position=?, department_id=?, division_id=?,
           start_date=?, emp_status=?, updated_at=datetime('now')
@@ -62,6 +66,10 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
         start_date ?? null, emp_status ?? "probation",
         id,
       ).run();
+      return Response.json({
+        ok: true,
+        warning: `บันทึกข้อมูลหลักสำเร็จ แต่ "จำนวนรอบประเมิน" และข้อมูลเพิ่มเติมบางส่วนไม่ได้บันทึก (${msg})`,
+      });
     }
 
     return Response.json({ ok: true });
