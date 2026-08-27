@@ -555,6 +555,14 @@ export default function ManpowerTable() {
   const filtered = useMemo(() => {
     const ql = q.toLowerCase();
     return orderedRows.filter(r => {
+      // Quota reduced to 0 removes the row from normal browsing — unless someone is
+      // still actually assigned to it (overstaffed edge case, keep visible so HR
+      // notices), or the row is what's being searched for by name, so a zeroed
+      // quota can still be found and adjusted back with the same +/- control.
+      if (r.type === "slot" && r.plan === 0 && r.liveFilled === 0) {
+        const searchedFor = ql && r.pos.toLowerCase().includes(ql);
+        if (!searchedFor) return false;
+      }
       if (filterDiv && r.divId !== filterDiv) return false;
       if (vacOnly && r.type === "slot" && r.liveVac <= 0) return false;
       if (ql && r.type === "slot") {
