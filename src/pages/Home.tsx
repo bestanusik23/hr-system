@@ -99,10 +99,18 @@ const IcGraduationCap = () => (
   </svg>
 );
 
+const IcSparkle = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>
+    <circle cx="12" cy="12" r="3"/>
+  </svg>
+);
+
 /* ─── System definitions ─── */
 interface SystemCard {
   key: string; no: string; icon: React.ReactNode;
   title: string; desc: string; roles: string[];
+  external?: string;
 }
 
 const SYSTEMS: SystemCard[] = [
@@ -189,6 +197,13 @@ const SYSTEMS: SystemCard[] = [
     title: "ประเมินผลการปฏิบัติงานประจำปี",
     desc: "สร้างรอบประเมินประจำปี ให้คะแนนตามลำดับผู้ประเมิน สรุปผลและออกเอกสาร แยกจากการประเมินทดลองงาน",
     roles: ["hr","head","deputy","deputyHR","admin"],
+  },
+  {
+    key: "ramhr-copilot", no: "15", icon: <IcSparkle />,
+    title: "RamHR Copilot (AI)",
+    desc: "ผู้ช่วย AI สำหรับงาน HR ครบวงจร เขียน JD อัตโนมัติ คัดกรองเรซูเม่ วิเคราะห์ Skill Gap เขียน KPI/OKR วิเคราะห์ Feedback และอื่น ๆ — เปิดในแท็บใหม่",
+    roles: ["hr","head","deputy","deputyHR","admin"],
+    external: "https://claude.ai/code/artifact/6b244691-4c9c-4f12-8d6b-f8a3f2c28680",
   },
 ];
 
@@ -473,7 +488,7 @@ export default function Home() {
             <div
               key={c.key}
               className="sys-card"
-              onClick={() => navigate(`/${c.key}`)}
+              onClick={() => c.external ? window.open(c.external, "_blank", "noopener,noreferrer") : navigate(`/${c.key}`)}
               style={{
                 background: "#fff", borderRadius: 18, padding: "24px 22px 20px",
                 boxShadow: "0 2px 8px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.04)",
@@ -515,10 +530,17 @@ export default function Home() {
                 display: "flex", alignItems: "center", gap: 5,
                 color: "#0038c6", fontSize: 12.5, fontWeight: 600,
               }}>
-                เข้าสู่ระบบ
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0038c6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M5 12h14M12 5l7 7-7 7"/>
-                </svg>
+                {c.external ? "เปิดเครื่องมือ" : "เข้าสู่ระบบ"}
+                {c.external ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0038c6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <path d="M15 3h6v6"/><path d="M10 14 21 3"/>
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0038c6" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M12 5l7 7-7 7"/>
+                  </svg>
+                )}
               </div>
             </div>
           ))}
