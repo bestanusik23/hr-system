@@ -231,6 +231,40 @@ export default function ManpowerDashboard() {
   const [empCodeEdits, setEmpCodeEdits]         = useState<Record<number, string>>({});
   const [empCodeSaving, setEmpCodeSaving]       = useState<number | null>(null);
   const [empCodeMsg, setEmpCodeMsg]             = useState<Record<number, string>>({});
+  const [editResignId, setEditResignId]         = useState<number | null>(null);
+  const [editResignDraft, setEditResignDraft]   = useState<{ resign_date: string; resign_reason: string }>({ resign_date: "", resign_reason: "" });
+  const [editResignSaving, setEditResignSaving] = useState(false);
+  const [editResignErr, setEditResignErr]       = useState("");
+
+  function startEditResign(e: ResignRow) {
+    setEditResignId(e.id);
+    setEditResignDraft({ resign_date: e.resign_date ?? "", resign_reason: e.resign_reason ?? "" });
+    setEditResignErr("");
+  }
+
+  async function saveEditResign(e: ResignRow) {
+    setEditResignSaving(true); setEditResignErr("");
+    try {
+      const r = await fetch(`/api/manpower/employees/${e.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resign_date: editResignDraft.resign_date || null,
+          resign_reason: editResignDraft.resign_reason || null,
+        }),
+      });
+      const d = await r.json() as { ok: boolean; error?: string };
+      if (!d.ok) { setEditResignErr(d.error ?? "บันทึกไม่สำเร็จ"); setEditResignSaving(false); return; }
+      const patch = (row: ResignRow) => row.id === e.id
+        ? { ...row, resign_date: editResignDraft.resign_date, resign_reason: editResignDraft.resign_reason }
+        : row;
+      if (isHist) setHistResignList(prev => prev.map(patch));
+      else setData(prev => prev && { ...prev, resign_list: prev.resign_list.map(patch) });
+      setEditResignId(null);
+    } catch {
+      setEditResignErr("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    }
+    setEditResignSaving(false);
+  }
 
   function openEmpCodeEditor() {
     setShowEmpCode(true);
@@ -565,20 +599,67 @@ export default function ManpowerDashboard() {
                   ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานลาออกในรอบนี้</div>
                   : <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead><tr style={{ background: "#f8fafc" }}>
-                        {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","วันสุดท้าย","เหตุผล","Clearance"].map(h => (
-                          <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
+                        {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","วันสุดท้าย","เหตุผล", canSave ? "" : null,"Clearance"].filter(h => h !== null).map((h, hi) => (
+                          <th key={h || `_${hi}`} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
                             fontWeight: 700, color: "#475569", borderBottom: "2px solid #e2e8f0" }}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>
-                        {(isHist ? histResignList : data.resign_list).map((e, i) => (
+                        {(isHist ? histResignList : data.resign_list).map((e, i) => {
+                          const isEditing = editResignId === e.id;
+                          return (
                           <tr key={e.id} style={{ background: i % 2 === 0 ? "#fafbff" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{i + 1}</td>
                             <td style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: "#0a1628" }}>{e.full_name}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#475569" }}>{e.position}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.division_name}</td>
-                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#dc2626", fontWeight: 600 }}>{formatThaiDate(e.resign_date)}</td>
-                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{e.resign_reason || "—"}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#dc2626", fontWeight: 600 }}>
+                              {isEditing
+                                ? <input type="date" value={editResignDraft.resign_date}
+                                    onChange={ev => setEditResignDraft(d => ({ ...d, resign_date: ev.target.value }))}
+                                    style={{ padding: "5px 8px", borderRadius: 6, border: "1.5px solid #c4cfee",
+                                      fontSize: 12, fontFamily: "inherit", outline: "none", width: 130 }} />
+                                : formatThaiDate(e.resign_date)}
+                            </td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>
+                              {isEditing
+                                ? <input value={editResignDraft.resign_reason}
+                                    onChange={ev => setEditResignDraft(d => ({ ...d, resign_reason: ev.target.value }))}
+                                    placeholder="เหตุผล…"
+                                    style={{ padding: "5px 8px", borderRadius: 6, border: "1.5px solid #c4cfee",
+                                      fontSize: 12, fontFamily: "inherit", outline: "none", width: 140 }} />
+                                : (e.resign_reason || "—")}
+                            </td>
+                            {canSave && (
+                              <td style={{ padding: "9px 12px" }}>
+                                {isEditing ? (
+                                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                    <button onClick={() => saveEditResign(e)} disabled={editResignSaving}
+                                      style={{ padding: "5px 10px", borderRadius: 8, border: "none",
+                                        background: "#0038c6", color: "#fff", fontSize: 11, fontWeight: 700,
+                                        cursor: editResignSaving ? "not-allowed" : "pointer", fontFamily: "inherit",
+                                        whiteSpace: "nowrap" }}>
+                                      {editResignSaving ? "…" : "บันทึก"}
+                                    </button>
+                                    <button onClick={() => setEditResignId(null)} disabled={editResignSaving}
+                                      style={{ padding: "5px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                                        background: "#fff", color: "#64748b", fontSize: 11, fontWeight: 600,
+                                        cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                      ยกเลิก
+                                    </button>
+                                    {editResignErr && <span style={{ fontSize: 11, color: "#dc2626" }}>{editResignErr}</span>}
+                                  </div>
+                                ) : (
+                                  <button onClick={() => startEditResign(e)} title="แก้ไขวันที่/เหตุผล"
+                                    style={{ padding: "5px 10px", borderRadius: 8, border: "1.5px solid #c4cfee",
+                                      background: "#fff", fontSize: 11, cursor: "pointer",
+                                      color: "#0038c6", fontWeight: 700, fontFamily: "inherit",
+                                      whiteSpace: "nowrap" }}>
+                                    ✏️ แก้ไข
+                                  </button>
+                                )}
+                              </td>
+                            )}
                             <td style={{ padding: "9px 12px" }}>
                               <button onClick={() => setExitChecklistEmp({ id: e.id, name: e.full_name })}
                                 style={{ padding: "5px 12px", borderRadius: 8, border: "1.5px solid #fecaca",
@@ -589,7 +670,8 @@ export default function ManpowerDashboard() {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
               )}

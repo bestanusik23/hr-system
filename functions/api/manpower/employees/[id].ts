@@ -100,6 +100,7 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const SETTABLE_FIELDS = [
     "full_name", "prefix", "position", "division_id", "department_id", "remark",
     "license_number", "license_expiry", "car_plate_1", "car_plate_2", "moto_plate_1", "moto_plate_2",
+    "resign_date", "resign_reason",
   ];
 
   const fields: Record<string, unknown> = {};
