@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useAuth, hasRole } from "../../context/AuthContext";
+import { useAuth, hasRole, isDeputyOfDivision } from "../../context/AuthContext";
 import PrintEvalModal from "./PrintEvalModal";
 
 interface Topic { id: number; owner: string; text: string; sort_order: number; }
@@ -9,7 +9,7 @@ interface EvalDetail {
   signer_employee: string | null; signer_head: string | null;
   signer_hr: string | null; signer_director: string | null;
   full_name: string; position: string | null; start_date: string | null;
-  department_name: string | null; division_name: string | null;
+  department_name: string | null; division_name: string | null; division_id: number | null;
 }
 interface ScoreRow { topic_id: number; score: number; text: string; owner: string; }
 interface Approval { step: string; status: string; note: string | null; created_at: string; approver_name: string; }
@@ -240,7 +240,9 @@ export default function EvaluationForm({ evalId, onClose, onSaved }: Props) {
   const headBypassed   = approvals.some(a => a.step === "head" && a.status === "bypassed");
   const canSendToHead  = !!(user && hasRole(user, "hr","admin")                      && ev?.status === "draft");
   const canDeputyEval  = !!(user && hasRole(user, "deputy","deputyHR","admin")       && ev?.status === "pending_deputy");
-  const canEditHead    = !!(user && hasRole(user, "head","admin")                    && ev?.status === "pending_head") || canDeputyEval;
+  // A division deputy can also evaluate at head level for any department in their own division.
+  const isDivDeputyAsHead = !!(ev && isDeputyOfDivision(user, ev.division_id));
+  const canEditHead    = !!(user && (hasRole(user, "head","admin") || isDivDeputyAsHead) && ev?.status === "pending_head") || canDeputyEval;
   const canEditHR      = !!(user && hasRole(user, "hr","admin")                      && ev?.status === "pending_hr");
   const canDeputyAct   = !!(user && hasRole(user, "deputy","deputyHR","admin")       && ev?.status === "pending_deputy");
   const canHRAct       = !!(user && hasRole(user, "hr","admin")                      && ev?.status === "pending_hr");

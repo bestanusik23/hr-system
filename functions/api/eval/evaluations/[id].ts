@@ -1,5 +1,5 @@
 import type { Env } from "../../../lib/types";
-import { getTokenFromCookie, getSessionUser, hasRole } from "../../../lib/auth";
+import { getTokenFromCookie, getSessionUser, hasRole, isDeputyOfDivision } from "../../../lib/auth";
 
 // Grade is always derived from total_score server-side (never trust a client-sent grade) so it
 // can never drift out of sync with the score, e.g. from a stale value computed before a later edit.
@@ -27,10 +27,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
   // Scope check: head by department, deputy (division-level) by division
-  if (user.role === "head" && user.scope_department_id && ev.department_id !== user.scope_department_id) {
+  if (hasRole(user, "head") && user.scope_department_id && ev.department_id !== user.scope_department_id) {
     return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
-  if (user.role === "deputy" && user.scope_division_id) {
+  if (hasRole(user, "deputy") && user.scope_division_id) {
     const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
     if (!divIds.includes(ev.division_id)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
   }
@@ -95,8 +95,8 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number; head_user_id: number | null }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
-  // Scope check: primary-role head must own or be assigned to the evaluation
-  if (user.role === "head" && user.scope_department_id) {
+  // Scope check: head (primary or secondary) must own or be assigned to the evaluation
+  if (hasRole(user, "head") && user.scope_department_id) {
     const deptMatch = !ev.department_id || ev.department_id === user.scope_department_id;
     const isAssignedHead = ev.head_user_id === user.id;
     if (!deptMatch && !isAssignedHead)
@@ -172,10 +172,12 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   // ── SAVE draft (head in pending_head / deputy evaluating / hr in pending_hr) ──
   if (action === "save") {
     const deputyInPending = hasRole(user, "deputy", "deputyHR", "admin") && ev.status === "pending_deputy";
+    // A division deputy can also evaluate at head level for departments in their own division.
+    const deputyAsHead = isDeputyOfDivision(user, ev.division_id) && ev.status === "pending_head";
     const canSave =
       (hasRole(user, "head", "admin") && ev.status === "pending_head") ||
       (hasRole(user, "hr",   "admin") && ev.status === "pending_hr") ||
-      deputyInPending;
+      deputyInPending || deputyAsHead;
     if (!canSave) return forbidden;
 
     await saveScores();
@@ -202,7 +204,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   // ── STEP 1: Head submits → pending_deputy ───────────────────────
   if (action === "submit") {
-    if (!hasRole(user, "head", "admin")) return forbidden;
+    if (!hasRole(user, "head", "admin") && !isDeputyOfDivision(user, ev.division_id)) return forbidden;
     if (ev.status !== "pending_head") return conflict("ไม่อยู่ในสถานะรอหัวหน้าแผนก");
 
     await saveScores();
@@ -373,7 +375,7 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
   // head can only delete draft/pending_head; HR/admin can delete any status
-  if (user.role === "head") {
+  if (hasRole(user, "head") && !hasRole(user, "hr", "admin")) {
     if (!["draft", "pending_head"].includes(ev.status))
       return Response.json({ ok: false, error: "ลบได้เฉพาะใบประเมินที่ยังไม่ได้ส่งให้รองฯ" }, { status: 409 });
     if (user.scope_department_id && ev.department_id !== user.scope_department_id)

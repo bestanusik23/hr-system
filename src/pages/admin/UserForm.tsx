@@ -73,6 +73,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
   }, []);
 
   // derived
+  const isHeadAnywhere = role === "head" || role2 === "head" || role3 === "head";
   const filteredDepts = departments.filter(d => !divisionId || d.division_id === divisionId);
 
   const filteredPositions = positions.filter(p => {
@@ -110,7 +111,7 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
     const scopeDivId  = isDeputy ? (divisionId  || null) : null;
     const scopeDivId2 = isDeputy ? (divisionId2 || null) : null;
     const scopeDivId3 = isDeputy ? (divisionId3 || null) : null;
-    const scopeDeptId = role === "head" ? (departmentId || null) : null;
+    const scopeDeptId = isHeadAnywhere ? (departmentId || null) : null;
 
     try {
       if (isNew) {
@@ -283,15 +284,16 @@ export default function UserForm({ user, onClose, onSaved }: Props) {
             <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 7,
               padding: "10px 14px", fontSize: 12, color: "#0369a1", marginBottom: 14 }}>
               ℹ️ สิทธิ์เพิ่มเติมช่วยให้ผู้ใช้ทำงานได้หลายบทบาท เช่น หัวหน้าแผนก + รองผู้อำนวยการ
-              — ขอบเขตข้อมูล (ฝ่าย/แผนก) ใช้ค่าจากสิทธิ์หลัก
+              — ขอบเขตฝ่าย (สำหรับรองผู้อำนวยการ) ใช้ค่าจากสิทธิ์หลักเท่านั้น
+              ส่วนขอบเขตแผนก (สำหรับหัวหน้าแผนก) ใช้ฟิลด์ "แผนก" ด้านบนไม่ว่าจะเลือกเป็นสิทธิ์หลักหรือสิทธิ์เพิ่มเติม
             </div>
           )}
 
           {/* Scope hint */}
-          {(role === "head" || ["deputy","deputyHR"].includes(role)) && (
+          {(isHeadAnywhere || ["deputy","deputyHR"].includes(role)) && (
             <div style={{ background: "#f0f5ff", borderRadius: 7, padding: "10px 14px",
               marginBottom: 14, fontSize: 12, color: "#475569", border: "1px solid #dce4f5" }}>
-              {role === "head"
+              {isHeadAnywhere
                 ? `🏥 หัวหน้าแผนก: จะเห็นเฉพาะข้อมูลใน${departmentId ? `แผนก "${filteredDepts.find(d=>d.id===departmentId)?.name ?? ""}"` : "แผนกที่เลือก (กรุณาเลือกแผนก)"}`
                 : deputyScopeHint}
             </div>

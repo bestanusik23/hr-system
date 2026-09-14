@@ -1,7 +1,7 @@
 // Shared helpers for the annual performance evaluation module (kept separate
 // from the probation eval module — see migrations/0025_annual_eval.sql).
 import type { SessionUser } from "./auth";
-import { hasRole } from "./auth";
+import { hasRole, isDeputyOfDivision } from "./auth";
 
 export type AnnualEvalStep = "self" | "head" | "deputy" | "quality" | "hr" | "director" | "summary";
 export type AnnualEvalStatus =
@@ -113,7 +113,11 @@ export async function canActOnStep(
   db: D1Database, user: SessionUser, step: AnnualEvalStep, departmentId: number | null, divisionId: number | null,
 ): Promise<boolean> {
   if (hasRole(user, "admin")) return true;
-  if (step === "head") return hasRole(user, "head") && user.scope_department_id === departmentId;
+  if (step === "head") {
+    if (hasRole(user, "head") && user.scope_department_id === departmentId) return true;
+    // A division deputy can also evaluate at head level for any department in their own division.
+    return isDeputyOfDivision(user, divisionId);
+  }
   if (step === "deputy") {
     if (!hasRole(user, "deputy")) return false;
     const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean);

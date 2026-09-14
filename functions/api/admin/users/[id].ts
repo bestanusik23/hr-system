@@ -15,11 +15,12 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     const { role, role_2, role_3, role_title, is_active, scope_division_id, scope_division_id_2, scope_division_id_3,
             scope_department_id, full_name, new_password } = body;
 
-    // head → scope by department; others → scope by division(s)
+    // head (in any of the 3 role slots) → scope by department; others → scope by division(s)
+    const isHeadAnywhere = role === "head" || role_2 === "head" || role_3 === "head";
     const divId  = (role === "head") ? null : (scope_division_id ?? null);
     const divId2 = (role === "head") ? null : (scope_division_id_2 ?? null);
     const divId3 = (role === "head") ? null : (scope_division_id_3 ?? null);
-    const deptId = (role === "head") ? (scope_department_id ?? null) : null;
+    const deptId = isHeadAnywhere ? (scope_department_id ?? null) : null;
 
     await ctx.env.HR_DB.prepare(
       "UPDATE users SET role=?, role_2=?, role_3=?, role_title=?, is_active=?, scope_division_id=?, scope_division_id_2=?, scope_division_id_3=?, scope_department_id=?, full_name=?, updated_at=datetime('now') WHERE id=?"

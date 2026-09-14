@@ -1,5 +1,5 @@
 import type { Env } from "../../lib/types";
-import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { getTokenFromCookie, getSessionUser, hasRole } from "../../lib/auth";
 
 // GET /api/eval/timeline — activity log for eval module, scoped by role
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
@@ -20,9 +20,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   `;
   const params: (string | number)[] = [];
 
-  if (user.role === "head" && user.scope_department_id) {
+  if (hasRole(user, "head") && user.scope_department_id) {
     sql += " AND e.department_id = ?"; params.push(user.scope_department_id);
-  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+  } else if (hasRole(user, "deputy", "deputyHR") && user.scope_division_id) {
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   }
 

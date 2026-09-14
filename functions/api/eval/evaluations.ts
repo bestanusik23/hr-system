@@ -1,5 +1,5 @@
 import type { Env } from "../../lib/types";
-import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { getTokenFromCookie, getSessionUser, hasRole } from "../../lib/auth";
 
 // GET /api/eval/evaluations
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
@@ -24,9 +24,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (status) { sql += " AND ev.status = ?"; params.push(status); }
   if (empId)  { sql += " AND ev.employee_id = ?"; params.push(Number(empId)); }
 
-  if (user.role === "head" && user.scope_department_id) {
+  if (hasRole(user, "head") && user.scope_department_id) {
     sql += " AND e.department_id = ? AND ev.status != 'draft'"; params.push(user.scope_department_id);
-  } else if (user.role === "deputy" && user.scope_division_id) {
+  } else if (hasRole(user, "deputy") && user.scope_division_id) {
     // division deputy: scoped to their assigned division(s)
     const divIds = [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].filter(Boolean) as number[];
     const ph = divIds.map(() => "?").join(",");
@@ -44,7 +44,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "head", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!hasRole(user, "hr", "head", "admin")) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as Record<string, unknown>;
   const { employee_id, round } = body;
@@ -55,14 +55,14 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   ).bind(employee_id).first<{ department_id: number; start_date: string | null }>();
 
   // head: can only create eval for employees in their department
-  if (user.role === "head" && user.scope_department_id) {
+  if (hasRole(user, "head") && user.scope_department_id) {
     if (!emp || emp.department_id !== user.scope_department_id) {
       return Response.json({ ok: false, error: "ไม่มีสิทธิ์สร้างประเมินพนักงานแผนกอื่น" }, { status: 403 });
     }
   }
 
   // Time-window check: head can create 7 days early only; HR/admin can create any time
-  if (emp?.start_date && !["hr", "admin"].includes(user.role)) {
+  if (emp?.start_date && !hasRole(user, "hr", "admin")) {
     const startMs = new Date(emp.start_date).getTime();
     const daysWorked = Math.floor((Date.now() - startMs) / 86400000);
     const roundDays = Number(round);

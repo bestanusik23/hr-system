@@ -1,5 +1,5 @@
 import type { Env } from "../../lib/types";
-import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { getTokenFromCookie, getSessionUser, hasRole } from "../../lib/auth";
 
 // GET /api/eval/employees
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
@@ -23,10 +23,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 
   if (status) { sql += " AND e.emp_status = ?"; params.push(status); }
 
-  if (user.role === "head" && user.scope_department_id) {
+  if (hasRole(user, "head") && user.scope_department_id) {
     // head: scoped to their own department (แผนก)
     sql += " AND e.department_id = ?"; params.push(user.scope_department_id);
-  } else if (["deputy", "deputyHR"].includes(user.role) && user.scope_division_id) {
+  } else if (hasRole(user, "deputy", "deputyHR") && user.scope_division_id) {
     // deputy: scoped to their own division (ฝ่าย)
     sql += " AND e.division_id = ?"; params.push(user.scope_division_id);
   } else if (divId) {

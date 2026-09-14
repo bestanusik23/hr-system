@@ -21,6 +21,15 @@ export function hasRole(user: SessionUser, ...roles: string[]): boolean {
   return roles.some(r => r === user.role || r === user.role_2 || r === user.role_3);
 }
 
+// A division deputy (รองผู้อำนวยการฝ่าย) can act at head-of-department level for
+// every department under their own division(s), without needing to be explicitly
+// assigned as "head" of any one department.
+export function isDeputyOfDivision(user: SessionUser, divisionId: number | null): boolean {
+  if (divisionId === null) return false;
+  if (!hasRole(user, "deputy", "deputyHR")) return false;
+  return [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].includes(divisionId);
+}
+
 // ---------- password hashing (PBKDF2-SHA256 via Web Crypto) ----------
 
 export async function hashPassword(password: string, salt?: string): Promise<{ hash: string; salt: string }> {

@@ -9,6 +9,8 @@ export interface User {
   role_3: string | null;
   role_title: string | null;
   scope_division_id: number | null;
+  scope_division_id_2: number | null;
+  scope_division_id_3: number | null;
   scope_department_id: number | null;
   color: string | null;
   initial: string | null;
@@ -17,6 +19,15 @@ export interface User {
 export function hasRole(user: User | null, ...roles: string[]): boolean {
   if (!user) return false;
   return roles.some(r => r === user.role || r === user.role_2 || r === user.role_3);
+}
+
+// A division deputy (รองผู้อำนวยการฝ่าย) can act at head-of-department level for
+// every department under their own division(s), without needing to be explicitly
+// assigned as "head" of any one department.
+export function isDeputyOfDivision(user: User | null, divisionId: number | null): boolean {
+  if (!user || divisionId === null) return false;
+  if (!hasRole(user, "deputy", "deputyHR")) return false;
+  return [user.scope_division_id, user.scope_division_id_2, user.scope_division_id_3].includes(divisionId);
 }
 
 interface AuthState {
