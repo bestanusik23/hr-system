@@ -49,7 +49,12 @@ export default function ReportTab({ year, onYearChange }: {
   useEffect(() => { load(); }, [year]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groups = useMemo(() => groupCategories(categories), [categories]);
-  const months = useMemo(() => monthsOfFiscalYear(year), [year]);
+  const allMonths = useMemo(() => monthsOfFiscalYear(year), [year]);
+  // Months with no budget entered yet (not reached in the planning cycle) are
+  // dropped from the table/stats entirely, rather than printed as a row of dashes.
+  const months = useMemo(() =>
+    allMonths.filter(m => monthTotal(entries, m).budget > 0),
+  [allMonths, entries]);
 
   const yearTotals = useMemo(() => {
     let budget = 0, actual = 0;
@@ -274,7 +279,7 @@ export default function ReportTab({ year, onYearChange }: {
         <div className="ot-factors-card" style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
           <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10 }}>ปัจจัยที่มีผลต่อค่าล่วงเวลา</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))", gap: 14 }}>
-            {months.filter(m => factorsByMonth.has(m)).map(m => (
+            {allMonths.filter(m => factorsByMonth.has(m)).map(m => (
               <div key={m}>
                 <div style={{ fontWeight: 700, fontSize: 12.5, color: NAVY_2, marginBottom: 4 }}>{formatYearMonthLong(m)}</div>
                 <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, color: "#334155" }}>
