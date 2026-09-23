@@ -17,10 +17,12 @@ export interface OtFactor {
 
 export interface OtSignoff {
   fiscal_year: string;
-  preparer_name: string | null; preparer_status: string; preparer_at: string | null;
-  reviewer_name: string | null; reviewer_status: string; reviewer_at: string | null;
-  approver_name: string | null; approver_status: string; approver_at: string | null;
+  preparer_name: string | null; preparer_title: string | null; preparer_status: string; preparer_at: string | null;
+  reviewer_name: string | null; reviewer_title: string | null; reviewer_status: string; reviewer_at: string | null;
+  approver_name: string | null; approver_title: string | null; approver_status: string; approver_at: string | null;
 }
+
+export interface OtApproverOption { name: string; title: string }
 
 export interface CategoryGroup {
   group_name: string;

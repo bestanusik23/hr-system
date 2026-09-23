@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import { useAuth, hasRole } from "../../context/AuthContext";
 import {
-  type OtCategory, type OtMonthlyEntry, type OtFactor, type OtSignoff,
+  type OtCategory, type OtMonthlyEntry, type OtFactor, type OtSignoff, type OtApproverOption,
   groupCategories, formatYearMonthShort, formatYearMonthLong, monthsOfFiscalYear,
   fmtNum, monthTotal, diffLabel, entryFor,
 } from "./otBudgetApi";
@@ -19,8 +19,11 @@ export default function ReportTab({ year, onYearChange }: {
   const [entries, setEntries] = useState<OtMonthlyEntry[]>([]);
   const [factors, setFactors] = useState<OtFactor[]>([]);
   const [signoff, setSignoff] = useState<OtSignoff | null>(null);
+  const [approverOptions, setApproverOptions] = useState<OtApproverOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyStep, setBusyStep] = useState<string | null>(null);
+  const [editingStep, setEditingStep] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
 
   function load() {
     setLoading(true);
@@ -33,12 +36,12 @@ export default function ReportTab({ year, onYearChange }: {
       { ok: boolean; categories: OtCategory[] },
       { ok: boolean; entries: OtMonthlyEntry[] },
       { ok: boolean; factors: OtFactor[] },
-      { ok: boolean; signoff: OtSignoff },
+      { ok: boolean; signoff: OtSignoff; approverOptions: OtApproverOption[] },
     ]) => {
       if (c.ok) setCategories(c.categories);
       if (m.ok) setEntries(m.entries);
       if (f.ok) setFactors(f.factors);
-      if (s.ok) setSignoff(s.signoff);
+      if (s.ok) { setSignoff(s.signoff); setApproverOptions(s.approverOptions ?? []); }
       setLoading(false);
     }).catch(() => setLoading(false));
   }
@@ -72,6 +75,16 @@ export default function ReportTab({ year, onYearChange }: {
     await fetch("/api/ot-budget/signoff", {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fiscal_year: year, step, status }),
+    });
+    setBusyStep(null);
+    load();
+  }
+
+  async function setSignerName(step: "preparer" | "reviewer" | "approver", name: string, title: string) {
+    setBusyStep(step);
+    await fetch("/api/ot-budget/signoff", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fiscal_year: year, step, name, title }),
     });
     setBusyStep(null);
     load();
@@ -283,23 +296,61 @@ export default function ReportTab({ year, onYearChange }: {
           { key: "approver" as const, label: "ผู้อนุมัติ", name: signoff?.approver_name, status: signoff?.approver_status, roles: ["deputy", "admin", "deputyHR"] },
         ]).map(s => {
           const canAct = hasRole(user, ...s.roles);
+          const canEditName = hasRole(user, "hr", "admin", "deputyHR");
           const done = s.status === "done";
+          const isEditing = editingStep === s.key;
           return (
             <div key={s.key} style={{ textAlign: "center" }}>
-              <div style={{ height: 46, display: "flex", alignItems: "flex-end", justifyContent: "center", marginBottom: 6 }}>
-                {done && <span style={{ fontSize: 13, color: "#334155" }}>( {s.name} )</span>}
+              <div style={{ minHeight: 46, display: "flex", alignItems: "flex-end", justifyContent: "center", marginBottom: 6 }}>
+                {isEditing ? (
+                  s.key === "approver" ? (
+                    <select autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+                      className="print-hide"
+                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #E6EBF5", fontFamily: "inherit", fontSize: 12 }}>
+                      <option value="">— เลือกผู้อนุมัติ —</option>
+                      {approverOptions.map(o => <option key={o.name} value={o.name}>{o.name}</option>)}
+                    </select>
+                  ) : (
+                    <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+                      className="print-hide" placeholder="ชื่อผู้ลงนาม"
+                      style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid #E6EBF5", fontFamily: "inherit", fontSize: 12, textAlign: "center" }} />
+                  )
+                ) : (
+                  s.name && <span style={{ fontSize: 13, color: "#334155" }}>( {s.name} )</span>
+                )}
               </div>
               <div style={{ borderTop: "1px solid #94a3b8", paddingTop: 6, fontSize: 13, fontWeight: 700, color: NAVY }}>{s.label}</div>
               {done && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>✓ ดำเนินการแล้ว</div>}
-              {canAct && (
-                <button className="print-hide" disabled={busyStep === s.key}
-                  onClick={() => setSignoffStep(s.key, done ? "pending" : "done")}
-                  style={{ marginTop: 8, padding: "6px 14px", borderRadius: 8, border: "none", fontSize: 12,
-                    fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
-                    background: done ? "#f1f5f9" : NAVY, color: done ? "#475569" : "#fff" }}>
-                  {busyStep === s.key ? "กำลังบันทึก…" : done ? "ยกเลิกการดำเนินการ" : `กด${s.label === "ผู้จัดทำ" ? "จัดทำ" : s.label === "ผู้ตรวจสอบ" ? "ตรวจสอบ" : "อนุมัติ"}`}
-                </button>
-              )}
+
+              <div className="print-hide" style={{ display: "flex", gap: 6, justifyContent: "center", marginTop: 8, flexWrap: "wrap" }}>
+                {canEditName && (isEditing ? (
+                  <>
+                    <button disabled={busyStep === s.key} onClick={() => {
+                      const title = s.key === "approver" ? approverOptions.find(o => o.name === editName)?.title ?? "" : "";
+                      setSignerName(s.key, editName, title); setEditingStep(null);
+                    }} style={{ padding: "5px 12px", borderRadius: 8, border: "none", fontSize: 11.5, fontWeight: 700,
+                      cursor: "pointer", fontFamily: "inherit", background: NAVY, color: "#fff" }}>บันทึกชื่อ</button>
+                    <button onClick={() => setEditingStep(null)} style={{ padding: "5px 12px", borderRadius: 8,
+                      border: "1px solid #E6EBF5", fontSize: 11.5, cursor: "pointer", fontFamily: "inherit",
+                      background: "#fff", color: "#64748b" }}>ยกเลิก</button>
+                  </>
+                ) : (
+                  <button onClick={() => { setEditingStep(s.key); setEditName(s.name ?? ""); }}
+                    style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #E6EBF5", fontSize: 11.5,
+                      cursor: "pointer", fontFamily: "inherit", background: "#fff", color: "#64748b" }}>
+                    ✏️ แก้ชื่อ
+                  </button>
+                ))}
+                {canAct && !isEditing && (
+                  <button disabled={busyStep === s.key}
+                    onClick={() => setSignoffStep(s.key, done ? "pending" : "done")}
+                    style={{ padding: "5px 14px", borderRadius: 8, border: "none", fontSize: 11.5,
+                      fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                      background: done ? "#f1f5f9" : NAVY, color: done ? "#475569" : "#fff" }}>
+                    {busyStep === s.key ? "กำลังบันทึก…" : done ? "ยกเลิกการดำเนินการ" : `กด${s.label === "ผู้จัดทำ" ? "จัดทำ" : s.label === "ผู้ตรวจสอบ" ? "ตรวจสอบ" : "อนุมัติ"}`}
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
