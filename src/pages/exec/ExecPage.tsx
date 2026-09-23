@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import PageLayout from "../../components/PageLayout";
 import { useAuth } from "../../context/AuthContext";
 import IsoQualitySection from "./IsoQualitySection";
@@ -190,6 +191,47 @@ function KPI({ label, value, sub, color }: { label: string; value: string | numb
       <div style={{ fontSize: 26, fontWeight: 800, color, marginTop: 6, lineHeight: 1 }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>{sub}</div>}
     </div>
+  );
+}
+
+interface OtMonthlyEntryLite { year_month: string; budget_amount: number; actual_amount: number }
+
+function OtBudgetExecSection() {
+  const navigate = useNavigate();
+  const [entries, setEntries] = useState<OtMonthlyEntryLite[] | null>(null);
+  const year = String(new Date().getFullYear() + 543);
+
+  useEffect(() => {
+    fetch(`/api/ot-budget/monthly?year=${year}`).then(r => r.json())
+      .then((d: { ok: boolean; entries: OtMonthlyEntryLite[] }) => { if (d.ok) setEntries(d.entries); })
+      .catch(() => {});
+  }, [year]);
+
+  if (!entries) return null;
+
+  const byMonth = new Map<string, { budget: number; actual: number }>();
+  for (const e of entries) {
+    const t = byMonth.get(e.year_month) ?? { budget: 0, actual: 0 };
+    t.budget += e.budget_amount; t.actual += e.actual_amount;
+    byMonth.set(e.year_month, t);
+  }
+  let budget = 0, actual = 0, overMonths = 0;
+  for (const t of byMonth.values()) { budget += t.budget; actual += t.actual; if (t.actual > t.budget) overMonths++; }
+  const pctUsed = budget > 0 ? (actual / budget) * 100 : 0;
+
+  return (
+    <>
+      <SectionTitle icon="🕒">ประมาณการ OT และจ่ายจริง ปี {year}</SectionTitle>
+      <div onClick={() => navigate("/ot-budget")} style={{ cursor: "pointer", marginBottom: 28 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+          <KPI label="งบ OT ปีนี้" value={budget.toLocaleString("en-US")} color="#2F5597" />
+          <KPI label="จ่ายจริงสะสม" value={actual.toLocaleString("en-US")} color="#0038C6" />
+          <KPI label="% ใช้งบ" value={`${pctUsed.toFixed(1)}%`} color={pctUsed > 100 ? "#dc2626" : "#16a34a"} />
+          <KPI label="เดือนที่เกินงบ" value={overMonths} color={overMonths > 0 ? "#dc2626" : "#16a34a"} />
+        </div>
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "#0038C6", fontWeight: 700 }}>ไปที่รายงาน OT →</div>
+      </div>
+    </>
   );
 }
 
@@ -671,6 +713,7 @@ export default function ExecPage() {
         </div>
         );
       })()}
+      <OtBudgetExecSection />
       {/* ISO 9001 HR quality-objective KPIs (FM-ISO-01-01 to 03) */}
       <SectionTitle icon="🛡️">วัตถุประสงค์คุณภาพ HR (ISO)</SectionTitle>
       <IsoQualitySection />

@@ -90,6 +90,12 @@ const IcFlow = () => (
     <path d="M7 6h10"/><path d="M6.5 7.5l4.5 9"/><path d="M17.5 7.5l-4.5 9"/>
   </svg>
 );
+const IcCoins = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18M7 6h1v4"/>
+    <path d="m16.71 13.88.7.71-2.82 2.82"/>
+  </svg>
+);
 const IcTimeline = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <line x1="3" y1="5" x2="21" y2="5"/>
@@ -225,6 +231,12 @@ const SYSTEMS: SystemCard[] = [
     desc: "ผู้ช่วย AI สำหรับงาน HR ครบวงจร เขียน JD อัตโนมัติ คัดกรองเรซูเม่ วิเคราะห์ Skill Gap เขียน KPI/OKR วิเคราะห์ Feedback และอื่น ๆ — เปิดในแท็บใหม่",
     roles: ["hr","head","deputy","deputyHR","admin"],
     external: "https://claude.ai/code/artifact/6b244691-4c9c-4f12-8d6b-f8a3f2c28680",
+  },
+  {
+    key: "ot-budget", no: "16", icon: <IcCoins />,
+    title: "ประมาณการ OT และจ่ายจริง",
+    desc: "กรอกงบประมาณและยอดจ่ายจริงค่าล่วงเวลารายเดือน แยกตามหมวดงาน พร้อมรายงานเปรียบเทียบ Budget vs Actual และลำดับตรวจสอบ/อนุมัติ",
+    roles: ["hr","head","deputy","deputyHR","admin"],
   },
 ];
 
