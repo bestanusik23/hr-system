@@ -150,20 +150,35 @@ export default function EmployeeList() {
         )}
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>
-      ) : employees.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#94a3b8",
-          background: "#fff", borderRadius: 14 }}>ไม่มีพนักงานในสถานะนี้</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {employees.map(emp => {
+      {(() => {
+        const allRounds = [30, 60, 90] as const;
+        // Precompute each probation employee's round states, and drop anyone
+        // whose every applicable round is already approved — they're done,
+        // no action needed here, so they shouldn't clutter this list.
+        const visible = employees
+          .map(emp => {
             const days = daysSince(emp.start_date);
-            const allRounds = [30, 60, 90] as const;
             const numRounds = (emp.eval_rounds != null && emp.eval_rounds > 0) ? emp.eval_rounds : 3;
             const rounds = allRounds.slice(0, numRounds).map(r => ({
               round: r, ...roundState(days, r, evals, emp.id),
             }));
+            return { emp, days, rounds };
+          })
+          .filter(({ emp, rounds }) =>
+            !(emp.emp_status === "probation" && rounds.length > 0 && rounds.every(r => r.state === "done")));
+
+        if (loading) {
+          return <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>กำลังโหลด…</div>;
+        }
+        if (visible.length === 0) {
+          return (
+            <div style={{ textAlign: "center", padding: 40, color: "#94a3b8",
+              background: "#fff", borderRadius: 14 }}>ไม่มีพนักงานในสถานะนี้</div>
+          );
+        }
+        return (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {visible.map(({ emp, days, rounds }) => {
             const hasAlert = rounds.some(r => r.state === "soon" || r.state === "overdue");
 
             return (
@@ -276,7 +291,8 @@ export default function EmployeeList() {
             );
           })}
         </div>
-      )}
+        );
+      })()}
 
       {showForm && (
         <EmployeeForm employee={editing} onClose={() => setShowForm(false)}
