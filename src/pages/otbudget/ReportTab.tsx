@@ -11,45 +11,6 @@ const NAVY = "#1F3864";
 const NAVY_2 = "#2F5597";
 const BUDGET_BG = "#D9E2F3";
 
-function BudgetActualChart({ months, entries }: { months: string[]; entries: OtMonthlyEntry[] }) {
-  const points = months.map(m => monthTotal(entries, m));
-  const maxVal = Math.max(1, ...points.flatMap(p => [p.budget, p.actual]));
-  const W = 900, H = 190, padL = 46, padR = 14, padT = 14, padB = 26;
-  const innerW = W - padL - padR, innerH = H - padT - padB;
-  const x = (i: number) => padL + (months.length <= 1 ? 0 : (innerW * i) / (months.length - 1));
-  const y = (v: number) => padT + innerH - (innerH * v) / maxVal;
-
-  const linePath = (vals: number[]) => vals.map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`).join(" ");
-  const budgetPath = linePath(points.map(p => p.budget));
-  const actualPath = linePath(points.map(p => p.actual));
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }}>
-      {[0, 0.25, 0.5, 0.75, 1].map(f => (
-        <line key={f} x1={padL} x2={W - padR} y1={padT + innerH * (1 - f)} y2={padT + innerH * (1 - f)}
-              stroke="#E6EBF5" strokeWidth={1} />
-      ))}
-      <text x={4} y={padT + 4} fontSize={9} fill="#94a3b8">{fmtNum(maxVal)}</text>
-      <text x={4} y={padT + innerH} fontSize={9} fill="#94a3b8">0</text>
-      <path d={budgetPath} fill="none" stroke={NAVY_2} strokeWidth={2} />
-      <path d={actualPath} fill="none" stroke="#dc2626" strokeWidth={2} />
-      {points.map((p, i) => (
-        <g key={i}>
-          <circle cx={x(i)} cy={y(p.budget)} r={2.6} fill={NAVY_2} />
-          <circle cx={x(i)} cy={y(p.actual)} r={2.6} fill="#dc2626" />
-          <text x={x(i)} y={H - 6} fontSize={8.5} fill="#64748b" textAnchor="middle">
-            {formatYearMonthShort(months[i])}
-          </text>
-        </g>
-      ))}
-      <g transform={`translate(${W - 150}, ${padT})`}>
-        <circle cx={0} cy={0} r={3} fill={NAVY_2} /><text x={8} y={3} fontSize={9} fill="#334155">Budget</text>
-        <circle cx={70} cy={0} r={3} fill="#dc2626" /><text x={78} y={3} fontSize={9} fill="#334155">Actual</text>
-      </g>
-    </svg>
-  );
-}
-
 export default function ReportTab({ year, onYearChange }: {
   year: string; onYearChange: (y: string) => void;
 }) {
@@ -186,95 +147,92 @@ export default function ReportTab({ year, onYearChange }: {
         </button>
       </div>
 
-      {/* Title */}
-      <h2 style={{ textAlign: "center", color: NAVY, fontSize: 20, fontWeight: 800, margin: "0 0 6px" }}>
-        ประมาณการ OT และจ่ายจริง ปี {year}
-      </h2>
+      {/* Report card — title, summary, table and legend together as one page */}
+      <div style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 14,
+        boxShadow: "0 2px 10px rgba(20,40,90,.05)", padding: "20px 22px", marginBottom: 16 }}>
+        <h2 style={{ textAlign: "center", color: NAVY, fontSize: 20, fontWeight: 800, margin: "0 0 16px" }}>
+          ประมาณการ OT และจ่ายจริง ปี {year}
+        </h2>
 
-      {/* Summary stat row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 10, marginBottom: 16 }}>
-        {[
-          { label: "งบประมาณรวม", value: fmtNum(yearTotals.budget) },
-          { label: "จ่ายจริงสะสม", value: fmtNum(yearTotals.actual) },
-          { label: "% การใช้งบ", value: `${pctUsed.toFixed(1)}%` },
-          { label: "เดือนที่เกินงบ", value: String(monthsOverBudget) },
-        ].map(s => (
-          <div key={s.label} style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: "10px 14px" }}>
-            <div style={{ fontSize: 11, color: "#6B7A99" }}>{s.label}</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: NAVY }}>{s.value}</div>
-          </div>
-        ))}
-      </div>
+        {/* Summary stat row */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
+          {[
+            { label: "งบประมาณรวม", value: fmtNum(yearTotals.budget) },
+            { label: "จ่ายจริงสะสม", value: fmtNum(yearTotals.actual) },
+            { label: "% การใช้งบ", value: `${pctUsed.toFixed(1)}%` },
+            { label: "เดือนที่เกินงบ", value: String(monthsOverBudget) },
+          ].map(s => (
+            <div key={s.label} style={{ background: "#F6F8FD", borderRadius: 10, padding: "10px 14px" }}>
+              <div style={{ fontSize: 11, color: "#6B7A99" }}>{s.label}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: NAVY }}>{s.value}</div>
+            </div>
+          ))}
+        </div>
 
-      {/* Chart */}
-      <div style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: "12px 16px", marginBottom: 16 }}>
-        <BudgetActualChart months={months} entries={entries} />
-      </div>
+        {/* Table */}
+        <div className="ot-table-wrap">
+          <table className="ot-table">
+            <thead>
+              <tr>
+                <th className="ot-month-th" rowSpan={2} style={{ minWidth: 110 }}>เดือน</th>
+                {groups.map(g => (
+                  <th key={g.group_name} colSpan={g.categories.length}>{g.group_name}</th>
+                ))}
+                <th rowSpan={2}>Total</th>
+                <th rowSpan={2}>หมายเหตุ</th>
+              </tr>
+              <tr>
+                {groups.flatMap(g => g.categories).map(c => <th key={c.id}>{c.name}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {months.map(m => {
+                const t = monthTotal(entries, m);
+                const { diff, label } = diffLabel(t.budget, t.actual);
+                const factorsThisMonth = factorsByMonth.get(m) ?? [];
+                return (
+                  <Fragment key={m}>
+                    <tr>
+                      <td className="ot-month-cell" rowSpan={2}>
+                        {formatYearMonthShort(m)}
+                        {factorsThisMonth.length > 0 && <span title="มีปัจจัยที่มีผล" style={{ marginLeft: 4 }}>📌</span>}
+                      </td>
+                      {groups.flatMap(g => g.categories).map(c => {
+                        const e = entryFor(entries, m, c.id);
+                        return <td key={c.id} style={{ background: BUDGET_BG }}>{fmtNum(e?.budget_amount ?? 0)}</td>;
+                      })}
+                      <td style={{ background: BUDGET_BG, fontWeight: 700 }}>{fmtNum(t.budget)}</td>
+                      <td rowSpan={2} style={{ color: label === "มากกว่า" ? "#dc2626" : label === "น้อยกว่า" ? "#16a34a" : "#94a3b8", fontWeight: 700 }}>
+                        {label ? `${label} ${fmtNum(diff)}` : "-"}
+                      </td>
+                    </tr>
+                    <tr>
+                      {groups.flatMap(g => g.categories).map(c => {
+                        const e = entryFor(entries, m, c.id);
+                        const over = (e?.actual_amount ?? 0) > (e?.budget_amount ?? 0) && (e?.actual_amount ?? 0) > 0;
+                        return (
+                          <td key={c.id} style={over ? { background: "#fee2e2", color: "#dc2626", fontWeight: 700 } : undefined}>
+                            {fmtNum(e?.actual_amount ?? 0)}
+                          </td>
+                        );
+                      })}
+                      <td style={{ fontWeight: 700 }}>{fmtNum(t.actual)}</td>
+                    </tr>
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-      {/* Table */}
-      <div className="ot-table-wrap">
-        <table className="ot-table">
-          <thead>
-            <tr>
-              <th className="ot-month-th" rowSpan={2} style={{ minWidth: 110 }}>เดือน</th>
-              {groups.map(g => (
-                <th key={g.group_name} colSpan={g.categories.length}>{g.group_name}</th>
-              ))}
-              <th rowSpan={2}>Total</th>
-              <th rowSpan={2}>หมายเหตุ</th>
-            </tr>
-            <tr>
-              {groups.flatMap(g => g.categories).map(c => <th key={c.id}>{c.name}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {months.map(m => {
-              const t = monthTotal(entries, m);
-              const { diff, label } = diffLabel(t.budget, t.actual);
-              const factorsThisMonth = factorsByMonth.get(m) ?? [];
-              return (
-                <Fragment key={m}>
-                  <tr>
-                    <td className="ot-month-cell" rowSpan={2}>
-                      {formatYearMonthShort(m)}
-                      {factorsThisMonth.length > 0 && <span title="มีปัจจัยที่มีผล" style={{ marginLeft: 4 }}>📌</span>}
-                    </td>
-                    {groups.flatMap(g => g.categories).map(c => {
-                      const e = entryFor(entries, m, c.id);
-                      return <td key={c.id} style={{ background: BUDGET_BG }}>{fmtNum(e?.budget_amount ?? 0)}</td>;
-                    })}
-                    <td style={{ background: BUDGET_BG, fontWeight: 700 }}>{fmtNum(t.budget)}</td>
-                    <td rowSpan={2} style={{ color: label === "มากกว่า" ? "#dc2626" : label === "น้อยกว่า" ? "#16a34a" : "#94a3b8", fontWeight: 700 }}>
-                      {label ? `${label} ${fmtNum(diff)}` : "-"}
-                    </td>
-                  </tr>
-                  <tr>
-                    {groups.flatMap(g => g.categories).map(c => {
-                      const e = entryFor(entries, m, c.id);
-                      const over = (e?.actual_amount ?? 0) > (e?.budget_amount ?? 0) && (e?.actual_amount ?? 0) > 0;
-                      return (
-                        <td key={c.id} style={over ? { background: "#fee2e2", color: "#dc2626", fontWeight: 700 } : undefined}>
-                          {fmtNum(e?.actual_amount ?? 0)}
-                          {e?.paid_date && <div style={{ fontSize: 9, color: "#94a3b8" }}>{e.paid_date}</div>}
-                        </td>
-                      );
-                    })}
-                    <td style={{ fontWeight: 700 }}>{fmtNum(t.actual)}</td>
-                  </tr>
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Legend */}
-      <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: "#334155", margin: "12px 0" }}>
-        <div><span style={{ display: "inline-block", width: 14, height: 14, background: BUDGET_BG, border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Budget</div>
-        <div><span style={{ display: "inline-block", width: 14, height: 14, background: "#fff", border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Actual</div>
-        <div><span style={{ display: "inline-block", width: 14, height: 14, background: "#fee2e2", border: "1px solid #fca5a5", marginRight: 6, verticalAlign: "middle" }} />Actual เกิน Budget ของหมวดนั้น</div>
-        <div><span style={{ color: "#dc2626", fontWeight: 700, marginRight: 4 }}>■</span>มากกว่างบ</div>
-        <div><span style={{ color: "#16a34a", fontWeight: 700, marginRight: 4 }}>■</span>น้อยกว่างบ</div>
+        {/* Legend */}
+        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: "#334155", marginTop: 14 }}>
+          <div><span style={{ display: "inline-block", width: 14, height: 14, background: BUDGET_BG, border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Budget</div>
+          <div><span style={{ display: "inline-block", width: 14, height: 14, background: "#fff", border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Actual</div>
+          <div><span style={{ display: "inline-block", width: 14, height: 14, background: "#fee2e2", border: "1px solid #fca5a5", marginRight: 6, verticalAlign: "middle" }} />Actual เกิน Budget ของหมวดนั้น</div>
+          <div><span style={{ color: "#dc2626", fontWeight: 700, marginRight: 4 }}>■</span>มากกว่างบ</div>
+          <div><span style={{ color: "#16a34a", fontWeight: 700, marginRight: 4 }}>■</span>น้อยกว่างบ</div>
+        </div>
       </div>
 
       {/* Factors */}
