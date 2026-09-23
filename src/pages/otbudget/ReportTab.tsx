@@ -117,17 +117,38 @@ export default function ReportTab({ year, onYearChange }: {
   return (
     <div id="ot-report" style={{ fontFamily: "'Sarabun', sans-serif" }}>
       <style>{`
-        @media print {
-          .print-hide { display: none !important; }
-          #ot-report { font-size: 8.5pt; }
-          @page { size: A4 landscape; margin: 10mm 10mm; }
-        }
         .ot-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .ot-table { border-collapse: collapse; font-size: 12px; min-width: 1100px; }
         .ot-table th, .ot-table td { border: 1px solid #C9D3E8; padding: 4px 7px; text-align: center; white-space: nowrap; }
         .ot-table thead th { background: ${NAVY}; color: #fff; font-weight: 700; position: sticky; top: 0; z-index: 2; }
         .ot-table td.ot-month-cell, .ot-table th.ot-month-th { position: sticky; left: 0; z-index: 1; text-align: left; background: #fff; }
         .ot-table thead th.ot-month-th { z-index: 3; background: ${NAVY}; }
+
+        /* Print: everything (table + legend + factors + signoff) must fit one A4 landscape page,
+           matching the original Excel ปะหน้า sheet's print area — so this drops decorative
+           chrome (card borders/shadows, the on-screen-only stat tiles) and shrinks hard. */
+        @media print {
+          .print-hide { display: none !important; }
+          body { margin: 0; background: #fff; }
+          @page { size: A4 landscape; margin: 6mm; }
+          #ot-report { font-size: 7pt; }
+          #ot-report h2 { font-size: 12pt; margin: 0 0 6px; }
+          .ot-report-card { border: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
+          .ot-stats-row { display: none !important; }
+          .ot-table-wrap { overflow: visible !important; }
+          .ot-table { width: 100%; min-width: 0; table-layout: fixed; font-size: 6.3pt; }
+          .ot-table th, .ot-table td { padding: 1px 2px !important; white-space: normal; word-break: break-word; }
+          .ot-table th.ot-month-th, .ot-table td.ot-month-cell { position: static !important; width: 42px; }
+          .ot-table thead th { position: static !important; }
+          .ot-legend { font-size: 6.3pt !important; gap: 8px !important; margin-top: 4px !important; }
+          .ot-swatch { width: 8px !important; height: 8px !important; }
+          .ot-factors-card { border: none !important; box-shadow: none !important; padding: 4px 0 0 !important;
+            border-top: 1px solid #C9D3E8 !important; border-radius: 0 !important; margin-top: 6px !important; }
+          .ot-factors-card > div:first-child { font-size: 7pt !important; margin-bottom: 4px !important; }
+          .ot-factors-card ul { font-size: 6.3pt !important; }
+          .ot-signoff-row { margin-top: 14px !important; gap: 10px !important; }
+          .ot-signoff-row * { font-size: 7pt !important; }
+        }
       `}</style>
 
       {/* Controls */}
@@ -148,14 +169,14 @@ export default function ReportTab({ year, onYearChange }: {
       </div>
 
       {/* Report card — title, summary, table and legend together as one page */}
-      <div style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 14,
+      <div className="ot-report-card" style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 14,
         boxShadow: "0 2px 10px rgba(20,40,90,.05)", padding: "20px 22px", marginBottom: 16 }}>
         <h2 style={{ textAlign: "center", color: NAVY, fontSize: 20, fontWeight: 800, margin: "0 0 16px" }}>
           ประมาณการ OT และจ่ายจริง ปี {year}
         </h2>
 
-        {/* Summary stat row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
+        {/* Summary stat row — screen only, dropped from print (see .ot-stats-row rule) */}
+        <div className="ot-stats-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
           {[
             { label: "งบประมาณรวม", value: fmtNum(yearTotals.budget) },
             { label: "จ่ายจริงสะสม", value: fmtNum(yearTotals.actual) },
@@ -226,10 +247,10 @@ export default function ReportTab({ year, onYearChange }: {
         </div>
 
         {/* Legend */}
-        <div style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: "#334155", marginTop: 14 }}>
-          <div><span style={{ display: "inline-block", width: 14, height: 14, background: BUDGET_BG, border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Budget</div>
-          <div><span style={{ display: "inline-block", width: 14, height: 14, background: "#fff", border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Actual</div>
-          <div><span style={{ display: "inline-block", width: 14, height: 14, background: "#fee2e2", border: "1px solid #fca5a5", marginRight: 6, verticalAlign: "middle" }} />Actual เกิน Budget ของหมวดนั้น</div>
+        <div className="ot-legend" style={{ display: "flex", gap: 18, flexWrap: "wrap", fontSize: 12, color: "#334155", marginTop: 14 }}>
+          <div><span className="ot-swatch" style={{ display: "inline-block", width: 14, height: 14, background: BUDGET_BG, border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Budget</div>
+          <div><span className="ot-swatch" style={{ display: "inline-block", width: 14, height: 14, background: "#fff", border: "1px solid #C9D3E8", marginRight: 6, verticalAlign: "middle" }} />Actual</div>
+          <div><span className="ot-swatch" style={{ display: "inline-block", width: 14, height: 14, background: "#fee2e2", border: "1px solid #fca5a5", marginRight: 6, verticalAlign: "middle" }} />Actual เกิน Budget ของหมวดนั้น</div>
           <div><span style={{ color: "#dc2626", fontWeight: 700, marginRight: 4 }}>■</span>มากกว่างบ</div>
           <div><span style={{ color: "#16a34a", fontWeight: 700, marginRight: 4 }}>■</span>น้อยกว่างบ</div>
         </div>
@@ -237,7 +258,7 @@ export default function ReportTab({ year, onYearChange }: {
 
       {/* Factors */}
       {factors.length > 0 && (
-        <div style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
+        <div className="ot-factors-card" style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: "14px 18px", marginBottom: 16 }}>
           <div style={{ fontWeight: 800, color: NAVY, marginBottom: 10 }}>ปัจจัยที่มีผลต่อค่าล่วงเวลา</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px,1fr))", gap: 14 }}>
             {months.filter(m => factorsByMonth.has(m)).map(m => (
@@ -255,7 +276,7 @@ export default function ReportTab({ year, onYearChange }: {
       )}
 
       {/* Signoff */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 20, marginTop: 28 }}>
+      <div className="ot-signoff-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 20, marginTop: 28 }}>
         {([
           { key: "preparer" as const, label: "ผู้จัดทำ", name: signoff?.preparer_name, status: signoff?.preparer_status, roles: ["hr", "admin", "deputyHR"] },
           { key: "reviewer" as const, label: "ผู้ตรวจสอบ", name: signoff?.reviewer_name, status: signoff?.reviewer_status, roles: ["head", "admin", "deputyHR"] },
