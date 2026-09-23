@@ -9,6 +9,27 @@ interface LicenseAlert {
   division_name: string | null; days_left: number;
 }
 
+interface ProbationEmployee {
+  id: number; full_name: string; position: string | null; start_date: string | null;
+  emp_status: string; department_name: string | null; division_name: string | null;
+  eval_rounds?: number;
+}
+interface EvalSummary { employee_id: number; round: number; status: string; }
+interface ProbationAlert {
+  employeeId: number; full_name: string; position: string | null;
+  division_name: string | null; round: 30 | 60 | 90; daysLeft: number;
+}
+
+function toGregorianBE(dateStr: string): Date {
+  const d = new Date(dateStr);
+  if (d.getFullYear() >= 2500) return new Date(d.getFullYear() - 543, d.getMonth(), d.getDate());
+  return d;
+}
+function daysSinceStart(dateStr: string | null) {
+  if (!dateStr) return null;
+  return Math.floor((Date.now() - toGregorianBE(dateStr).getTime()) / 86400000);
+}
+
 /* ─── SVG Icons ─── */
 const IcUsers = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -241,6 +262,42 @@ export default function Home() {
       .catch(() => {});
   }, [canSeeAlerts]);
 
+  // Probation-evaluation due-date reminder — HR only (not admin/deputyHR/head),
+  // per the user's explicit request to scope this notification to HR alone.
+  const [probAlerts, setProbAlerts] = useState<ProbationAlert[]>([]);
+  const canSeeProbationAlerts = user?.role === "hr";
+
+  useEffect(() => {
+    if (!canSeeProbationAlerts) return;
+    Promise.all([
+      fetch("/api/eval/employees?status=probation").then(r => r.json()),
+      fetch("/api/eval/evaluations").then(r => r.json()),
+    ]).then(([empRes, evalRes]: [{ ok: boolean; employees: ProbationEmployee[] }, { ok: boolean; evaluations: EvalSummary[] }]) => {
+      const employees = empRes.employees ?? [];
+      const evals = evalRes.evaluations ?? [];
+      const allRounds = [30, 60, 90] as const;
+      const alerts: ProbationAlert[] = [];
+      for (const emp of employees) {
+        const days = daysSinceStart(emp.start_date);
+        if (days === null) continue;
+        const numRounds = (emp.eval_rounds != null && emp.eval_rounds > 0) ? emp.eval_rounds : 3;
+        for (const round of allRounds.slice(0, numRounds)) {
+          const hasEval = evals.some(e => e.employee_id === emp.id && e.round === round);
+          if (hasEval) continue; // already has an evaluation record (draft/pending/approved) — not a gap
+          const daysLeft = round - days;
+          if (daysLeft <= 10) {
+            alerts.push({
+              employeeId: emp.id, full_name: emp.full_name, position: emp.position,
+              division_name: emp.division_name, round, daysLeft,
+            });
+          }
+        }
+      }
+      alerts.sort((a, b) => a.daysLeft - b.daysLeft);
+      setProbAlerts(alerts);
+    }).catch(() => {});
+  }, [canSeeProbationAlerts]);
+
   return (
     <div className="home-root" style={{ minHeight: "100vh", background: "#f4f6fb", fontFamily: "'IBM Plex Sans Thai', sans-serif" }}>
       <style>{CSS}</style>
@@ -447,6 +504,80 @@ export default function Home() {
                   <div style={{ textAlign: "right", fontSize: 12, color: "#475569", flexShrink: 0 }}>
                     <div style={{ fontFamily: "monospace", fontWeight: 700, color: "#dc2626" }}>{a.license_number}</div>
                     <div>หมดอายุ {formatThaiDate(a.license_expiry)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════ PROBATION EVAL DUE-DATE ALERT (HR only) ══════════ */}
+      {canSeeProbationAlerts && probAlerts.length > 0 && (
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "28px 24px 0" }}>
+          <div style={{
+            borderRadius: 16, overflow: "hidden",
+            boxShadow: "0 4px 20px rgba(217,119,6,.15)",
+            border: "1.5px solid #fcd34d",
+          }}>
+            {/* Header bar */}
+            <div style={{
+              background: "#d97706", color: "#fff",
+              padding: "12px 20px", display: "flex", alignItems: "center", gap: 10,
+            }}>
+              <span style={{ fontSize: 18 }}>🔔</span>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: 14 }}>
+                  แจ้งเตือน — พนักงานทดลองงานยังไม่ได้รับการประเมิน (ภายใน 10 วันก่อนถึงกำหนด)
+                </div>
+                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 1 }}>
+                  พบ {probAlerts.length} รายการ — กรุณาติดตามสร้างใบประเมินให้ทันกำหนด
+                </div>
+              </div>
+              <button
+                onClick={() => navigate("/eval")}
+                style={{
+                  background: "rgba(255,255,255,.2)", border: "1.5px solid rgba(255,255,255,.5)",
+                  borderRadius: 8, padding: "6px 14px", color: "#fff",
+                  fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                  whiteSpace: "nowrap",
+                }}
+              >ไปที่ระบบประเมินผล →</button>
+            </div>
+
+            {/* Alert rows */}
+            <div style={{ background: "#fffbeb" }}>
+              {probAlerts.map((a, i) => (
+                <div key={`${a.employeeId}-${a.round}`} style={{
+                  display: "flex", alignItems: "center", gap: 14,
+                  padding: "11px 20px",
+                  borderTop: i > 0 ? "1px solid #fef3c7" : undefined,
+                }}>
+                  {/* Days badge */}
+                  <div style={{
+                    minWidth: 54, textAlign: "center",
+                    padding: "4px 0", borderRadius: 8, fontWeight: 800, fontSize: 13,
+                    ...(a.daysLeft < 0
+                      ? { background: "#7c2d12", color: "#fff" }
+                      : a.daysLeft <= 3
+                        ? { background: "#d97706", color: "#fff" }
+                        : { background: "#fef3c7", color: "#92400e" }),
+                  }}>
+                    {a.daysLeft < 0 ? `เกิน ${Math.abs(a.daysLeft)}ว` : `${a.daysLeft} วัน`}
+                  </div>
+
+                  {/* Info */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: "#0a1628" }}>{a.full_name}</div>
+                    <div style={{ fontSize: 12, color: "#64748b" }}>
+                      {a.position ?? "—"}{a.division_name ? ` · ${a.division_name}` : ""}
+                    </div>
+                  </div>
+
+                  {/* Round info */}
+                  <div style={{ textAlign: "right", fontSize: 12, color: "#475569", flexShrink: 0 }}>
+                    <div style={{ fontFamily: "monospace", fontWeight: 700, color: "#d97706" }}>รอบ {a.round} วัน</div>
+                    <div>ยังไม่มีใบประเมิน</div>
                   </div>
                 </div>
               ))}
