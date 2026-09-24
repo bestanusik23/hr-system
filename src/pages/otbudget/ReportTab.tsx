@@ -24,6 +24,12 @@ export default function ReportTab({ year, onYearChange }: {
   const [busyStep, setBusyStep] = useState<string | null>(null);
   const [editingStep, setEditingStep] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  const [printedAt, setPrintedAt] = useState(() => new Date());
+  useEffect(() => {
+    const refresh = () => setPrintedAt(new Date());
+    window.addEventListener("beforeprint", refresh);
+    return () => window.removeEventListener("beforeprint", refresh);
+  }, []);
 
   function load() {
     setLoading(true);
@@ -135,6 +141,7 @@ export default function ReportTab({ year, onYearChange }: {
   return (
     <div id="ot-report" style={{ fontFamily: "'Sarabun', sans-serif" }}>
       <style>{`
+        .ot-credit { display: none; }
         .ot-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
         .ot-table { border-collapse: collapse; font-size: 12px; min-width: 1100px; }
         .ot-table th, .ot-table td { border: 1px solid #C9D3E8; padding: 4px 7px; text-align: center; white-space: nowrap; }
@@ -173,6 +180,8 @@ export default function ReportTab({ year, onYearChange }: {
             border-top: 1px solid #C9D3E8 !important; border-radius: 0 !important; margin-top: 6px !important; }
           .ot-factors-card > div:first-child { font-size: 7pt !important; margin-bottom: 4px !important; }
           .ot-factors-card ul { font-size: 6.3pt !important; }
+          .ot-credit { display: block; margin-top: 10px; padding-top: 3px; border-top: 1px solid #C9D3E8;
+            text-align: right; font-size: 6pt; color: #64748b; }
           .ot-signoff-row { margin-top: 14px !important; gap: 10px !important; }
           .ot-signoff-row * { font-size: 7pt !important; }
         }
@@ -372,6 +381,13 @@ export default function ReportTab({ year, onYearChange }: {
             </div>
           );
         })}
+      </div>
+
+      {/* Print-only credit: which system produced this document, and when */}
+      <div className="ot-credit">
+        พิมพ์จากระบบบริหารทรัพยากรบุคคล โรงพยาบาลเชียงราย ราม (HR System v3.0) · พิมพ์เมื่อ{" "}
+        {printedAt.toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}{" "}
+        {printedAt.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" })} น.
       </div>
     </div>
   );
