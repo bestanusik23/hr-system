@@ -142,17 +142,23 @@ export default function ReportTab({ year, onYearChange }: {
         .ot-table td.ot-month-cell, .ot-table th.ot-month-th { position: sticky; left: 0; z-index: 1; text-align: left; background: #fff; }
         .ot-table thead th.ot-month-th { z-index: 3; background: ${NAVY}; }
 
-        /* Print: everything (table + legend + factors + signoff) must fit one A4 landscape page,
-           matching the original Excel ปะหน้า sheet's print area — so this drops decorative
-           chrome (card borders/shadows, the on-screen-only stat tiles) and shrinks hard. */
+        /* Print: everything (stats + table + legend + factors + signoff) must fit one A4 landscape
+           page, matching the original Excel ปะหน้า sheet's print area — so this drops decorative
+           chrome (card borders/shadows) and shrinks hard. */
         @media print {
           .print-hide { display: none !important; }
           body { margin: 0; background: #fff; }
           @page { size: A4 landscape; margin: 6mm; }
+          /* Without this, browsers drop background colors by default — the navy header row's
+             white text then prints invisible on white paper. */
+          #ot-report, #ot-report * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           #ot-report { font-size: 7pt; }
           #ot-report h2 { font-size: 12pt; margin: 0 0 6px; }
           .ot-report-card { border: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
-          .ot-stats-row { display: none !important; }
+          .ot-stats-row { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; margin-bottom: 8px !important; }
+          .ot-stats-row > div { padding: 3px 8px !important; border-radius: 4px !important; }
+          .ot-stats-row > div > div:first-child { font-size: 6.5pt !important; }
+          .ot-stats-row > div > div:last-child { font-size: 10pt !important; }
           .ot-table-wrap { overflow: visible !important; }
           .ot-table { width: 100%; min-width: 0; table-layout: fixed; font-size: 6.3pt; }
           .ot-table th, .ot-table td { padding: 1px 2px !important; white-space: normal; word-break: break-word; }
@@ -193,7 +199,7 @@ export default function ReportTab({ year, onYearChange }: {
           ประมาณการ OT และจ่ายจริง ปี {year}
         </h2>
 
-        {/* Summary stat row — screen only, dropped from print (see .ot-stats-row rule) */}
+        {/* Summary stat row — shown on screen and in print (compact in print, see .ot-stats-row rules) */}
         <div className="ot-stats-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
           {[
             { label: "งบประมาณรวม", value: fmtNum(yearTotals.budget) },
