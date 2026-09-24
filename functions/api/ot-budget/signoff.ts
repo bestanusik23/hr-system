@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { canAccessOtBudget } from "../../lib/otBudgetAccess";
 
 // GET   /api/ot-budget/signoff?year=2569   → สถานะลงนามของปีงบนั้น + ตัวเลือกผู้อนุมัติ 2 คน
 //                                             (สร้างแถวเปล่าให้ถ้ายังไม่มี พร้อม seed ชื่อ/ตำแหน่งจาก ot_signer_defaults)
@@ -9,8 +10,8 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 //      body: { fiscal_year, step, name, title }
 //   2) กดจัดทำ/ตรวจสอบ/อนุมัติ (หรือย้อนกลับเป็น pending) — ยังคงเช็คสิทธิ์ตาม role ต่อขั้นเหมือนเดิม:
 //      body: { fiscal_year, step, status: "done"|"pending" }
-//   ผู้จัดทำ (preparer): hr/admin/deputyHR · ผู้ตรวจสอบ (reviewer): head · ผู้อนุมัติ (approver): deputy
-//   admin/deputyHR ได้สิทธิ์เท่ากันทุกขั้น (ตามที่ตกลง)
+//   ผู้จัดทำ (preparer): hr/admin/deputyHR · ผู้ตรวจสอบ/ผู้อนุมัติ: admin/deputyHR
+//   ทั้งโมดูลจำกัดเฉพาะ hr/deputyHR/admin (head/deputy ไม่มีสิทธิ์เข้าเลย ตามที่ HR สั่ง)
 
 interface SignoffRow {
   fiscal_year: string;
@@ -28,8 +29,8 @@ interface SignerDefaults {
 
 const STEP_ROLE: Record<string, string[]> = {
   preparer: ["hr", "admin", "deputyHR"],
-  reviewer: ["head", "admin", "deputyHR"],
-  approver: ["deputy", "admin", "deputyHR"],
+  reviewer: ["admin", "deputyHR"],
+  approver: ["admin", "deputyHR"],
 };
 const canManage = (role: string) => ["hr", "admin", "deputyHR"].includes(role);
 
@@ -46,6 +47,7 @@ async function getDefaults(db: D1Database): Promise<SignerDefaults> {
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canAccessOtBudget(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const url = new URL(ctx.request.url);
   const fiscalYear = (url.searchParams.get("year") ?? "").trim();
@@ -79,6 +81,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canAccessOtBudget(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json().catch(() => ({})) as {
     fiscal_year?: string; step?: string; status?: string; name?: string; title?: string;

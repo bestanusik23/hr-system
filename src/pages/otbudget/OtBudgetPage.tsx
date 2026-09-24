@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth, hasRole } from "../../context/AuthContext";
+import { Navigate, useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 import ReportTab from "./ReportTab";
 import EntryTab from "./EntryTab";
 import CategorySetup from "./CategorySetup";
@@ -15,7 +15,9 @@ export default function OtBudgetPage() {
   const [tab, setTab] = useState<Tab>("report");
   const [year, setYear] = useState<string>(String(nowBEYear));
 
-  const canManage = hasRole(user, "hr", "admin", "deputyHR");
+  // Primary role only, matching the API and the Home menu (secondary roles don't grant this module).
+  const canManage = ["hr", "admin", "deputyHR"].includes(user?.role ?? "");
+  if (!canManage) return <Navigate to="/" replace />;
 
   const TABS: { key: Tab; icon: string; label: string }[] = [
     { key: "report", icon: "📊", label: "รายงาน" },

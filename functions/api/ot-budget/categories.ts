@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { canAccessOtBudget } from "../../lib/otBudgetAccess";
 
 // GET    /api/ot-budget/categories       → รายการหมวด OT ทั้งหมด (ทุก role ที่เห็นเมนูนี้)
 // POST   /api/ot-budget/categories       → เพิ่มหมวดใหม่ (hr/admin/deputyHR)
@@ -15,6 +16,7 @@ const canManage = (role: string) => ["hr", "admin", "deputyHR"].includes(role);
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canAccessOtBudget(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const rows = await ctx.env.HR_DB.prepare(
     "SELECT id, group_name, name, sort_order, is_active FROM ot_categories WHERE is_active = 1 ORDER BY sort_order"

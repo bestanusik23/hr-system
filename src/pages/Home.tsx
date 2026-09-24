@@ -229,14 +229,14 @@ const SYSTEMS: SystemCard[] = [
     key: "ramhr-copilot", no: "15", icon: <IcSparkle />,
     title: "RamHR Copilot (AI)",
     desc: "ผู้ช่วย AI สำหรับงาน HR ครบวงจร เขียน JD อัตโนมัติ คัดกรองเรซูเม่ วิเคราะห์ Skill Gap เขียน KPI/OKR วิเคราะห์ Feedback และอื่น ๆ — เปิดในแท็บใหม่",
-    roles: ["hr","head","deputy","deputyHR","admin"],
+    roles: ["hr","deputyHR","admin"],
     external: "https://claude.ai/code/artifact/6b244691-4c9c-4f12-8d6b-f8a3f2c28680",
   },
   {
     key: "ot-budget", no: "16", icon: <IcCoins />,
     title: "ประมาณการ OT และจ่ายจริง",
     desc: "กรอกงบประมาณและยอดจ่ายจริงค่าล่วงเวลารายเดือน แยกตามหมวดงาน พร้อมรายงานเปรียบเทียบ Budget vs Actual และลำดับตรวจสอบ/อนุมัติ",
-    roles: ["hr","head","deputy","deputyHR","admin"],
+    roles: ["hr","deputyHR","admin"],
   },
 ];
 

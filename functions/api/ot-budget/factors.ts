@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { canAccessOtBudget } from "../../lib/otBudgetAccess";
 
 // GET    /api/ot-budget/factors?year=2569        → ปัจจัยทุกเดือนของปีงบนั้น
 // POST   /api/ot-budget/factors                  → เพิ่มปัจจัย 1 ข้อ (hr/admin/deputyHR)
@@ -14,6 +15,7 @@ const canManage = (role: string) => ["hr", "admin", "deputyHR"].includes(role);
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  if (!canAccessOtBudget(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const url = new URL(ctx.request.url);
   const year = (url.searchParams.get("year") ?? "").trim();

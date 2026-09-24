@@ -319,8 +319,8 @@ export default function ReportTab({ year, onYearChange }: {
       <div className="ot-signoff-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px,1fr))", gap: 20, marginTop: 28 }}>
         {([
           { key: "preparer" as const, label: "ผู้จัดทำ", name: signoff?.preparer_name, status: signoff?.preparer_status, roles: ["hr", "admin", "deputyHR"] },
-          { key: "reviewer" as const, label: "ผู้ตรวจสอบ", name: signoff?.reviewer_name, status: signoff?.reviewer_status, roles: ["head", "admin", "deputyHR"] },
-          { key: "approver" as const, label: "ผู้อนุมัติ", name: signoff?.approver_name, status: signoff?.approver_status, roles: ["deputy", "admin", "deputyHR"] },
+          { key: "reviewer" as const, label: "ผู้ตรวจสอบ", name: signoff?.reviewer_name, status: signoff?.reviewer_status, roles: ["admin", "deputyHR"] },
+          { key: "approver" as const, label: "ผู้อนุมัติ", name: signoff?.approver_name, status: signoff?.approver_status, roles: ["admin", "deputyHR"] },
         ]).map(s => {
           const canAct = hasRole(user, ...s.roles);
           const canEditName = hasRole(user, "hr", "admin", "deputyHR");
