@@ -85,7 +85,8 @@ export function monthTotal(entries: OtMonthlyEntry[], yearMonth: string): { budg
 }
 
 export function diffLabel(budget: number, actual: number): { diff: number; label: "มากกว่า" | "น้อยกว่า" | null } {
-  if (budget === 0 && actual === 0) return { diff: 0, label: null };
+  // No actual yet (month not paid) isn't "under budget" — the original sheet left this blank.
+  if (actual === 0) return { diff: 0, label: null };
   const diff = actual - budget;
   if (diff === 0) return { diff: 0, label: null };
   return { diff: Math.abs(diff), label: diff > 0 ? "มากกว่า" : "น้อยกว่า" };

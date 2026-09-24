@@ -153,7 +153,10 @@ export default function ReportTab({ year, onYearChange }: {
              white text then prints invisible on white paper. */
           #ot-report, #ot-report * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
           #ot-report { font-size: 7pt; }
-          #ot-report h2 { font-size: 12pt; margin: 0 0 6px; }
+          #ot-report h2 { font-size: 12pt; line-height: 34px !important; }
+          .ot-title-row { margin: 0 0 6px !important; min-height: 34px !important; }
+          .ot-logo { height: 34px !important; }
+          .ot-table thead tr:nth-child(2) th { font-size: 5.6pt; letter-spacing: -0.15px; }
           .ot-report-card { border: none !important; box-shadow: none !important; padding: 0 !important; border-radius: 0 !important; }
           .ot-stats-row { grid-template-columns: repeat(4, 1fr) !important; gap: 6px !important; margin-bottom: 8px !important; }
           .ot-stats-row > div { padding: 3px 8px !important; border-radius: 4px !important; }
@@ -195,9 +198,13 @@ export default function ReportTab({ year, onYearChange }: {
       {/* Report card — title, summary, table and legend together as one page */}
       <div className="ot-report-card" style={{ background: "#fff", border: "1px solid #E6EBF5", borderRadius: 14,
         boxShadow: "0 2px 10px rgba(20,40,90,.05)", padding: "20px 22px", marginBottom: 16 }}>
-        <h2 style={{ textAlign: "center", color: NAVY, fontSize: 20, fontWeight: 800, margin: "0 0 16px" }}>
-          ประมาณการ OT และจ่ายจริง ปี {year}
-        </h2>
+        <div className="ot-title-row" style={{ position: "relative", margin: "0 0 16px", minHeight: 48 }}>
+          <img className="ot-logo" src="/logo-nobg.png" alt="Chiangrai Ram Hospital"
+            style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", height: 48, objectFit: "contain" }} />
+          <h2 style={{ textAlign: "center", color: NAVY, fontSize: 20, fontWeight: 800, margin: 0, lineHeight: "48px" }}>
+            ประมาณการ OT และจ่ายจริง ปี {year}
+          </h2>
+        </div>
 
         {/* Summary stat row — shown on screen and in print (compact in print, see .ot-stats-row rules) */}
         <div className="ot-stats-row" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px,1fr))", gap: 10, marginBottom: 18 }}>
