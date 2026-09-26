@@ -63,24 +63,30 @@ export async function computeOrientation(db: D1Database, pStart: string, pEnd: s
 }
 
 // ร้อยละพนักงานใหม่ที่ผ่านการประเมินผลปฏิบัติงาน (ทดลองงาน) / Competency.
-// Same assumed-compliant treatment as orientation; a hire's real round-90
-// evaluation (if any) is excluded from the live count so it isn't double-counted.
+// Same assumed-compliant treatment as orientation for periods up to the end of the
+// assumed window; see the liveScope note below for evaluations approved after it.
 export async function computeProbationPass(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
   const auto = await db.prepare(
     "SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ? AND start_date >= ? AND start_date <= ?"
   ).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
   const autoN = auto?.n ?? 0;
+  // A hire in the assumed-compliant window is auto-counted in the period of their start date. Their real
+  // round-90 evaluation is counted too once it is approved after that window ends — but never in a period
+  // that already auto-counted the same hire (e.g. a whole-year view), so nobody is counted twice at once.
+  const liveScope = `AND (NOT (e.start_date >= ? AND e.start_date <= ?)
+      OR (date(ev.updated_at) > ? AND NOT (e.start_date >= ? AND e.start_date <= ?)))`;
+  const scopeBinds = [ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END, ASSUMED_COMPLIANT_END, pStart, pEnd];
   const total = await db.prepare(`
     SELECT COUNT(*) AS n FROM evaluations ev JOIN employees e ON e.id = ev.employee_id
     WHERE ev.round = 90 AND ev.status = 'approved' AND date(ev.updated_at) >= ? AND date(ev.updated_at) <= ?
-      AND NOT (e.start_date >= ? AND e.start_date <= ?)
-  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
+      ${liveScope}
+  `).bind(pStart, pEnd, ...scopeBinds).first<{ n: number }>();
   const passed = await db.prepare(`
     SELECT COUNT(*) AS n FROM evaluations ev JOIN employees e ON e.id = ev.employee_id
     WHERE ev.round = 90 AND ev.status = 'approved' AND ev.decision = 'บรรจุเป็นพนักงานประจำ'
       AND date(ev.updated_at) >= ? AND date(ev.updated_at) <= ?
-      AND NOT (e.start_date >= ? AND e.start_date <= ?)
-  `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).first<{ n: number }>();
+      ${liveScope}
+  `).bind(pStart, pEnd, ...scopeBinds).first<{ n: number }>();
   return toPct(autoN + (passed?.n ?? 0), autoN + (total?.n ?? 0));
 }
 
