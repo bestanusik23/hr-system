@@ -1075,9 +1075,9 @@ export default function ExecPage() {
             ));
         } else if (kpiDetail === "eval_coverage") {
           const STATE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-            ontime:  { bg: "#f0fdf4", color: "#16a34a", label: "ทันกำหนด" },
-            late:    { bg: "#fff7ed", color: "#c2410c", label: "เกินกำหนด" },
-            missing: { bg: "#fef2f2", color: "#dc2626", label: "ยังไม่อนุมัติ" },
+            ontime:  { bg: "#f0fdf4", color: "#16a34a", label: "สร้างทันกำหนด" },
+            late:    { bg: "#fff7ed", color: "#c2410c", label: "สร้างเกินกำหนด" },
+            missing: { bg: "#fef2f2", color: "#dc2626", label: "ยังไม่สร้างแบบประเมิน" },
             waiting: { bg: "#f1f5f9", color: "#94a3b8", label: "รอถึงรอบ" },
             na:      { bg: "#f1f5f9", color: "#cbd5e1", label: "ไม่มีรอบนี้" },
           };

@@ -169,9 +169,9 @@ export async function computeEvalCoverage(db: D1Database, pStart: string, pEnd: 
 
 // ร้อยละพนักงานใหม่ที่ได้รับการประเมินตามกำหนด — per round (เดือนที่ 1/2/3 = รอบ 30/60/90 วัน
 // นับจาก start_date). A round is "due" once start_date + N days has passed (and the employee
-// actually has that round — employees.eval_rounds, default 3). It counts as on time when that
-// round's evaluation is approved (status='approved') on or before the due date; evaluations.updated_at
-// is the approval timestamp, so a later edit of an old evaluation can push it past the due date.
+// actually has that round — employees.eval_rounds, default 3). It counts as on time when HR has
+// created that round's evaluation form (any status) on or before the due date, judged by
+// evaluations.created_at — not by approval, so a form still in draft/pending already counts.
 export interface EvalRoundResult { round: 30 | 60 | 90; month: 1 | 2 | 3; due: number; onTime: number; pct: number | null }
 export const EVAL_ROUNDS: { round: 30 | 60 | 90; month: 1 | 2 | 3 }[] = [
   { round: 30, month: 1 }, { round: 60, month: 2 }, { round: 90, month: 3 },
@@ -187,8 +187,8 @@ export async function computeEvalOnTime(
       SELECT COUNT(*) AS due,
         SUM(CASE WHEN EXISTS (
           SELECT 1 FROM evaluations ev
-          WHERE ev.employee_id = e.id AND ev.round = ? AND ev.status = 'approved'
-            AND date(ev.updated_at) <= date(e.start_date, '+' || ? || ' days')
+          WHERE ev.employee_id = e.id AND ev.round = ?
+            AND date(ev.created_at) <= date(e.start_date, '+' || ? || ' days')
         ) THEN 1 ELSE 0 END) AS on_time
       FROM employees e
       WHERE e.start_date >= ? AND e.start_date <= ?
@@ -211,14 +211,14 @@ export interface EvalOnTimeRow {
 }
 
 // Drill-down for the card: one row per new hire in the period with each round's state, so HR can
-// see who is on time / late / still missing an approved evaluation.
+// see who had the form created on time / late / not created yet.
 export async function listEvalOnTime(db: D1Database, pStart: string, pEnd: string): Promise<EvalOnTimeRow[]> {
   const today = new Date().toISOString().slice(0, 10);
   const res = await db.prepare(`
     SELECT e.id, e.full_name, e.position, e.start_date, COALESCE(e.eval_rounds, 3) AS n_rounds,
-      (SELECT date(ev.updated_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 30 AND ev.status = 'approved') AS a30,
-      (SELECT date(ev.updated_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 60 AND ev.status = 'approved') AS a60,
-      (SELECT date(ev.updated_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 90 AND ev.status = 'approved') AS a90,
+      (SELECT date(ev.created_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 30) AS a30,
+      (SELECT date(ev.created_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 60) AS a60,
+      (SELECT date(ev.created_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 90) AS a90,
       date(e.start_date, '+30 days') AS d30, date(e.start_date, '+60 days') AS d60, date(e.start_date, '+90 days') AS d90
     FROM employees e WHERE e.start_date >= ? AND e.start_date <= ? ORDER BY e.start_date ASC
   `).bind(pStart, pEnd).all<Record<string, any>>();
