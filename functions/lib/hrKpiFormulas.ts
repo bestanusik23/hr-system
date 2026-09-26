@@ -39,15 +39,30 @@ function toPct(numerator: number, denominator: number): KpiResult {
 // e.g. 'probation'), so HR can flag it manually instead — see
 // iso_kpi_license_exclusions for the same pattern on the license KPI.
 const NOT_ORIENTATION_EXCLUDED = "id NOT IN (SELECT employee_id FROM iso_kpi_orientation_exclusions)";
+
+// Which period a new hire counts in for the orientation KPI (SQL fragment; needs the employees
+// table aliased as `e`). Normally it's the month of start_date. But a hire who starts AFTER the
+// month's last (non-cancelled) orientation session missed it — they can only attend the next
+// month's session — so they're counted in the following month instead (first day of next month).
+const ORIENTATION_SESSION_SAME_MONTH = `
+  SELECT 1 FROM training_courses oc
+  WHERE oc.course LIKE '%ปฐมนิเทศ%' AND oc.course NOT LIKE '%(สำเนา)%' AND COALESCE(oc.is_cancelled,0) = 0
+    AND strftime('%Y-%m', oc.course_date) = strftime('%Y-%m', e.start_date)`;
+export const ORIENTATION_KPI_DATE = `(CASE
+  WHEN EXISTS (${ORIENTATION_SESSION_SAME_MONTH})
+   AND NOT EXISTS (${ORIENTATION_SESSION_SAME_MONTH} AND date(oc.course_date) >= date(e.start_date))
+  THEN date(e.start_date, 'start of month', '+1 month')
+  ELSE e.start_date END)`;
+
 export async function computeOrientation(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult> {
   const denom = await db.prepare(
-    `SELECT COUNT(*) AS n FROM employees WHERE start_date >= ? AND start_date <= ? AND emp_status != 'transferred' AND ${NOT_ORIENTATION_EXCLUDED}`
+    `SELECT COUNT(*) AS n FROM employees e WHERE ${ORIENTATION_KPI_DATE} >= ? AND ${ORIENTATION_KPI_DATE} <= ? AND e.emp_status != 'transferred' AND e.${NOT_ORIENTATION_EXCLUDED}`
   ).bind(pStart, pEnd).first<{ n: number }>();
   const denominator = denom?.n ?? 0;
   const num = await db.prepare(`
     SELECT COUNT(DISTINCT e.id) AS n
     FROM employees e
-    WHERE e.start_date >= ? AND e.start_date <= ? AND e.emp_status != 'transferred' AND e.${NOT_ORIENTATION_EXCLUDED}
+    WHERE ${ORIENTATION_KPI_DATE} >= ? AND ${ORIENTATION_KPI_DATE} <= ? AND e.emp_status != 'transferred' AND e.${NOT_ORIENTATION_EXCLUDED}
       AND (
         (e.start_date >= ? AND e.start_date <= ?)
         OR EXISTS (

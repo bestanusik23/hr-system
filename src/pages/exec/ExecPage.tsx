@@ -43,7 +43,7 @@ interface KpiSummary {
   new_hire_list: { full_name: string; position: string | null; start_date: string }[];
   resign_list: { full_name: string; position: string | null; resign_date: string; resign_reason: string | null }[];
   eval_coverage_list: { id: number; full_name: string; position: string | null; start_date: string; has_eval: boolean }[];
-  orientation_list: { id: number; full_name: string; position: string | null; start_date: string; oriented: boolean; excluded: boolean }[];
+  orientation_list: { id: number; full_name: string; position: string | null; start_date: string; oriented: boolean; excluded: boolean; deferred?: boolean }[];
   satisfaction_list: { course_id: number; course: string; course_date: string | null; avg_pct: number; n: number }[];
   probation_pass_list: { eval_id: number; employee_id: number; full_name: string; position: string | null; decision: string | null; updated_at: string }[];
   training_plan_list: { id: number; course: string; course_date: string | null; status: string; is_cancelled: boolean }[];
@@ -1100,7 +1100,9 @@ export default function ExecPage() {
             : kpiData.orientation_list.map(r => (
               <tr key={r.id} style={r.excluded ? { opacity: 0.5 } : undefined}>
                 <td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
-                <td style={tdStyle}>{fmtShortDate(r.start_date)}</td>
+                <td style={tdStyle}>{fmtShortDate(r.start_date)}
+                  {r.deferred && <div style={{ fontSize: 10.5, color: "#b45309" }}>เริ่มงานหลังปฐมนิเทศเดือนก่อน → นับเดือนนี้</div>}
+                </td>
                 <td style={tdStyle}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                     {r.excluded
