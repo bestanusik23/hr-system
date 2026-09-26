@@ -33,6 +33,9 @@ interface KpiSummary {
   overrides: Partial<Record<KpiKey, { pct: number; detail: string; numerator?: number; denominator?: number }>>;
   turnover:       { pct: number; resigned: number; headcount: number };
   eval_coverage:  { pct: number | null; received: number; total: number };
+  eval_on_time:   { pct: number | null; onTime: number; due: number; rounds: { round: number; month: number; due: number; onTime: number; pct: number | null }[] };
+  eval_on_time_list: { id: number; full_name: string; position: string | null; start_date: string;
+    rounds: { round: number; month: number; state: "ontime" | "late" | "missing" | "waiting" | "na" }[] }[];
   orientation:    { pct: number | null; passed: number; total: number };
   satisfaction:   { pct: number | null; responses: number };
   probation_pass: { pct: number | null; passed: number; total: number };
@@ -156,7 +159,7 @@ function pctColorLow(pct: number): string {
   return "#dc2626";
 }
 
-function KpiCard({ label, icon, pct, sub, color, onClick }: { label: string; icon: string; pct: number | null; sub: string; color: string; onClick?: () => void }) {
+function KpiCard({ label, icon, pct, sub, color, onClick, extra }: { label: string; icon: string; pct: number | null; sub: string; color: string; onClick?: () => void; extra?: React.ReactNode }) {
   return (
     <div onClick={onClick} style={{ background: "#fff", borderRadius: 12, padding: "18px 20px",
       border: "1px solid #dce4f5", borderTop: `4px solid ${color}`,
@@ -175,6 +178,7 @@ function KpiCard({ label, icon, pct, sub, color, onClick }: { label: string; ico
             width: `${Math.min(100, pct)}%`, transition: "width .4s" }} />
         </div>
       )}
+      {extra}
       {onClick && (
         <div style={{ marginTop: 8, fontSize: 10.5, color: "#0038C6", fontWeight: 700 }}>ดูรายละเอียด →</div>
       )}
@@ -420,8 +424,8 @@ export default function ExecPage() {
     const kpiRows: { label: string; pct: number | null; detail: string }[] = [
       { label: "ร้อยละพนักงานลาออก",
         ...withOverride("turnover", kpiData.turnover.pct, `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`) },
-      { label: "ร้อยละพนักงานใหม่ที่ได้รับการประเมิน",
-        ...withOverride("eval_coverage", kpiData.eval_coverage.pct, kpiData.eval_coverage.total > 0 ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้") },
+      { label: "ร้อยละพนักงานใหม่ที่ได้รับการประเมินตามกำหนด",
+        ...withOverride("eval_coverage", kpiData.eval_on_time.pct, kpiData.eval_on_time.due > 0 ? `เดือนที่ 1/2/3 ตามกำหนด ${kpiData.eval_on_time.rounds.map(r => `${r.onTime}/${r.due}`).join(" · ")}` : "ยังไม่มีรอบประเมินที่ครบกำหนดในช่วงนี้") },
       { label: "ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ",
         ...withOverride("orientation", kpiData.orientation.pct, kpiData.orientation.total > 0 ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน` : "ไม่มีพนักงานใหม่ในช่วงนี้") },
       { label: "ร้อยละความพึงพอใจของผู้ได้รับการอบรม",
@@ -659,9 +663,21 @@ export default function ExecPage() {
           return ov ? { pct: ov.pct, sub: ov.detail || "ข้อมูลบันทึกด้วยตนเอง", overridden: true } : { pct, sub, overridden: false };
         };
         const turnoverD = disp("turnover", kpiData.turnover.pct, `ลาออก ${kpiData.turnover.resigned} / พนักงาน ${kpiData.turnover.headcount} คน`);
-        const evalCoverageD = disp("eval_coverage", kpiData.eval_coverage.pct, kpiData.eval_coverage.total > 0
-          ? `ได้รับประเมิน ${kpiData.eval_coverage.received} / พนักงานใหม่ ${kpiData.eval_coverage.total} คน`
-          : "ไม่มีพนักงานใหม่ในช่วงนี้");
+        const evalCoverageD = disp("eval_coverage", kpiData.eval_on_time.pct, kpiData.eval_on_time.due > 0
+          ? `ตามกำหนด ${kpiData.eval_on_time.onTime} / ครบกำหนด ${kpiData.eval_on_time.due} รอบ`
+          : "ยังไม่มีรอบประเมินที่ครบกำหนดในช่วงนี้");
+        const evalRoundRows = evalCoverageD.overridden ? null : (
+          <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 4 }}>
+            {kpiData.eval_on_time.rounds.map(r => (
+              <div key={r.round} style={{ display: "flex", justifyContent: "space-between", fontSize: 11.5, color: "#475569" }}>
+                <span>เดือนที่ {r.month} ({r.round} วัน)</span>
+                <span style={{ fontWeight: 700, color: r.pct === null ? "#94a3b8" : pctColorHigh(r.pct) }}>
+                  {r.pct === null ? "—" : `${r.pct}%`} <span style={{ fontWeight: 400, color: "#94a3b8" }}>({r.onTime}/{r.due})</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        );
         const orientationD = disp("orientation", kpiData.orientation.pct, kpiData.orientation.total > 0
           ? `ผ่าน ${kpiData.orientation.passed} / พนักงานใหม่ ${kpiData.orientation.total} คน`
           : "ไม่มีพนักงานใหม่ในช่วงนี้");
@@ -686,9 +702,9 @@ export default function ExecPage() {
             pct={turnoverD.pct} color={pctColorLow(turnoverD.pct ?? 0)}
             sub={turnoverD.sub}
             onClick={() => setKpiDetail("turnover")} />
-          <KpiCard label={`ร้อยละพนักงานใหม่ที่ได้รับการประเมิน${overrideNote(evalCoverageD.overridden)}`} icon="📋"
+          <KpiCard label={`ร้อยละพนักงานใหม่ที่ได้รับการประเมินตามกำหนด${overrideNote(evalCoverageD.overridden)}`} icon="📋"
             pct={evalCoverageD.pct} color={pctColorHigh(evalCoverageD.pct)}
-            sub={evalCoverageD.sub}
+            sub={evalCoverageD.sub} extra={evalRoundRows}
             onClick={() => setKpiDetail("eval_coverage")} />
           <KpiCard label={`ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ${overrideNote(orientationD.overridden)}`} icon="🧑‍🏫"
             pct={orientationD.pct} color={pctColorHigh(orientationD.pct)}
@@ -1032,7 +1048,7 @@ export default function ExecPage() {
       {kpiDetail && kpiData && (() => {
         const CONFIG: Record<KpiKey, { title: string; icon: string; modulePath: string; moduleLabel: string }> = {
           turnover:        { title: "รายชื่อพนักงานลาออก", icon: "📉", modulePath: "/manpower", moduleLabel: "ไปที่ระบบอัตรากำลัง →" },
-          eval_coverage:   { title: "พนักงานใหม่ที่ได้รับ/ยังไม่ได้รับการประเมิน", icon: "📋", modulePath: "/eval", moduleLabel: "ไปที่ระบบประเมินผล →" },
+          eval_coverage:   { title: "พนักงานใหม่ที่ได้รับการประเมินตามกำหนด (เดือนที่ 1 / 2 / 3)", icon: "📋", modulePath: "/eval", moduleLabel: "ไปที่ระบบประเมินผล →" },
           orientation:     { title: "พนักงานใหม่ที่ผ่าน/ยังไม่ผ่านการอบรมปฐมนิเทศ", icon: "🧑‍🏫", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
           satisfaction:    { title: "ความพึงพอใจของผู้เข้าอบรม แยกตามหลักสูตร", icon: "⭐", modulePath: "/training", moduleLabel: "ไปที่ระบบฝึกอบรม →" },
           probation_pass:  { title: "ผลการประเมินทดลองงาน (รอบสุดท้าย) ที่อนุมัติในช่วงนี้", icon: "📝", modulePath: "/eval", moduleLabel: "ไปที่ระบบประเมินผล →" },
@@ -1058,12 +1074,25 @@ export default function ExecPage() {
                 <td style={tdStyle}>{fmtShortDate(r.resign_date)}</td><td style={tdStyle}>{r.resign_reason ?? "—"}</td></tr>
             ));
         } else if (kpiDetail === "eval_coverage") {
-          rows = kpiData.eval_coverage_list.length === 0
+          const STATE_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+            ontime:  { bg: "#f0fdf4", color: "#16a34a", label: "ทันกำหนด" },
+            late:    { bg: "#fff7ed", color: "#c2410c", label: "เกินกำหนด" },
+            missing: { bg: "#fef2f2", color: "#dc2626", label: "ยังไม่อนุมัติ" },
+            waiting: { bg: "#f1f5f9", color: "#94a3b8", label: "รอถึงรอบ" },
+            na:      { bg: "#f1f5f9", color: "#cbd5e1", label: "ไม่มีรอบนี้" },
+          };
+          rows = kpiData.eval_on_time_list.length === 0
             ? <tr><td colSpan={3} style={{ ...tdStyle, textAlign: "center", color: "#94a3b8" }}>ไม่มีพนักงานใหม่ในช่วงนี้</td></tr>
-            : kpiData.eval_coverage_list.map(r => (
+            : kpiData.eval_on_time_list.map(r => (
               <tr key={r.id}><td style={tdStyle}>{r.full_name}<div style={{ fontSize: 11, color: "#94a3b8" }}>{r.position ?? "—"}</div></td>
                 <td style={tdStyle}>{fmtShortDate(r.start_date)}</td>
-                <td style={tdStyle}>{badge(r.has_eval, "ได้รับประเมินแล้ว", "ยังไม่ได้ประเมิน")}</td></tr>
+                <td style={tdStyle}>
+                  {r.rounds.map(x => { const st = STATE_STYLE[x.state]; return (
+                    <div key={x.round} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                      <span style={{ fontSize: 10.5, color: "#94a3b8", width: 44 }}>เดือน {x.month}</span>
+                      <span style={{ padding: "1px 8px", borderRadius: 999, fontSize: 10.5, fontWeight: 700, background: st.bg, color: st.color }}>{st.label}</span>
+                    </div>); })}
+                </td></tr>
             ));
         } else if (kpiDetail === "orientation") {
           rows = kpiData.orientation_list.length === 0
@@ -1137,7 +1166,7 @@ export default function ExecPage() {
           kpiDetail === "turnover"       ? ["ชื่อ-นามสกุล", "วันที่ลาออก", "เหตุผล"] :
           kpiDetail === "satisfaction"    ? ["หลักสูตร", "วันที่อบรม", "คะแนนเฉลี่ย"] :
           kpiDetail === "training_plan"   ? ["หลักสูตร", "วันที่อบรม", "สถานะ"] :
-          kpiDetail === "eval_coverage"   ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "สถานะประเมิน"] :
+          kpiDetail === "eval_coverage"   ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "ประเมินตามกำหนด"] :
           kpiDetail === "orientation"     ? ["ชื่อ-นามสกุล", "วันที่เริ่มงาน", "สถานะปฐมนิเทศ"] :
           kpiDetail === "license"         ? ["ชื่อ-นามสกุล", "วันหมดอายุใบฯ", "สถานะ"] :
                                              ["ชื่อ-นามสกุล", "วันที่อนุมัติ", "ผลการประเมิน"];

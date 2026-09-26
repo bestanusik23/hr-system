@@ -5,7 +5,7 @@ import { ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END } from "../../lib/assume
 import { monthBounds } from "../../lib/periodBounds";
 import {
   computeOrientation, computeProbationPass, computeLicense, computeTrainingPlan,
-  computeTurnover, computeEvalCoverage, computeSatisfaction, ISO_TO_EXEC_KPI_KEY,
+  computeTurnover, computeEvalCoverage, computeEvalOnTime, listEvalOnTime, computeSatisfaction, ISO_TO_EXEC_KPI_KEY,
 } from "../../lib/hrKpiFormulas";
 
 // GET /api/exec/kpi?period=month&value=2026-07   (or period=year&value=2026)
@@ -67,6 +67,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const newHireN = evalCoverageResult.denominator;
   const evalReceivedN = evalCoverageResult.numerator;
   const evalCoveragePct = evalCoverageResult.pct;
+  // Card now reports on-time evaluations per round (month 1/2/3); eval_coverage above is kept for overrides/yearly view.
+  const evalOnTime = await computeEvalOnTime(db, pStart, pEnd);
+  const evalOnTimeList = await listEvalOnTime(db, pStart, pEnd);
 
   // 3) ร้อยละพนักงานใหม่ที่ผ่านการอบรมปฐมนิเทศ — shared with the ISO "orientation" KPI; see hrKpiFormulas.ts.
   const orientationResult = await computeOrientation(db, pStart, pEnd);
@@ -198,6 +201,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     overrides,
     turnover:       { pct: turnoverPct, resigned: turnoverResult.numerator, headcount: turnoverResult.denominator },
     eval_coverage:  { pct: evalCoveragePct, received: evalReceivedN, total: newHireN },
+    eval_on_time:   { pct: evalOnTime.combined.pct, onTime: evalOnTime.combined.numerator, due: evalOnTime.combined.denominator, rounds: evalOnTime.rounds },
+    eval_on_time_list: evalOnTimeList,
     orientation:    { pct: orientationPct, passed: orientedN, total: newHireN },
     satisfaction:   { pct: satisfactionPct, responses: satisfactionN },
     probation_pass: { pct: probationPassPct, passed: evalPassedN, total: evalTotalN },

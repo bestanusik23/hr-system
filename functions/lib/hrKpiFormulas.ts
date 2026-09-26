@@ -167,6 +167,75 @@ export async function computeEvalCoverage(db: D1Database, pStart: string, pEnd: 
   return toPct(received?.n ?? 0, total?.n ?? 0);
 }
 
+// ร้อยละพนักงานใหม่ที่ได้รับการประเมินตามกำหนด — per round (เดือนที่ 1/2/3 = รอบ 30/60/90 วัน
+// นับจาก start_date). A round is "due" once start_date + N days has passed (and the employee
+// actually has that round — employees.eval_rounds, default 3). It counts as on time when that
+// round's evaluation is approved (status='approved') on or before the due date; evaluations.updated_at
+// is the approval timestamp, so a later edit of an old evaluation can push it past the due date.
+export interface EvalRoundResult { round: 30 | 60 | 90; month: 1 | 2 | 3; due: number; onTime: number; pct: number | null }
+export const EVAL_ROUNDS: { round: 30 | 60 | 90; month: 1 | 2 | 3 }[] = [
+  { round: 30, month: 1 }, { round: 60, month: 2 }, { round: 90, month: 3 },
+];
+
+export async function computeEvalOnTime(
+  db: D1Database, pStart: string, pEnd: string,
+): Promise<{ rounds: EvalRoundResult[]; combined: KpiResult }> {
+  const today = new Date().toISOString().slice(0, 10);
+  const rounds: EvalRoundResult[] = [];
+  for (const { round, month } of EVAL_ROUNDS) {
+    const r = await db.prepare(`
+      SELECT COUNT(*) AS due,
+        SUM(CASE WHEN EXISTS (
+          SELECT 1 FROM evaluations ev
+          WHERE ev.employee_id = e.id AND ev.round = ? AND ev.status = 'approved'
+            AND date(ev.updated_at) <= date(e.start_date, '+' || ? || ' days')
+        ) THEN 1 ELSE 0 END) AS on_time
+      FROM employees e
+      WHERE e.start_date >= ? AND e.start_date <= ?
+        AND COALESCE(e.eval_rounds, 3) >= ?
+        AND date(e.start_date, '+' || ? || ' days') <= ?
+    `).bind(round, round, pStart, pEnd, month, round, today).first<{ due: number; on_time: number | null }>();
+    const due = r?.due ?? 0;
+    const onTime = r?.on_time ?? 0;
+    rounds.push({ round, month, due, onTime, pct: due > 0 ? round1((onTime / due) * 100) : null });
+  }
+  const totalDue = rounds.reduce((a, x) => a + x.due, 0);
+  const totalOnTime = rounds.reduce((a, x) => a + x.onTime, 0);
+  return { rounds, combined: toPct(totalOnTime, totalDue) };
+}
+
+export type EvalRoundState = "ontime" | "late" | "missing" | "waiting" | "na";
+export interface EvalOnTimeRow {
+  id: number; full_name: string; position: string | null; start_date: string;
+  rounds: { round: 30 | 60 | 90; month: 1 | 2 | 3; state: EvalRoundState }[];
+}
+
+// Drill-down for the card: one row per new hire in the period with each round's state, so HR can
+// see who is on time / late / still missing an approved evaluation.
+export async function listEvalOnTime(db: D1Database, pStart: string, pEnd: string): Promise<EvalOnTimeRow[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const res = await db.prepare(`
+    SELECT e.id, e.full_name, e.position, e.start_date, COALESCE(e.eval_rounds, 3) AS n_rounds,
+      (SELECT date(ev.updated_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 30 AND ev.status = 'approved') AS a30,
+      (SELECT date(ev.updated_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 60 AND ev.status = 'approved') AS a60,
+      (SELECT date(ev.updated_at) FROM evaluations ev WHERE ev.employee_id = e.id AND ev.round = 90 AND ev.status = 'approved') AS a90,
+      date(e.start_date, '+30 days') AS d30, date(e.start_date, '+60 days') AS d60, date(e.start_date, '+90 days') AS d90
+    FROM employees e WHERE e.start_date >= ? AND e.start_date <= ? ORDER BY e.start_date ASC
+  `).bind(pStart, pEnd).all<Record<string, any>>();
+  return (res.results ?? []).map(r => ({
+    id: r.id, full_name: r.full_name, position: r.position, start_date: r.start_date,
+    rounds: EVAL_ROUNDS.map(({ round, month }) => {
+      const approved: string | null = r[`a${round}`];
+      const due: string = r[`d${round}`];
+      let state: EvalRoundState;
+      if (r.n_rounds < month) state = "na";
+      else if (approved) state = approved <= due ? "ontime" : "late";
+      else state = due <= today ? "missing" : "waiting";
+      return { round, month, state };
+    }),
+  }));
+}
+
 // ร้อยละความพึงพอใจของผู้ที่ได้รับการอบรม — average survey score, not a ratio, so pct is
 // computed directly by the DB rather than via toPct(); "denominator" holds the response
 // count purely so callers that expect {numerator,denominator,pct} have something to show.
