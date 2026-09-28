@@ -92,7 +92,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     SELECT ev.*, e.division_id, e.department_id FROM evaluations ev
     JOIN employees e ON e.id = ev.employee_id
     WHERE ev.id = ?
-  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number; head_user_id: number | null }>();
+  `).bind(id).first<{ status: string; employee_id: number; division_id: number; department_id: number; round: number; head_user_id: number | null; decision: string | null }>();
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
 
   // Scope check: head (primary or secondary) must own or be assigned to the evaluation
@@ -331,6 +331,16 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     await ctx.env.HR_DB.prepare(
       "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'eval','final_approve','evaluation',?)"
     ).bind(user.id, user.full_name, id).run();
+
+    // Final approval of the round-90 evaluation with a "hired permanently" decision is the
+    // event that actually ends probation — without this the employee stays emp_status='probation'
+    // forever even though every round is approved, so they silently disappear from both the
+    // "ทดลองงาน" list (all rounds done → hidden) and the "ผ่านทดลองงานแล้ว" list (status never flipped).
+    if (ev.round === 90 && ev.decision === "บรรจุเป็นพนักงานประจำ") {
+      await ctx.env.HR_DB.prepare(
+        "UPDATE employees SET emp_status='passed', updated_at=datetime('now') WHERE id=? AND emp_status='probation'"
+      ).bind(ev.employee_id).run();
+    }
 
     return Response.json({ ok: true });
   }
