@@ -225,6 +225,10 @@ export default function ManpowerDashboard() {
   const [histHireList, setHistHireList]         = useState<NewHireRow[]>([]);
   const [histResignList, setHistResignList]     = useState<ResignRow[]>([]);
   const [histListLoad, setHistListLoad]         = useState(false);
+  // Live hire/resign counts for whatever historical month is open, refetched independently of
+  // the modal — used only to flag when a saved snapshot has drifted from reality (someone
+  // recorded a late/backdated resignation or hire after the month was already "saved").
+  const [histLiveCounts, setHistLiveCounts]     = useState<{ hire: number; resign: number } | null>(null);
   const [showEmpCode, setShowEmpCode]           = useState(false);
   const [empCodeList, setEmpCodeList]           = useState<{ id: number; full_name: string; emp_code: string | null; position: string | null }[]>([]);
   const [empCodeQ, setEmpCodeQ]                 = useState("");
@@ -324,13 +328,18 @@ export default function ManpowerDashboard() {
 
   // Load historical snapshot when month changes
   useEffect(() => {
-    if (!histMonth) { setHistData(null); return; }
+    if (!histMonth) { setHistData(null); setHistLiveCounts(null); return; }
     setHL(true);
     fetch(`/api/manpower/snapshot?month=${histMonth}`).then(r => r.json())
       .then((d: { ok: boolean; snapshot: SnapshotDetail }) => {
         if (d.ok) setHistData(d.snapshot);
         setHL(false);
       });
+    fetch(`/api/manpower/period-employees?month=${histMonth}`).then(r => r.json())
+      .then((d: { ok: boolean; new_hire_list: NewHireRow[]; resign_list: ResignRow[] }) => {
+        if (d.ok) setHistLiveCounts({ hire: (d.new_hire_list ?? []).length, resign: (d.resign_list ?? []).length });
+      })
+      .catch(() => setHistLiveCounts(null));
   }, [histMonth]);
 
   async function openModal(type: Modal) {
@@ -802,9 +811,28 @@ export default function ManpowerDashboard() {
               {clickable && (
                 <div style={{ fontSize: 10.5, color: c.color, marginTop: 4, opacity: 0.75 }}>คลิกดูรายชื่อ →</div>
               )}
-              {clickable && c.key === "new_this_month" && (
+              {(c.key === "new_this_month" || c.key === "resigned_this_month" || c.key === "turnover_rate") && (
                 <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>รอบ {periodLabel}</div>
               )}
+              {isHist && histLiveCounts && (() => {
+                const stale =
+                  (c.key === "new_this_month" && histLiveCounts.hire !== histData!.new_this_month) ||
+                  ((c.key === "resigned_this_month" || c.key === "turnover_rate") && histLiveCounts.resign !== histData!.resigned_this_month);
+                if (!stale) return null;
+                const liveN = c.key === "new_this_month" ? histLiveCounts.hire : histLiveCounts.resign;
+                return (
+                  <div style={{ fontSize: 10, color: "#dc2626", marginTop: 4, fontWeight: 700, lineHeight: 1.5 }}>
+                    ⚠ ข้อมูลจริงตอนนี้ {liveN} คน — สแนปช็อตยังไม่อัปเดต{" "}
+                    <button
+                      onClick={e => { e.stopPropagation(); saveSnapshot(histMonth); }}
+                      disabled={saving}
+                      style={{ background: "none", border: "none", padding: 0, color: "#dc2626",
+                        textDecoration: "underline", cursor: "pointer", fontSize: 10, fontWeight: 700, fontFamily: "inherit" }}>
+                      {saving ? "กำลังอัปเดต…" : "อัปเดตเลย"}
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
