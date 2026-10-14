@@ -13,7 +13,7 @@ interface CourseInfo {
 type Step = "form" | "success" | "prereg" | "updated" | "duplicate" | "closed" | "session";
 type Sess = "am" | "pm";
 interface Windows { am_from: string; am_to: string; pm_from: string; pm_to: string }
-interface Saved { prefix: string; firstName: string; lastName: string; position: string; department: string; empCode: string | null; partType: "attendee" | "trainer"; }
+interface Saved { prefix: string; firstName: string; lastName: string; position: string; department: string; empCode: string | null; }
 const savedKey = (token: string) => `ramTrainingId:${token}`;
 function loadSaved(token: string): Saved | null {
   try { const v = JSON.parse(localStorage.getItem(savedKey(token)) ?? "null") as Saved | null; return v && v.firstName && v.lastName ? v : null; } catch { return null; }
@@ -43,7 +43,6 @@ export default function CheckinPage() {
   const [position,   setPosition]   = useState("");
   const [department, setDepartment] = useState("");
   const [empCode,    setEmpCode]    = useState<string | null>(null);
-  const [partType,   setPartType]   = useState<"attendee" | "trainer">("attendee");
 
   // Employee autocomplete
   const [empSearch,    setEmpSearch]    = useState("");
@@ -140,7 +139,7 @@ export default function CheckinPage() {
     if (!firstName.trim() || !lastName.trim() || !position.trim()) {
       setError("กรุณากรอกชื่อ นามสกุล และตำแหน่งให้ครบถ้วน"); return;
     }
-    return submit({ prefix, firstName: firstName.trim(), lastName: lastName.trim(), position: position.trim(), department: department.trim(), empCode, partType });
+    return submit({ prefix, firstName: firstName.trim(), lastName: lastName.trim(), position: position.trim(), department: department.trim(), empCode });
   }
 
   async function submit(v: Saved) {
@@ -150,7 +149,7 @@ export default function CheckinPage() {
       body: JSON.stringify({
         token, first_name: `${v.prefix}${v.firstName}`, last_name: v.lastName,
         position: v.position, department: v.department || undefined,
-        participant_type: v.partType, emp_code: v.empCode ?? undefined,
+        emp_code: v.empCode ?? undefined,
       }),
     });
     const d = await r.json() as {
@@ -161,7 +160,7 @@ export default function CheckinPage() {
     setSubmitting(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     setRegisteredId(d.attendee_id ?? null);
-    setRegisteredType((d.participant_type as "attendee" | "trainer") ?? v.partType);
+    setRegisteredType((d.participant_type as "attendee" | "trainer") ?? "attendee");
     setTrainingDate(d.course_date ?? course?.course_date ?? null);
     if (d.two_sessions && !d.session) { setStep("prereg"); return; }
     if (d.two_sessions) {
@@ -215,15 +214,6 @@ export default function CheckinPage() {
     border: "1.5px solid #c4cfee", fontSize: 14, fontFamily: "inherit",
     outline: "none", boxSizing: "border-box",
   };
-
-  const typeBtn = (val: "attendee" | "trainer"): React.CSSProperties => ({
-    flex: 1, padding: "12px 0", borderRadius: 9, border: "2px solid",
-    borderColor: partType === val ? (val === "attendee" ? "#0038C6" : "#16a34a") : "#dce4f5",
-    background:  partType === val ? (val === "attendee" ? "#eff4ff" : "#f0fdf4") : "#fff",
-    color:       partType === val ? (val === "attendee" ? "#0038C6" : "#16a34a") : "#64748b",
-    fontWeight:  partType === val ? 800 : 500,
-    fontSize: 14, cursor: "pointer", fontFamily: "inherit", transition: "all .15s",
-  });
 
   return (
     <div style={{ minHeight: "100vh", background: "#f0f5ff", display: "flex", flexDirection: "column",
@@ -452,18 +442,6 @@ export default function CheckinPage() {
             </div>
           )}
 
-          {/* Participant type */}
-          <div style={{ marginBottom: 18 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
-              ประเภทผู้เข้าร่วม <span style={{ color: "#dc2626" }}>*</span>
-            </label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setPartType("attendee")} style={typeBtn("attendee")}>👥 ผู้เข้ารับการอบรม</button>
-              <button onClick={() => setPartType("trainer")}  style={typeBtn("trainer")}>🎤 วิทยากร</button>
-            </div>
-          </div>
-
           {/* Employee search autocomplete */}
           <div ref={searchRef} style={{ marginBottom: 18, position: "relative" }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
@@ -574,7 +552,7 @@ export default function CheckinPage() {
 
           <button onClick={register} disabled={submitting || locked}
             style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none",
-              background: locked ? "#94a3b8" : partType === "attendee" ? "#0038C6" : "#16a34a",
+              background: locked ? "#94a3b8" : "#0038C6",
               color: "#fff", fontWeight: 800, fontSize: 16,
               cursor: submitting || locked ? "not-allowed" : "pointer", fontFamily: "inherit",
               boxShadow: locked ? "none" : "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>

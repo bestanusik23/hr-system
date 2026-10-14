@@ -33,7 +33,13 @@ function row(i: number, p: SheetPerson | null): string {
   </tr>`;
 }
 
-export function buildTwoSessionSheetHtml(course: SheetCourse, attendees: SheetPerson[], trainers: SheetPerson[]): string {
+// วิทยากรนับจากรายชื่อที่ใส่ไว้ตอนสร้างหลักสูตร (ช่อง "วิทยากร" คั่นด้วย / , และ)
+export function trainerNames(field: string | null | undefined): string[] {
+  return (field ?? "").split(/[\/,;&\n]|\s+และ\s+/).map(s => s.trim()).filter(Boolean);
+}
+
+export function buildTwoSessionSheetHtml(course: SheetCourse, attendees: SheetPerson[]): string {
+  const trainers: SheetPerson[] = trainerNames(course.trainer).map(name => ({ name, position: "วิทยากร" }));
   const sorted = [...attendees].sort((a, b) => sortKey(a.name).localeCompare(sortKey(b.name), "th"));
   let n = 0;
   const attRows = sorted.map(p => row(++n, p)).join("");

@@ -1,5 +1,5 @@
 import type { Env } from "../../lib/types";
-import { bangkokNow, checkinWindows, findRegistered, openSession, parseHm, syncAttendeeStatus, windowStrings, windowsText, type Session } from "../../lib/trainingSessions";
+import { bangkokNow, checkinWindows, findRegistered, isTrainerName, openSession, parseHm, syncAttendeeStatus, windowStrings, windowsText, type Session } from "../../lib/trainingSessions";
 
 interface CourseRow {
   id: number; course_code: string; course: string; course_type: string;
@@ -42,23 +42,20 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const body = await ctx.request.json() as {
     token: string; first_name: string; last_name: string;
-    position?: string; department?: string; participant_type: "attendee" | "trainer"; emp_code?: string;
+    position?: string; department?: string; emp_code?: string;
   };
 
-  const { token, first_name, last_name, position, department, participant_type, emp_code } = body;
+  const { token, first_name, last_name, position, department, emp_code } = body;
 
-  if (!token || !first_name?.trim() || !last_name?.trim() || !participant_type) {
+  if (!token || !first_name?.trim() || !last_name?.trim()) {
     return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบถ้วน" }, { status: 400 });
-  }
-  if (!["attendee", "trainer"].includes(participant_type)) {
-    return Response.json({ ok: false, error: "participant_type ไม่ถูกต้อง" }, { status: 400 });
   }
 
   const course = await ctx.env.HR_DB.prepare(
-    `SELECT id, reg_open, status, course_date, start_time, end_time, am_from, am_to, pm_from, pm_to,
+    `SELECT id, reg_open, status, course_date, start_time, end_time, trainer, am_from, am_to, pm_from, pm_to,
             COALESCE(checkin_sessions, 1) AS checkin_sessions, COALESCE(is_cancelled, 0) AS is_cancelled
        FROM training_courses WHERE qr_token = ?`
-  ).bind(token).first<{ id: number; reg_open: number; status: string; course_date: string | null; start_time: string | null; end_time: string | null; am_from: string | null; am_to: string | null; pm_from: string | null; pm_to: string | null; checkin_sessions: number; is_cancelled: number }>();
+  ).bind(token).first<{ id: number; reg_open: number; status: string; course_date: string | null; start_time: string | null; end_time: string | null; trainer: string | null; am_from: string | null; am_to: string | null; pm_from: string | null; pm_to: string | null; checkin_sessions: number; is_cancelled: number }>();
 
   if (!course) return Response.json({ ok: false, error: "QR Code ไม่ถูกต้อง" }, { status: 404 });
   if (course.is_cancelled) return Response.json({ ok: false, error: "หลักสูตรนี้ถูกยกเลิกแล้ว" }, { status: 410 });
@@ -88,9 +85,15 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const ua = ctx.request.headers.get("user-agent") ?? "";
   const ip = ctx.request.headers.get("CF-Connecting-IP") ?? ctx.request.headers.get("X-Real-IP") ?? null;
   const code = emp_code?.trim() || null;
+  // ประเภทผู้เข้าร่วมตัดสินจากรายชื่อวิทยากรของหลักสูตร (ไม่ให้ผู้สแกนเลือกเอง)
+  const participant_type: "attendee" | "trainer" = isTrainerName(fullName, course.trainer) ? "trainer" : "attendee";
 
   // จับคู่กับผู้ที่ลงทะเบียนไว้: รหัสพนักงานก่อน แล้วค่อยชื่อ (ไม่สนคำนำหน้า เช่น "น.ส." = "นางสาว")
   const existing = await findRegistered(ctx.env.HR_DB, course.id, fullName, code);
+  if (existing && existing.participant_type !== participant_type) {
+    await ctx.env.HR_DB.prepare("UPDATE training_attendees SET participant_type = ? WHERE id = ?").bind(participant_type, existing.id).run();
+    existing.participant_type = participant_type;
+  }
   if (existing && code && !existing.emp_code) {
     await ctx.env.HR_DB.prepare("UPDATE training_attendees SET emp_code = ? WHERE id = ? AND emp_code IS NULL").bind(code, existing.id).run();
   }

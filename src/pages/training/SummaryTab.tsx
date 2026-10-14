@@ -150,7 +150,7 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     if (course.checkin_sessions === 2) {
       const w2 = window.open("", "_blank", "width=1200,height=800");
       if (!w2) return;
-      w2.document.write(buildTwoSessionSheetHtml(course, attendees, trainers));
+      w2.document.write(buildTwoSessionSheetHtml(course, attendees));
       w2.document.close();
       setTimeout(() => w2.print(), 500);
       return;

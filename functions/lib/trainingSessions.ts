@@ -113,3 +113,17 @@ export async function findRegistered(db: Env["HR_DB"], courseId: number, fullNam
   const n = normalizeName(fullName);
   return n ? rows.find(r => normalizeName(r.name) === n) ?? null : null;
 }
+
+// ── วิทยากร = รายชื่อที่ใส่ไว้ตอนสร้างหลักสูตร (ช่อง "วิทยากร") ไม่ให้ผู้สแกนเลือกเอง ──────────
+/** แยกรายชื่อวิทยากรจากข้อความช่องเดียว เช่น "นายก ข / นางสาวค ง" (คั่นด้วย / , ; & ขึ้นบรรทัดใหม่ หรือคำว่า "และ") */
+export function splitTrainerNames(field: string | null | undefined): string[] {
+  return (field ?? "").split(/[\/,;&\n]|\s+และ\s+/).map(s => s.trim()).filter(Boolean);
+}
+
+// ตัดอักษรซ้ำติดกัน (เช่น "แแ" ที่พิมพ์เกินตอนสร้างหลักสูตร) เฉพาะตอนเทียบชื่อ
+const squash = (s: string) => normalizeName(s).replace(/(.)\1+/gu, "$1");
+
+export function isTrainerName(fullName: string, trainerField: string | null | undefined): boolean {
+  const n = squash(fullName);
+  return n.length > 0 && splitTrainerNames(trainerField).some(t => squash(t) === n);
+}

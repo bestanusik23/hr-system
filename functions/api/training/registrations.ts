@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { isTrainerName } from "../../lib/trainingSessions";
 
 // GET /api/training/registrations?course_id=X
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
@@ -89,16 +90,17 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!course_id || !name) return Response.json({ ok: false, error: "กรุณากรอกข้อมูลให้ครบ" }, { status: 400 });
 
   // Check reg_open
-  const course = await ctx.env.HR_DB.prepare("SELECT reg_open FROM training_courses WHERE id = ?")
-    .bind(course_id).first<{ reg_open: number }>();
+  const course = await ctx.env.HR_DB.prepare("SELECT reg_open, trainer FROM training_courses WHERE id = ?")
+    .bind(course_id).first<{ reg_open: number; trainer: string | null }>();
   if (!course) return Response.json({ ok: false, error: "ไม่พบหลักสูตร" }, { status: 404 });
   if (!course.reg_open) return Response.json({ ok: false, error: "หลักสูตรนี้ปิดรับสมัครแล้ว" }, { status: 400 });
 
   const result = await ctx.env.HR_DB.prepare(`
     INSERT INTO training_attendees
-      (course_id, emp_code, name, department, position, phone, reg_method, attendance_status)
-    VALUES (?, ?, ?, ?, ?, ?, 'manual', 'registered')
-  `).bind(course_id, emp_code ?? null, name, department ?? null, position ?? null, phone ?? null).run();
+      (course_id, emp_code, name, department, position, phone, reg_method, attendance_status, participant_type)
+    VALUES (?, ?, ?, ?, ?, ?, 'manual', 'registered', ?)
+  `).bind(course_id, emp_code ?? null, name, department ?? null, position ?? null, phone ?? null,
+          isTrainerName(String(name), course.trainer) ? "trainer" : "attendee").run();
 
   return Response.json({ ok: true, id: result.meta.last_row_id }, { status: 201 });
 };
