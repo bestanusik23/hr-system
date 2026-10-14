@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
+import { buildTwoSessionSheetHtml } from "./attendanceSheet";
 
 interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; reg_open: number; checkin_sessions?: number; }
 
@@ -145,8 +146,15 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     if (!course) return;
     const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
     const trainers  = regs.filter(r => r.participant_type === "trainer");
-    const two = course.checkin_sessions === 2;
-    const sigCells = two ? "<td></td><td></td>" : "<td></td>";
+    // หลักสูตรเช็คชื่อ 2 รอบ (AI-Powered Workforce): ใช้ใบลงทะเบียนแบบหน่วยงานราชการ (เวลาเข้าฝึกเช้า-บ่าย / เลขบัตร ปชช. / ผู้รับรอง)
+    if (course.checkin_sessions === 2) {
+      const w2 = window.open("", "_blank", "width=1200,height=800");
+      if (!w2) return;
+      w2.document.write(buildTwoSessionSheetHtml(course, attendees, trainers));
+      w2.document.close();
+      setTimeout(() => w2.print(), 500);
+      return;
+    }
     const win = window.open("", "_blank", "width=1000,height=750");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
@@ -189,19 +197,19 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
 </div>
 <table>
 <colgroup>
-  <col style="width:50px"><col style="width:74px"><col style="width:170px"><col>${two ? '<col style="width:100px"><col style="width:100px">' : '<col style="width:90px">'}
+  <col style="width:58px"><col style="width:80px"><col style="width:190px"><col><col style="width:90px">
 </colgroup>
-<thead><tr><th>ลำดับที่</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th>${two ? "<th>ลายเซ็นรอบเช้า</th><th>ลายเซ็นรอบบ่าย</th>" : "<th>ลายเซ็น</th>"}</tr></thead>
+<thead><tr><th>ลำดับที่</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
 <tbody>
 ${attendees.map((r, i) => `<tr>
   <td>${i + 1}</td>
   <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
   <td class="nm"><strong>${r.name}</strong></td>
   <td>${r.position ?? "—"}</td>
-  ${sigCells}
+  <td></td>
 </tr>`).join("")}
-${trainers.length > 0 ? `<tr><td colspan="${two ? 6 : 5}" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td>${sigCells}</tr>`).join("")}` : ""}
+${trainers.length > 0 ? `<tr><td colspan="5" class="sect">🎤 วิทยากร</td></tr>
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
 </tbody></table>
 <div class="sig">
   <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ผู้รับผิดชอบโครงการ</div></div>
