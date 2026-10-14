@@ -12,6 +12,11 @@ interface CourseInfo {
 
 type Step = "form" | "success" | "prereg" | "updated" | "duplicate" | "closed" | "session";
 type Sess = "am" | "pm";
+interface Saved { prefix: string; firstName: string; lastName: string; position: string; department: string; empCode: string | null; partType: "attendee" | "trainer"; }
+const savedKey = (token: string) => `ramTrainingId:${token}`;
+function loadSaved(token: string): Saved | null {
+  try { const v = JSON.parse(localStorage.getItem(savedKey(token)) ?? "null") as Saved | null; return v && v.firstName && v.lastName ? v : null; } catch { return null; }
+}
 const SESS_LABEL: Record<Sess, string> = { am: "รอบเช้า", pm: "รอบบ่าย" };
 
 function thDate(iso: string | null) {
@@ -53,7 +58,8 @@ export default function CheckinPage() {
   const [countdown, setCountdown] = useState(3);
   const [serverToday, setServerToday] = useState<string | null>(null);
   const [sessionNow,  setSessionNow]  = useState<Sess>("am");
-  const [sessResult,  setSessResult]  = useState<{ session: Sess; already: boolean; late: boolean; done: Sess[] } | null>(null);
+  const [sessResult,  setSessResult]  = useState<{ session: Sess; already: boolean; late: boolean; done: Sess[]; walkin: boolean } | null>(null);
+  const [quick,       setQuick]       = useState<Saved | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -66,7 +72,10 @@ export default function CheckinPage() {
           setCourse(d.course);
           if (d.today) setServerToday(d.today);
           if (d.session_now) setSessionNow(d.session_now);
-          if (!d.course.reg_open) setStep("closed");
+          // หลักสูตรเช็คชื่อ 2 รอบ: ปิดรับลงทะเบียนแล้วผู้ที่ลงทะเบียนไว้ยังเช็คชื่อได้ (server ตัดสิน)
+          if (!d.course.reg_open && d.course.checkin_sessions !== 2) setStep("closed");
+          // สแกนซ้ำในวันอบรมจากเครื่องเดิม → เช็คชื่อรอบถัดไปได้ในคลิกเดียว
+          if (d.course.checkin_sessions === 2 && d.course.course_date && d.course.course_date === d.today) setQuick(loadSaved(token));
         }
         setLoading(false);
       });
@@ -124,32 +133,39 @@ export default function CheckinPage() {
     setSuggestions([]); setShowDrop(false);
   }
 
-  async function register() {
+  function register() {
     if (!firstName.trim() || !lastName.trim() || !position.trim()) {
       setError("กรุณากรอกชื่อ นามสกุล และตำแหน่งให้ครบถ้วน"); return;
     }
+    return submit({ prefix, firstName: firstName.trim(), lastName: lastName.trim(), position: position.trim(), department: department.trim(), empCode, partType });
+  }
+
+  async function submit(v: Saved) {
     setSubmitting(true); setError("");
     const r = await fetch("/api/training/checkin", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        token, first_name: `${prefix}${firstName.trim()}`, last_name: lastName.trim(),
-        position: position.trim(), department: department.trim() || undefined,
-        participant_type: partType, emp_code: empCode ?? undefined,
+        token, first_name: `${v.prefix}${v.firstName}`, last_name: v.lastName,
+        position: v.position, department: v.department || undefined,
+        participant_type: v.partType, emp_code: v.empCode ?? undefined,
       }),
     });
     const d = await r.json() as {
       ok: boolean; duplicate?: boolean; prereg?: boolean; updated?: boolean;
       attendee_id?: number; participant_type?: string; course_date?: string; error?: string;
-      two_sessions?: boolean; session?: Sess; already?: boolean; is_late?: boolean; sessions_done?: Sess[];
+      two_sessions?: boolean; session?: Sess; already?: boolean; is_late?: boolean; sessions_done?: Sess[]; walkin?: boolean;
     };
     setSubmitting(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     setRegisteredId(d.attendee_id ?? null);
-    setRegisteredType((d.participant_type as "attendee" | "trainer") ?? partType);
+    setRegisteredType((d.participant_type as "attendee" | "trainer") ?? v.partType);
     setTrainingDate(d.course_date ?? course?.course_date ?? null);
     if (d.two_sessions && !d.session) { setStep("prereg"); return; }
+    if (d.two_sessions) {
+      try { localStorage.setItem(savedKey(token), JSON.stringify(v)); } catch { /* private mode */ }
+    }
     if (d.two_sessions && d.session) {
-      setSessResult({ session: d.session, already: !!d.already, late: !!d.is_late, done: d.sessions_done ?? [d.session] });
+      setSessResult({ session: d.session, already: !!d.already, late: !!d.is_late, done: d.sessions_done ?? [d.session], walkin: !!d.walkin });
       setStep("session");
       return;
     }
@@ -290,6 +306,12 @@ export default function CheckinPage() {
           <div style={{ textAlign: "center", fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>
             {new Date().toLocaleString("th-TH")}
           </div>
+          {sessResult.walkin && (
+            <div style={{ background: "#fff7ed", borderRadius: 8, border: "1px solid #fed7aa", padding: "10px 14px",
+              fontSize: 12, color: "#9a3412", marginBottom: 14, textAlign: "center" }}>
+              ⚠️ ไม่พบชื่อท่านในรายชื่อลงทะเบียนล่วงหน้า — บันทึกเป็นผู้เข้าร่วมเพิ่มเติม เจ้าหน้าที่ HR จะตรวจสอบ
+            </div>
+          )}
           <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
             {(["am", "pm"] as Sess[]).map(k => {
               const ok = sessResult.done.includes(k);
@@ -359,6 +381,36 @@ export default function CheckinPage() {
                 <div style={{ fontSize: 12, color: "#64748b", marginTop: 4 }}>ขอบคุณที่ร่วมเป็นวิทยากร</div>
               </div>
           }
+        </div>
+
+      ) : course && quick ? (
+        /* ===== ONE-TAP RE-SCAN (same phone, same person) ===== */
+        <div style={cardStyle}>
+          <CourseCard course={course} />
+          <div style={{ background: "#eff4ff", borderRadius: 8, border: "1px solid #c4cfee", padding: "10px 14px",
+            fontSize: 13, color: "#0038C6", fontWeight: 700, marginBottom: 18 }}>
+            🕘 กำลังเช็คชื่อ{SESS_LABEL[sessionNow]}
+          </div>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>เช็คชื่อในนาม</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#0a1628" }}>{quick.prefix}{quick.firstName} {quick.lastName}</div>
+            <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{[quick.position, quick.department].filter(Boolean).join(" · ")}</div>
+          </div>
+          {error && (
+            <div style={{ background: "#fee2e2", borderRadius: 7, padding: "10px 14px", fontSize: 13, color: "#dc2626",
+              marginBottom: 14, border: "1px solid #fecaca" }}>{error}</div>
+          )}
+          <button onClick={() => submit(quick)} disabled={submitting}
+            style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none", background: "#0038C6", color: "#fff",
+              fontWeight: 800, fontSize: 16, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "inherit",
+              boxShadow: "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
+            {submitting ? "กำลังบันทึก…" : `✅ ยืนยัน เช็คชื่อ${SESS_LABEL[sessionNow]}`}
+          </button>
+          <button onClick={() => { setQuick(null); setError(""); }}
+            style={{ width: "100%", marginTop: 10, padding: "10px 0", borderRadius: 9, border: "1.5px solid #c4cfee",
+              background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
+            ไม่ใช่ฉัน / กรอกข้อมูลใหม่
+          </button>
         </div>
 
       ) : course ? (

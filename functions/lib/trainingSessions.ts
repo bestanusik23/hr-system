@@ -72,3 +72,25 @@ export async function syncAttendeeStatus(db: Env["HR_DB"], attendeeId: number): 
     ).bind(next, first.checked_at, attendeeId).run();
   }
 }
+
+// ── จับคู่การสแกน QR กับรายชื่อที่ลงทะเบียนไว้ ──────────────────────────────
+// รหัสพนักงานตรงกันก่อน แล้วค่อยเทียบชื่อโดยไม่สนคำนำหน้า/ช่องว่าง (ที่เก็บไว้มี "น.ส." กับ "นางสาว" ปนกัน)
+const NAME_PREFIX_RE = /^(นางสาว|น\.\s*ส\.?|นส\.?|นาย|นาง|ทพญ\.?|ทพ\.?|ภกญ\.?|ภก\.?|พญ\.?|นพ\.?|ดร\.?|ผศ\.?|รศ\.?|คุณ)\s*/;
+
+export function normalizeName(s: string): string {
+  return s.normalize("NFC").replace(/[​-‍﻿]/g, "").trim().replace(NAME_PREFIX_RE, "").replace(/[\s.]+/g, "");
+}
+
+export interface RegisteredRow { id: number; name: string; emp_code: string | null; participant_type: string; attendance_status: string }
+
+export async function findRegistered(db: Env["HR_DB"], courseId: number, fullName: string, empCode: string | null): Promise<RegisteredRow | null> {
+  const rows = (await db.prepare(
+    "SELECT id, name, emp_code, participant_type, attendance_status FROM training_attendees WHERE course_id = ? ORDER BY id"
+  ).bind(courseId).all<RegisteredRow>()).results ?? [];
+  if (empCode) {
+    const byCode = rows.find(r => r.emp_code === empCode);
+    if (byCode) return byCode;
+  }
+  const n = normalizeName(fullName);
+  return n ? rows.find(r => normalizeName(r.name) === n) ?? null : null;
+}

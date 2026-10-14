@@ -310,10 +310,12 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
                   </td>
                   )}
                   <td style={{ padding: "10px 14px" }}>
-                    <span style={{ fontSize: 11, background: reg.reg_method === "qr" ? "#e8eeff" : "#f0f9ff",
-                      color: reg.reg_method === "qr" ? "#0038C6" : "#0891b2",
-                      border: "1px solid #c4cfee", borderRadius: 4, padding: "2px 7px" }}>
-                      {reg.reg_method === "qr" ? "QR" : "Manual"}
+                    <span style={{ fontSize: 11,
+                      background: reg.reg_method === "walkin" ? "#fff7ed" : reg.reg_method === "qr" ? "#e8eeff" : "#f0f9ff",
+                      color: reg.reg_method === "walkin" ? "#c2410c" : reg.reg_method === "qr" ? "#0038C6" : "#0891b2",
+                      border: reg.reg_method === "walkin" ? "1px solid #fdba74" : "1px solid #c4cfee", borderRadius: 4, padding: "2px 7px" }}
+                      title={reg.reg_method === "walkin" ? "สแกนในวันอบรมแต่ไม่อยู่ในรายชื่อลงทะเบียนล่วงหน้า" : undefined}>
+                      {reg.reg_method === "qr" ? "QR" : reg.reg_method === "walkin" ? "เพิ่มหน้างาน" : "Manual"}
                     </span>
                   </td>
                   <td style={{ padding: "10px 14px" }}>

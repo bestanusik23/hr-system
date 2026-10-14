@@ -1,5 +1,5 @@
 import type { Env } from "../../lib/types";
-import { bangkokNow, isLateFor, parseHm, sessionAt, syncAttendeeStatus, type Session } from "../../lib/trainingSessions";
+import { bangkokNow, findRegistered, isLateFor, parseHm, sessionAt, syncAttendeeStatus, type Session } from "../../lib/trainingSessions";
 
 interface CourseRow {
   id: number; course_code: string; course: string; course_type: string;
@@ -60,11 +60,12 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   if (!course) return Response.json({ ok: false, error: "QR Code ไม่ถูกต้อง" }, { status: 404 });
   if (course.is_cancelled) return Response.json({ ok: false, error: "หลักสูตรนี้ถูกยกเลิกแล้ว" }, { status: 410 });
-  if (!course.reg_open) return Response.json({ ok: false, error: "ขณะนี้ยังไม่เปิดรับลงทะเบียน กรุณาติดต่อเจ้าหน้าที่ HR" }, { status: 403 });
+  const twoSessions = course.checkin_sessions === 2;
+  // หลักสูตรเช็คชื่อ 2 รอบ: ปิดรับลงทะเบียนแล้วยังเช็คชื่อผู้ที่ลงทะเบียนไว้ได้ (คนนอกรายชื่อจะถูกปฏิเสธด้านล่าง)
+  if (!course.reg_open && !twoSessions) return Response.json({ ok: false, error: "ขณะนี้ยังไม่เปิดรับลงทะเบียน กรุณาติดต่อเจ้าหน้าที่ HR" }, { status: 403 });
 
   const now      = bangkokNow();
   const isPreReg = course.course_date ? course.course_date > now.date : false;
-  const twoSessions = course.checkin_sessions === 2;
 
   // หลักสูตรเช็คชื่อ 2 รอบ: เช็คได้เฉพาะวันอบรม (หลังวันอบรมไม่รับเช็คชื่อ — ให้ HR บันทึกให้แทน)
   if (twoSessions && course.course_date && course.course_date < now.date) {
@@ -76,26 +77,31 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const ip = ctx.request.headers.get("CF-Connecting-IP") ?? ctx.request.headers.get("X-Real-IP") ?? null;
   const code = emp_code?.trim() || null;
 
-  // จับคู่ด้วยรหัสพนักงานก่อน (กันชื่อสะกด/คำนำหน้าไม่ตรงกับตอนลงทะเบียนล่วงหน้า) แล้วค่อยจับคู่ด้วยชื่อ
-  const existing = await ctx.env.HR_DB.prepare(
-    `SELECT id, participant_type, attendance_status FROM training_attendees
-      WHERE course_id = ? AND (name = ? OR (? IS NOT NULL AND emp_code = ?))
-      ORDER BY (name = ?) DESC, id LIMIT 1`
-  ).bind(course.id, fullName, code, code, fullName).first<{ id: number; participant_type: string; attendance_status: string }>();
+  // จับคู่กับผู้ที่ลงทะเบียนไว้: รหัสพนักงานก่อน แล้วค่อยชื่อ (ไม่สนคำนำหน้า เช่น "น.ส." = "นางสาว")
+  const existing = await findRegistered(ctx.env.HR_DB, course.id, fullName, code);
+  if (existing && code && !existing.emp_code) {
+    await ctx.env.HR_DB.prepare("UPDATE training_attendees SET emp_code = ? WHERE id = ? AND emp_code IS NULL").bind(code, existing.id).run();
+  }
 
   // ---- เช็คชื่อ 2 รอบ (เช้า/บ่าย) ----
   if (twoSessions) {
     let attendeeId = existing?.id ?? 0;
     let participantType = existing?.participant_type ?? participant_type;
 
+    if (!existing && !course.reg_open) {
+      return Response.json({ ok: false, error: "ไม่พบชื่อท่านในรายชื่อผู้ลงทะเบียน และปิดรับลงทะเบียนเพิ่มแล้ว กรุณาติดต่อเจ้าหน้าที่ HR" }, { status: 403 });
+    }
+    // สแกนในวันอบรมแต่ไม่อยู่ในรายชื่อที่ลงทะเบียนไว้ → บันทึกเป็น "เพิ่มหน้างาน" ให้ HR ตรวจสอบ
+    const walkin = !existing && !isPreReg;
+
     if (!existing) {
       const ins = await ctx.env.HR_DB.prepare(`
         INSERT INTO training_attendees
           (course_id, emp_code, name, department, position, reg_method, attendance_status,
            device_info, ip_address, participant_type)
-        VALUES (?, ?, ?, ?, ?, 'qr', 'registered', ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, 'registered', ?, ?, ?)
       `).bind(course.id, code, fullName, department?.trim() || null, position?.trim() ?? null,
-              ua.slice(0, 300), ip, participant_type).run();
+              walkin ? "walkin" : "qr", ua.slice(0, 300), ip, participant_type).run();
       attendeeId = Number(ins.meta.last_row_id);
       participantType = participant_type;
     }
@@ -120,7 +126,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     ).bind(attendeeId).all<{ session: Session }>()).results?.map(r => r.session) ?? [];
 
     return Response.json({
-      ok: true, two_sessions: true, session, already, is_late: late, sessions_done: done,
+      ok: true, two_sessions: true, session, already, is_late: late, sessions_done: done, walkin,
       attendee_id: attendeeId, participant_type: participantType, course_date: course.course_date,
     }, { status: already ? 200 : 201 });
   }
