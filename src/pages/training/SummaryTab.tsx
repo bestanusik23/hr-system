@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx";
 
-interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; reg_open: number; }
+interface Course { id: number; course_code: string; course: string; course_type: string; course_date: string | null; start_time: string | null; end_time: string | null; location: string | null; trainer: string | null; target: number; actual: number; status: string; objectives: string | null; reg_open: number; checkin_sessions?: number; }
 
 function toThaiTime(utc: string | null): string {
   if (!utc) return "—";
   const d = new Date(utc.replace(" ", "T") + (utc.includes("Z") ? "" : "Z"));
   return new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
 }
-interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; participant_type?: string; }
+interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; participant_type?: string; am_time?: string | null; am_late?: number | null; pm_time?: string | null; pm_late?: number | null; }
 interface Photo { id: number; course_id: number; url: string; photo_type: string; caption: string | null; uploaded_at: string; }
 interface Survey { id: number; q1: number; q2: number; q3: number; q4: number; q5: number; comment: string | null; submitted_at: string; }
 
@@ -145,6 +145,8 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
     if (!course) return;
     const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
     const trainers  = regs.filter(r => r.participant_type === "trainer");
+    const two = course.checkin_sessions === 2;
+    const sigCells = two ? "<td></td><td></td>" : "<td></td>";
     const win = window.open("", "_blank", "width=1000,height=750");
     if (!win) return;
     win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
@@ -187,19 +189,19 @@ export default function SummaryTab({ canEdit, initCourseId }: Props) {
 </div>
 <table>
 <colgroup>
-  <col style="width:58px"><col style="width:80px"><col style="width:190px"><col><col style="width:90px">
+  <col style="width:50px"><col style="width:74px"><col style="width:170px"><col>${two ? '<col style="width:100px"><col style="width:100px">' : '<col style="width:90px">'}
 </colgroup>
-<thead><tr><th>ลำดับที่</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th><th>ลายเซ็น</th></tr></thead>
+<thead><tr><th>ลำดับที่</th><th>รหัสพนักงาน</th><th>ชื่อ-นามสกุล</th><th>ตำแหน่ง</th>${two ? "<th>ลายเซ็นรอบเช้า</th><th>ลายเซ็นรอบบ่าย</th>" : "<th>ลายเซ็น</th>"}</tr></thead>
 <tbody>
 ${attendees.map((r, i) => `<tr>
   <td>${i + 1}</td>
   <td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td>
   <td class="nm"><strong>${r.name}</strong></td>
   <td>${r.position ?? "—"}</td>
-  <td></td>
+  ${sigCells}
 </tr>`).join("")}
-${trainers.length > 0 ? `<tr><td colspan="5" class="sect">🎤 วิทยากร</td></tr>
-${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td><td></td></tr>`).join("")}` : ""}
+${trainers.length > 0 ? `<tr><td colspan="${two ? 6 : 5}" class="sect">🎤 วิทยากร</td></tr>
+${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;font-size:9pt">${r.emp_code ?? "—"}</td><td class="nm"><strong>${r.name}</strong></td><td>${r.position ?? "—"}</td>${sigCells}</tr>`).join("")}` : ""}
 </tbody></table>
 <div class="sig">
   <div class="sigbox"><div style="height:44px"></div><div class="sigline"></div><div>ผู้รับผิดชอบโครงการ</div></div>
@@ -218,6 +220,9 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
     if (!course) return;
     const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
     const trainers  = regs.filter(r => r.participant_type === "trainer");
+    const two = course.checkin_sessions === 2;
+    const sessCell = (t: string | null | undefined, late: number | null | undefined) =>
+      t ? `${toThaiTime(t).slice(11)}${late ? " (สาย)" : ""}` : "";
 
     const aoa: (string | number)[][] = [
       [course.course],
@@ -225,20 +230,27 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
       [`วันที่อบรม: ${course.course_date ?? "—"}`, "", `เวลา: ${course.start_time ?? "—"} – ${course.end_time ?? "—"} น.`],
       [`สถานที่: ${course.location ?? "—"}`, "", `วิทยากร: ${course.trainer ?? "—"}`],
       [],
-      ["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "ตำแหน่ง", "ลายเซ็น"],
-      ...attendees.map((r, i) => [i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]),
+      two ? ["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "ตำแหน่ง", "เช็คชื่อรอบเช้า", "เช็คชื่อรอบบ่าย", "ลายเซ็นเช้า", "ลายเซ็นบ่าย"]
+          : ["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "ตำแหน่ง", "ลายเซ็น"],
+      ...attendees.map((r, i) => two
+        ? [i + 1, r.emp_code ?? "", r.name, r.position ?? "", sessCell(r.am_time, r.am_late), sessCell(r.pm_time, r.pm_late), "", ""]
+        : [i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]),
     ];
     if (trainers.length > 0) {
       aoa.push([]);
       aoa.push(["วิทยากร"]);
-      trainers.forEach((r, i) => aoa.push([i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]));
+      trainers.forEach((r, i) => aoa.push(two
+        ? [i + 1, r.emp_code ?? "", r.name, r.position ?? "", sessCell(r.am_time, r.am_late), sessCell(r.pm_time, r.pm_late), "", ""]
+        : [i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]));
     }
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws["!cols"] = [{ wch: 5 }, { wch: 12 }, { wch: 28 }, { wch: 26 }, { wch: 16 }];
+    ws["!cols"] = two
+      ? [{ wch: 5 }, { wch: 12 }, { wch: 28 }, { wch: 26 }, { wch: 16 }, { wch: 16 }, { wch: 14 }, { wch: 14 }]
+      : [{ wch: 5 }, { wch: 12 }, { wch: 28 }, { wch: 26 }, { wch: 16 }];
     ws["!merges"] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: two ? 7 : 4 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: two ? 7 : 4 } },
     ];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "รายชื่อ");
@@ -246,7 +258,11 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
   }
 
   const checkedIn = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
-  const pct       = regs.length > 0 ? Math.round(checkedIn / regs.length * 100) : 0;
+  const twoSess   = course?.checkin_sessions === 2;
+  const amCount   = regs.filter(r => r.am_time).length;
+  const pmCount   = regs.filter(r => r.pm_time).length;
+  const bothCount = regs.filter(r => r.am_time && r.pm_time).length;
+  const pct       = regs.length > 0 ? Math.round((twoSess ? bothCount : checkedIn) / regs.length * 100) : 0;
 
   const PHOTO_GROUPS = [
     { key: "activity",    label: "🎯 กิจกรรม" },
@@ -323,13 +339,19 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
 
           {/* Attendance KPIs */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10, marginBottom: 20 }}>
-            {[
+            {(twoSess ? [
+              { label: "ลงทะเบียน",   value: regs.length, color: "#0038C6" },
+              { label: "รอบเช้า",     value: amCount,     color: "#16a34a" },
+              { label: "รอบบ่าย",     value: pmCount,     color: "#0891b2" },
+              { label: "ครบ 2 รอบ",   value: bothCount,   color: "#d97706" },
+              { label: "% ครบ 2 รอบ", value: `${pct}%`,  color: pct >= 80 ? "#16a34a" : "#d97706" },
+            ] : [
               { label: "ลงทะเบียน",  value: regs.length, color: "#0038C6" },
               { label: "เช็คชื่อ",   value: checkedIn,   color: "#16a34a" },
               { label: "ขาด",        value: regs.filter(r => r.attendance_status === "absent").length, color: "#dc2626" },
               { label: "สาย",        value: regs.filter(r => r.attendance_status === "late").length,   color: "#d97706" },
               { label: "% เข้าร่วม", value: `${pct}%`,  color: pct >= 80 ? "#16a34a" : "#d97706" },
-            ].map(s => (
+            ]).map(s => (
               <div key={s.label} style={{ background: "#fff", borderRadius: 8, padding: "14px 16px",
                 border: "1px solid #dce4f5", borderLeft: "4px solid #0038C6", textAlign: "center" }}>
                 <div style={{ fontSize: 10, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.label}</div>
@@ -383,7 +405,7 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#f4f7ff" }}>
-                  {["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "แผนก", "ตำแหน่ง", "เวลาเช็คชื่อ", "สถานะ"].map(h => (
+                  {["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "แผนก", "ตำแหน่ง", ...(twoSess ? ["เช้า", "บ่าย"] : ["เวลาเช็คชื่อ"]), "สถานะ"].map(h => (
                     <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontWeight: 700,
                       color: "#475569", borderBottom: "2px solid #dce4f5", fontSize: 11,
                       letterSpacing: "0.06em", textTransform: "uppercase" }}>{h}</th>
@@ -392,7 +414,7 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
               </thead>
               <tbody>
                 {regs.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8" }}>ยังไม่มีผู้เข้าร่วม</td></tr>
+                  <tr><td colSpan={twoSess ? 9 : 8} style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8" }}>ยังไม่มีผู้เข้าร่วม</td></tr>
                 ) : regs.map((r, i) => (
                   <tr key={r.id} style={{ borderBottom: "1px solid #f0f5ff", background: i % 2 === 0 ? "#fff" : "#fafcff" }}>
                     <td style={{ padding: "9px 14px", color: "#94a3b8" }}>{i + 1}</td>
@@ -400,7 +422,14 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
                     <td style={{ padding: "9px 14px", fontWeight: 600, color: "#0a1628" }}>{r.name}</td>
                     <td style={{ padding: "9px 14px", color: "#64748b" }}>{r.department ?? "—"}</td>
                     <td style={{ padding: "9px 14px", color: "#64748b" }}>{r.position ?? "—"}</td>
+                    {twoSess ? ([["am", r.am_time, r.am_late], ["pm", r.pm_time, r.pm_late]] as const).map(([k, t, late]) => (
+                      <td key={k} style={{ padding: "9px 14px", fontSize: 11, whiteSpace: "nowrap",
+                        color: t ? (late ? "#d97706" : "#16a34a") : "#cbd5e1", fontWeight: t ? 700 : 400 }}>
+                        {t ? `✓ ${toThaiTime(t).slice(11)}${late ? " สาย" : ""}` : "—"}
+                      </td>
+                    )) : (
                     <td style={{ padding: "9px 14px", color: "#64748b", fontSize: 11 }}>{toThaiTime(r.checkin_time)}</td>
+                    )}
                     <td style={{ padding: "9px 14px" }}>
                       <span style={{ background: STATUS_COLOR[r.attendance_status] + "20", color: STATUS_COLOR[r.attendance_status],
                         border: `1px solid ${STATUS_COLOR[r.attendance_status]}40`,

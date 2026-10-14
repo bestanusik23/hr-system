@@ -13,6 +13,7 @@ interface Course {
   location: string | null; month_label: string | null; target: number;
   budget: number; objectives: string | null; status: string; reg_open: number;
   qr_token: string | null; actual: number;
+  checkin_sessions?: number; pm_start_time?: string | null;
 }
 interface Props { course: Course | null; onClose: () => void; onSaved: () => void; canEdit: boolean; }
 
@@ -36,6 +37,8 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
   const [attachmentUrl,   setAttachmentUrl]   = useState(course?.attachment_url ?? "");
   const [status,          setStatus]          = useState(course?.status ?? "planned");
   const [regOpen,         setRegOpen]         = useState(course?.reg_open !== 0);
+  const [twoSessions,     setTwoSessions]     = useState(course?.checkin_sessions === 2);
+  const [pmStart,         setPmStart]         = useState(course?.pm_start_time ?? "13:00");
   const [saving,          setSaving]          = useState(false);
   const [error,           setError]           = useState("");
 
@@ -64,6 +67,8 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
       target: Number(target) || 0, budget: Number(budget) || 0,
       objectives: objectives || null, attachment_url: attachmentUrl || null,
       status, reg_open: regOpen ? 1 : 0,
+      checkin_sessions: twoSessions ? 2 : 1,
+      pm_start_time: twoSessions ? (pmStart || "13:00") : null,
     };
     const url    = isNew ? "/api/training/courses" : `/api/training/courses/${course!.id}`;
     const method = isNew ? "POST" : "PUT";
@@ -268,6 +273,26 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
             <label htmlFor="regOpen" style={{ fontSize: 13, fontWeight: 600, color: "#0a1628", cursor: "pointer" }}>
               เปิดรับลงทะเบียน (QR Check-in)
             </label>
+          </div>
+
+          {/* เช็คชื่อ 2 รอบ */}
+          <div style={{ marginBottom: 16, background: "#f0f5ff", borderRadius: 8, padding: "10px 14px", border: "1px solid #dce4f5" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input type="checkbox" id="twoSessions" checked={twoSessions}
+                onChange={e => setTwoSessions(e.target.checked)} disabled={!canEdit}
+                style={{ width: 16, height: 16, accentColor: "#0038C6", cursor: "pointer" }} />
+              <label htmlFor="twoSessions" style={{ fontSize: 13, fontWeight: 600, color: "#0a1628", cursor: "pointer" }}>
+                เช็คชื่อ 2 รอบ (เช้า + บ่าย) — ต้องเช็คครบทั้งสองรอบจึงได้ใบประกาศ
+              </label>
+            </div>
+            {twoSessions && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontSize: 12, color: "#475569" }}>
+                รอบเช้าเริ่มตามเวลาเริ่มอบรมด้านบน · รอบบ่ายเริ่ม
+                <input value={pmStart} onChange={e => setPmStart(e.target.value)} disabled={!canEdit} placeholder="13:00"
+                  style={{ ...inp, width: 90, padding: "5px 8px" }} />
+                น. (เช็คหลังเวลานี้นับเป็นสาย · ก่อน 12:30 น. = รอบเช้า, หลังจากนั้น = รอบบ่าย)
+              </div>
+            )}
           </div>
 
           {!isNew && course!.qr_token && (

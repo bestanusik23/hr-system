@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { syncAttendeeStatus } from "../../lib/trainingSessions";
 
 interface SurveyBody {
   token: string; attendee_id?: number;
@@ -22,8 +23,8 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   }
 
   const course = await ctx.env.HR_DB.prepare(
-    "SELECT id FROM training_courses WHERE qr_token = ? AND COALESCE(is_cancelled, 0) = 0"
-  ).bind(token).first<{ id: number }>();
+    "SELECT id, COALESCE(checkin_sessions, 1) AS checkin_sessions FROM training_courses WHERE qr_token = ? AND COALESCE(is_cancelled, 0) = 0"
+  ).bind(token).first<{ id: number; checkin_sessions: number }>();
 
   if (!course) return Response.json({ ok: false, error: "ไม่พบหลักสูตร" }, { status: 404 });
 
@@ -46,9 +47,14 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   // Mark attendee as completed after survey submission
   if (attendee_id) {
     try {
-      await ctx.env.HR_DB.prepare(
-        "UPDATE training_attendees SET attendance_status = 'completed' WHERE id = ? AND course_id = ? AND attendance_status IN ('checked_in','late')"
-      ).bind(attendee_id, course.id).run();
+      if (course.checkin_sessions === 2) {
+        // เช็คชื่อ 2 รอบ: completed ก็ต่อเมื่อเช็คครบทั้งเช้าและบ่าย (syncAttendeeStatus ตรวจให้)
+        await syncAttendeeStatus(ctx.env.HR_DB, attendee_id);
+      } else {
+        await ctx.env.HR_DB.prepare(
+          "UPDATE training_attendees SET attendance_status = 'completed' WHERE id = ? AND course_id = ? AND attendance_status IN ('checked_in','late')"
+        ).bind(attendee_id, course.id).run();
+      }
     } catch { /* non-critical */ }
   }
 

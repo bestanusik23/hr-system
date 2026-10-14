@@ -35,7 +35,8 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
   const body = await ctx.request.json() as Record<string, unknown>;
   const { course, course_type, organizing_dept, project_owner, trainer,
           course_date, start_time, end_time, location, month_label,
-          target, budget, objectives, attachment_url, status, reg_open } = body;
+          target, budget, objectives, attachment_url, status, reg_open,
+          checkin_sessions, pm_start_time } = body;
 
   // Auto-assign qr_token if missing (for courses created before migration 0008)
   const existing = await ctx.env.HR_DB.prepare("SELECT qr_token FROM training_courses WHERE id = ?").bind(id).first<{ qr_token: string | null }>();
@@ -49,6 +50,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
       course=?, course_type=?, organizing_dept=?, project_owner=?, trainer=?,
       course_date=?, start_time=?, end_time=?, location=?, month_label=?,
       target=?, budget=?, objectives=?, attachment_url=?, status=?, reg_open=?,
+      checkin_sessions=?, pm_start_time=?,
       updated_at=datetime('now')
     WHERE id=?
   `).bind(
@@ -59,6 +61,8 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     Number(target) || 0, Number(budget) || 0,
     objectives ?? null, attachment_url ?? null,
     status ?? "planned", reg_open ? 1 : 0,
+    Number(checkin_sessions) === 2 ? 2 : 1,
+    Number(checkin_sessions) === 2 ? (pm_start_time ?? null) : null,
     id
   ).run();
 

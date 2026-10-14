@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
-interface Course { id: number; course_code: string; course: string; course_date: string | null; status: string; reg_open: number; qr_token: string | null; target: number; actual: number; }
+interface Course { id: number; course_code: string; course: string; course_date: string | null; status: string; reg_open: number; qr_token: string | null; target: number; actual: number; checkin_sessions?: number; }
 interface Reg {
   id: number; course_id: number; emp_code: string | null; name: string;
   department: string | null; position: string | null; phone: string | null;
   reg_method: string; attendance_status: string; checkin_time: string | null;
+  am_time?: string | null; am_late?: number | null; am_source?: string | null;
+  pm_time?: string | null; pm_late?: number | null; pm_source?: string | null;
 }
 interface EmpOption { id: number; emp_code: string | null; full_name: string; position: string | null; department_name: string | null; }
 
@@ -130,6 +132,14 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
     loadRegs(selId as number);
   }
 
+  async function toggleSession(id: number, session: "am" | "pm", present: boolean) {
+    await fetch("/api/training/session-checkin", {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ attendee_id: id, session, present }),
+    });
+    loadRegs(selId as number);
+  }
+
   async function deleteReg(id: number) {
     await fetch(`/api/training/registrations/${id}`, { method: "DELETE" });
     loadRegs(selId as number);
@@ -151,6 +161,10 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
   }
 
   const checkedIn = regs.filter(r => ["checked_in", "late", "completed"].includes(r.attendance_status)).length;
+  const twoSess   = selCourse?.checkin_sessions === 2;
+  const amCount   = regs.filter(r => r.am_time).length;
+  const pmCount   = regs.filter(r => r.pm_time).length;
+  const bothCount = regs.filter(r => r.am_time && r.pm_time).length;
 
   const inp: React.CSSProperties = {
     width: "100%", padding: "8px 11px", borderRadius: 7,
@@ -192,12 +206,17 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
       {/* Stats row */}
       {selId !== "" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 20 }}>
-          {[
+          {(twoSess ? [
+            { label: `ลงทะเบียนทั้งหมด (เป้า ${selCourse?.target ?? 0})`, value: regs.length, color: "#0038C6" },
+            { label: "เช็คชื่อรอบเช้า",   value: `${amCount}/${regs.length}`,   color: "#16a34a" },
+            { label: "เช็คชื่อรอบบ่าย",   value: `${pmCount}/${regs.length}`,   color: "#0891b2" },
+            { label: "ครบทั้ง 2 รอบ",      value: `${bothCount}/${regs.length}`, color: "#d97706" },
+          ] : [
             { label: "ลงทะเบียนทั้งหมด", value: regs.length,   color: "#0038C6" },
             { label: "เช็คชื่อแล้ว",      value: checkedIn,     color: "#16a34a" },
             { label: "เป้าหมาย",          value: selCourse?.target ?? 0, color: "#475569" },
             { label: "% เข้าร่วม",        value: selCourse?.target ? `${Math.round(checkedIn / selCourse.target * 100)}%` : "—", color: "#d97706" },
-          ].map(s => (
+          ]).map(s => (
             <div key={s.label} style={{ background: "#fff", borderRadius: 8, padding: "14px 18px",
               border: "1px solid #dce4f5", borderLeft: "4px solid #0038C6" }}>
               <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>{s.label}</div>
@@ -218,7 +237,7 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "#f4f7ff" }}>
-                {["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "แผนก", "ตำแหน่ง", "เวลาเช็คชื่อ", "วิธี", "สถานะ", canEdit ? "" : ""].map((h, i) => (
+                {["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "แผนก", "ตำแหน่ง", ...(twoSess ? ["เช้า", "บ่าย"] : ["เวลาเช็คชื่อ"]), "วิธี", "สถานะ", canEdit ? "" : ""].map((h, i) => (
                   <th key={i} style={{ padding: "11px 14px", textAlign: "left", fontWeight: 700,
                     color: "#475569", borderBottom: "2px solid #dce4f5", fontSize: 11,
                     letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap" }}>{h}</th>
@@ -227,7 +246,7 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
             </thead>
             <tbody>
               {regs.length === 0 ? (
-                <tr><td colSpan={9} style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8" }}>ยังไม่มีผู้ลงทะเบียน</td></tr>
+                <tr><td colSpan={twoSess ? 10 : 9} style={{ padding: "40px 0", textAlign: "center", color: "#94a3b8" }}>ยังไม่มีผู้ลงทะเบียน</td></tr>
               ) : regs.map((reg, i) => (
                 <tr key={reg.id} style={{ borderBottom: "1px solid #f0f5ff", background: i % 2 === 0 ? "#fff" : "#fafcff" }}>
                   <td style={{ padding: "10px 14px", color: "#94a3b8", width: 36 }}>{i + 1}</td>
@@ -269,9 +288,27 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
                   <td style={{ padding: "10px 14px", fontWeight: 600, color: "#0a1628" }}>{reg.name}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.department ?? "—"}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.position ?? "—"}</td>
+                  {twoSess ? (["am", "pm"] as const).map(k => {
+                    const t = reg[`${k}_time`], late = reg[`${k}_late`], src = reg[`${k}_source`];
+                    return (
+                      <td key={k} style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
+                        <button disabled={!canEdit}
+                          onClick={() => toggleSession(reg.id, k, !t)}
+                          title={canEdit ? (t ? "คลิกเพื่อยกเลิกการเช็คชื่อรอบนี้" : "คลิกเพื่อบันทึกว่ามาแล้ว (HR บันทึกแทน)") : undefined}
+                          style={{ padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "inherit",
+                            cursor: canEdit ? "pointer" : "default",
+                            border: `1.5px solid ${t ? (late ? "#fcd34d" : "#86efac") : "#e2e8f0"}`,
+                            background: t ? (late ? "#fffbeb" : "#f0fdf4") : "#f8fafc",
+                            color: t ? (late ? "#d97706" : "#16a34a") : "#94a3b8" }}>
+                          {t ? `✓ ${toThaiTime(t).slice(11)}${late ? " สาย" : ""}${src === "manual" ? " (HR)" : ""}` : "—"}
+                        </button>
+                      </td>
+                    );
+                  }) : (
                   <td style={{ padding: "10px 14px", color: "#64748b", fontSize: 11, whiteSpace: "nowrap" }}>
                     {toThaiTime(reg.checkin_time)}
                   </td>
+                  )}
                   <td style={{ padding: "10px 14px" }}>
                     <span style={{ fontSize: 11, background: reg.reg_method === "qr" ? "#e8eeff" : "#f0f9ff",
                       color: reg.reg_method === "qr" ? "#0038C6" : "#0891b2",

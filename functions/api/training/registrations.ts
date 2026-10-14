@@ -61,7 +61,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
          -- 3rd: fall back to whatever was captured at registration (e.g. non-employee
          -- participant, or an employee no longer in Manpower)
          ta.department
-       ) AS department
+       ) AS department,
+       (SELECT c.checked_at FROM training_checkins c WHERE c.attendee_id = ta.id AND c.session = 'am') AS am_time,
+       (SELECT c.is_late    FROM training_checkins c WHERE c.attendee_id = ta.id AND c.session = 'am') AS am_late,
+       (SELECT c.source     FROM training_checkins c WHERE c.attendee_id = ta.id AND c.session = 'am') AS am_source,
+       (SELECT c.checked_at FROM training_checkins c WHERE c.attendee_id = ta.id AND c.session = 'pm') AS pm_time,
+       (SELECT c.is_late    FROM training_checkins c WHERE c.attendee_id = ta.id AND c.session = 'pm') AS pm_late,
+       (SELECT c.source     FROM training_checkins c WHERE c.attendee_id = ta.id AND c.session = 'pm') AS pm_source
      FROM training_attendees ta
      WHERE ta.course_id = ?
      ORDER BY

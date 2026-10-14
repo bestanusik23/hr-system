@@ -7,9 +7,12 @@ interface CourseInfo {
   course_date: string | null; start_time: string | null; end_time: string | null;
   location: string | null; trainer: string | null; reg_open: number;
   status: string; is_cancelled: number;
+  checkin_sessions?: number; pm_start_time?: string | null;
 }
 
-type Step = "form" | "success" | "prereg" | "updated" | "duplicate" | "closed";
+type Step = "form" | "success" | "prereg" | "updated" | "duplicate" | "closed" | "session";
+type Sess = "am" | "pm";
+const SESS_LABEL: Record<Sess, string> = { am: "รอบเช้า", pm: "รอบบ่าย" };
 
 function thDate(iso: string | null) {
   if (!iso) return "";
@@ -48,16 +51,21 @@ export default function CheckinPage() {
   const [registeredType, setRegisteredType] = useState<"attendee" | "trainer">("attendee");
   const [trainingDate,   setTrainingDate]   = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
+  const [serverToday, setServerToday] = useState<string | null>(null);
+  const [sessionNow,  setSessionNow]  = useState<Sess>("am");
+  const [sessResult,  setSessResult]  = useState<{ session: Sess; already: boolean; late: boolean; done: Sess[] } | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!token) { setError("ไม่พบ QR Token"); setLoading(false); return; }
     fetch(`/api/training/checkin?token=${encodeURIComponent(token)}`)
-      .then(r => r.json() as Promise<{ ok: boolean; course?: CourseInfo; error?: string }>)
+      .then(r => r.json() as Promise<{ ok: boolean; course?: CourseInfo; error?: string; today?: string; session_now?: Sess }>)
       .then(d => {
         if (!d.ok || !d.course) { setError(d.error ?? "QR Code ไม่ถูกต้อง"); }
         else {
           setCourse(d.course);
+          if (d.today) setServerToday(d.today);
+          if (d.session_now) setSessionNow(d.session_now);
           if (!d.course.reg_open) setStep("closed");
         }
         setLoading(false);
@@ -132,19 +140,28 @@ export default function CheckinPage() {
     const d = await r.json() as {
       ok: boolean; duplicate?: boolean; prereg?: boolean; updated?: boolean;
       attendee_id?: number; participant_type?: string; course_date?: string; error?: string;
+      two_sessions?: boolean; session?: Sess; already?: boolean; is_late?: boolean; sessions_done?: Sess[];
     };
     setSubmitting(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
     setRegisteredId(d.attendee_id ?? null);
     setRegisteredType((d.participant_type as "attendee" | "trainer") ?? partType);
     setTrainingDate(d.course_date ?? course?.course_date ?? null);
+    if (d.two_sessions && !d.session) { setStep("prereg"); return; }
+    if (d.two_sessions && d.session) {
+      setSessResult({ session: d.session, already: !!d.already, late: !!d.is_late, done: d.sessions_done ?? [d.session] });
+      setStep("session");
+      return;
+    }
     if      (d.duplicate) setStep("duplicate");
     else if (d.updated)   setStep("updated");
     else if (d.prereg)    setStep("prereg");
     else                  setStep("success");
   }
 
-  const today       = new Date().toISOString().slice(0, 10);
+  const today       = serverToday ?? new Date().toISOString().slice(0, 10);
+  const twoSessions = course?.checkin_sessions === 2;
+  const onTrainingDay = !!course?.course_date && course.course_date === today;
   const surveyUrl   = `/survey?token=${encodeURIComponent(token)}&aid=${registeredId ?? ""}`;
 
   // Auto-redirect to survey after check-in (attendee only, on training day)
@@ -259,6 +276,50 @@ export default function CheckinPage() {
           )}
         </div>
 
+      ) : step === "session" && sessResult ? (
+        /* ===== 2-SESSION CHECK-IN RESULT ===== */
+        <div style={cardStyle}>
+          <div style={{ textAlign: "center", fontSize: 56, marginBottom: 12 }}>{sessResult.already ? "ℹ️" : "✅"}</div>
+          <div style={{ textAlign: "center", fontSize: 20, fontWeight: 800, color: "#16a34a", marginBottom: 6 }}>
+            {sessResult.already ? `เช็คชื่อ${SESS_LABEL[sessResult.session]}ไว้แล้ว` : `เช็คชื่อ${SESS_LABEL[sessResult.session]}สำเร็จ!`}
+          </div>
+          {sessResult.late && !sessResult.already && (
+            <div style={{ textAlign: "center", fontSize: 13, color: "#d97706", fontWeight: 700, marginBottom: 4 }}>⏰ บันทึกเป็น "สาย"</div>
+          )}
+          <div style={{ textAlign: "center", fontSize: 14, color: "#475569", marginBottom: 4 }}>{course?.course}</div>
+          <div style={{ textAlign: "center", fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>
+            {new Date().toLocaleString("th-TH")}
+          </div>
+          <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+            {(["am", "pm"] as Sess[]).map(k => {
+              const ok = sessResult.done.includes(k);
+              return (
+                <div key={k} style={{ flex: 1, textAlign: "center", padding: "12px 0", borderRadius: 10,
+                  border: `1.5px solid ${ok ? "#86efac" : "#e2e8f0"}`, background: ok ? "#f0fdf4" : "#f8fafc" }}>
+                  <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>{SESS_LABEL[k]}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: ok ? "#16a34a" : "#94a3b8", marginTop: 2 }}>{ok ? "✓ เช็คแล้ว" : "ยังไม่ได้เช็ค"}</div>
+                </div>
+              );
+            })}
+          </div>
+          {registeredType === "trainer" ? (
+            <div style={{ background: "#eff4ff", borderRadius: 10, border: "1px solid #c4cfee", padding: "14px 20px", textAlign: "center" }}>
+              <div style={{ fontWeight: 700, color: "#0038C6" }}>🎤 บันทึกการเข้าร่วมของวิทยากรแล้ว</div>
+            </div>
+          ) : sessResult.done.length < 2 ? (
+            <div style={{ background: "#fffbeb", borderRadius: 10, border: "1px solid #fde68a", padding: "14px 18px", textAlign: "center", fontSize: 13, color: "#92400e" }}>
+              📌 กรุณาสแกน QR นี้อีกครั้งในรอบ{sessResult.done.includes("am") ? "บ่าย" : "เช้า"} — ต้องเช็คชื่อครบทั้ง 2 รอบจึงจะได้รับใบประกาศนียบัตร
+            </div>
+          ) : (
+            <div style={{ background: "#f0fdf4", borderRadius: 10, border: "1px solid #bbf7d0", padding: "16px 18px", textAlign: "center" }}>
+              <div style={{ fontWeight: 800, color: "#0a1628", fontSize: 14, marginBottom: 6 }}>เช็คชื่อครบทั้ง 2 รอบแล้ว 🎉</div>
+              <div style={{ fontSize: 12, color: "#475569", marginBottom: 12 }}>ตอบแบบประเมินเมื่ออบรมเสร็จ เพื่อให้การเข้าร่วมสมบูรณ์</div>
+              <a href={surveyUrl} style={{ display: "inline-block", padding: "10px 28px", borderRadius: 9,
+                background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: 14, textDecoration: "none" }}>ไปตอบแบบประเมิน →</a>
+            </div>
+          )}
+        </div>
+
       ) : step === "updated" ? (
         /* ===== UPGRADED FROM PRE-REG → CHECK-IN ===== */
         <div style={cardStyle}>
@@ -304,6 +365,13 @@ export default function CheckinPage() {
         /* ===== REGISTRATION FORM ===== */
         <div style={cardStyle}>
           <CourseCard course={course} />
+
+          {twoSessions && onTrainingDay && (
+            <div style={{ background: "#eff4ff", borderRadius: 8, border: "1px solid #c4cfee",
+              padding: "10px 14px", fontSize: 13, color: "#0038C6", fontWeight: 700, marginBottom: 18 }}>
+              🕘 กำลังเช็คชื่อ{SESS_LABEL[sessionNow]} — ต้องเช็คทั้งรอบเช้าและรอบบ่ายจึงจะได้รับใบประกาศนียบัตร
+            </div>
+          )}
 
           {/* Pre-reg notice if before training date */}
           {course.course_date && course.course_date > today && (
@@ -439,7 +507,7 @@ export default function CheckinPage() {
               color: "#fff", fontWeight: 800, fontSize: 16,
               cursor: submitting ? "not-allowed" : "pointer", fontFamily: "inherit",
               boxShadow: "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "กำลังลงทะเบียน…" : "✅ ยืนยันลงทะเบียน"}
+            {submitting ? "กำลังบันทึก…" : (twoSessions && onTrainingDay ? `✅ เช็คชื่อ${SESS_LABEL[sessionNow]}` : "✅ ยืนยันลงทะเบียน")}
           </button>
 
           <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", marginTop: 12 }}>
