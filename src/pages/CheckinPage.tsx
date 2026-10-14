@@ -7,11 +7,12 @@ interface CourseInfo {
   course_date: string | null; start_time: string | null; end_time: string | null;
   location: string | null; trainer: string | null; reg_open: number;
   status: string; is_cancelled: number;
-  checkin_sessions?: number; pm_start_time?: string | null;
+  checkin_sessions?: number;
 }
 
 type Step = "form" | "success" | "prereg" | "updated" | "duplicate" | "closed" | "session";
 type Sess = "am" | "pm";
+interface Windows { am_from: string; am_to: string; pm_from: string; pm_to: string }
 interface Saved { prefix: string; firstName: string; lastName: string; position: string; department: string; empCode: string | null; partType: "attendee" | "trainer"; }
 const savedKey = (token: string) => `ramTrainingId:${token}`;
 function loadSaved(token: string): Saved | null {
@@ -57,7 +58,8 @@ export default function CheckinPage() {
   const [trainingDate,   setTrainingDate]   = useState<string | null>(null);
   const [countdown, setCountdown] = useState(3);
   const [serverToday, setServerToday] = useState<string | null>(null);
-  const [sessionNow,  setSessionNow]  = useState<Sess>("am");
+  const [sessionNow,  setSessionNow]  = useState<Sess | null>(null);
+  const [windows,     setWindows]     = useState<Windows | null>(null);
   const [sessResult,  setSessResult]  = useState<{ session: Sess; already: boolean; done: Sess[]; walkin: boolean } | null>(null);
   const [quick,       setQuick]       = useState<Saved | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -65,13 +67,14 @@ export default function CheckinPage() {
   useEffect(() => {
     if (!token) { setError("ไม่พบ QR Token"); setLoading(false); return; }
     fetch(`/api/training/checkin?token=${encodeURIComponent(token)}`)
-      .then(r => r.json() as Promise<{ ok: boolean; course?: CourseInfo; error?: string; today?: string; session_now?: Sess }>)
+      .then(r => r.json() as Promise<{ ok: boolean; course?: CourseInfo; error?: string; today?: string; session_now?: Sess | null; windows?: Windows }>)
       .then(d => {
         if (!d.ok || !d.course) { setError(d.error ?? "QR Code ไม่ถูกต้อง"); }
         else {
           setCourse(d.course);
           if (d.today) setServerToday(d.today);
-          if (d.session_now) setSessionNow(d.session_now);
+          setSessionNow(d.session_now ?? null);
+          if (d.windows) setWindows(d.windows);
           // หลักสูตรเช็คชื่อ 2 รอบ: ปิดรับลงทะเบียนแล้วผู้ที่ลงทะเบียนไว้ยังเช็คชื่อได้ (server ตัดสิน)
           if (!d.course.reg_open && d.course.checkin_sessions !== 2) setStep("closed");
           // สแกนซ้ำในวันอบรมจากเครื่องเดิม → เช็คชื่อรอบถัดไปได้ในคลิกเดียว
@@ -178,6 +181,9 @@ export default function CheckinPage() {
   const today       = serverToday ?? new Date().toISOString().slice(0, 10);
   const twoSessions = course?.checkin_sessions === 2;
   const onTrainingDay = !!course?.course_date && course.course_date === today;
+  const winText = windows ? `รอบเช้า ${windows.am_from}–${windows.am_to} น. · รอบบ่าย ${windows.pm_from}–${windows.pm_to} น.` : "";
+  // เช็คชื่อ 2 รอบในวันอบรม แต่ยังไม่อยู่ในช่วงเวลาของรอบใดเลย → ล็อก
+  const locked = twoSessions && onTrainingDay && !sessionNow;
   const surveyUrl   = `/survey?token=${encodeURIComponent(token)}&aid=${registeredId ?? ""}`;
 
   // Auto-redirect to survey after check-in (attendee only, on training day)
@@ -268,8 +274,13 @@ export default function CheckinPage() {
           <div style={{ background: "#f5f3ff", borderRadius: 10, border: "1px solid #ddd6fe",
             padding: "16px 20px", marginBottom: registeredType === "attendee" ? 16 : 0 }}>
             <div style={{ fontSize: 13, color: "#6d28d9", fontWeight: 700, marginBottom: 8 }}>
-              📌 กรุณาสแกน QR อีกครั้งในวันอบรม
+              {twoSessions ? "📌 วันอบรมกรุณาสแกน QR นี้ 2 รอบ (เช้า และ บ่าย)" : "📌 กรุณาสแกน QR อีกครั้งในวันอบรม"}
             </div>
+            {twoSessions && (
+              <div style={{ fontSize: 12, color: "#6d28d9", marginBottom: 8 }}>
+                {winText} — สแกนได้เฉพาะในช่วงเวลานี้ และต้องครบทั้ง 2 รอบจึงจะได้รับใบประกาศนียบัตร
+              </div>
+            )}
             <div style={{ fontSize: 13, color: "#475569" }}>
               วันอบรม: <strong>{thDate(trainingDate ?? course?.course_date ?? null)}</strong>
             </div>
@@ -386,7 +397,7 @@ export default function CheckinPage() {
           <CourseCard course={course} />
           <div style={{ background: "#eff4ff", borderRadius: 8, border: "1px solid #c4cfee", padding: "10px 14px",
             fontSize: 13, color: "#0038C6", fontWeight: 700, marginBottom: 18 }}>
-            🕘 กำลังเช็คชื่อ{SESS_LABEL[sessionNow]}
+            {sessionNow ? `🕘 กำลังเช็คชื่อ${SESS_LABEL[sessionNow]}` : `🔒 ขณะนี้ยังไม่เปิดเช็คชื่อ (${winText})`}
           </div>
           <div style={{ textAlign: "center", marginBottom: 20 }}>
             <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>เช็คชื่อในนาม</div>
@@ -397,11 +408,11 @@ export default function CheckinPage() {
             <div style={{ background: "#fee2e2", borderRadius: 7, padding: "10px 14px", fontSize: 13, color: "#dc2626",
               marginBottom: 14, border: "1px solid #fecaca" }}>{error}</div>
           )}
-          <button onClick={() => submit(quick)} disabled={submitting}
-            style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none", background: "#0038C6", color: "#fff",
-              fontWeight: 800, fontSize: 16, cursor: submitting ? "not-allowed" : "pointer", fontFamily: "inherit",
-              boxShadow: "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "กำลังบันทึก…" : `✅ ยืนยัน เช็คชื่อ${SESS_LABEL[sessionNow]}`}
+          <button onClick={() => submit(quick)} disabled={submitting || locked}
+            style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none", background: locked ? "#94a3b8" : "#0038C6", color: "#fff",
+              fontWeight: 800, fontSize: 16, cursor: submitting || locked ? "not-allowed" : "pointer", fontFamily: "inherit",
+              boxShadow: locked ? "none" : "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
+            {submitting ? "กำลังบันทึก…" : locked ? "🔒 ยังไม่เปิดเช็คชื่อ" : `✅ ยืนยัน เช็คชื่อ${SESS_LABEL[sessionNow as Sess]}`}
           </button>
           <button onClick={() => { setQuick(null); setError(""); }}
             style={{ width: "100%", marginTop: 10, padding: "10px 0", borderRadius: 9, border: "1.5px solid #c4cfee",
@@ -416,9 +427,11 @@ export default function CheckinPage() {
           <CourseCard course={course} />
 
           {twoSessions && onTrainingDay && (
-            <div style={{ background: "#eff4ff", borderRadius: 8, border: "1px solid #c4cfee",
-              padding: "10px 14px", fontSize: 13, color: "#0038C6", fontWeight: 700, marginBottom: 18 }}>
-              🕘 กำลังเช็คชื่อ{SESS_LABEL[sessionNow]} — ต้องเช็คทั้งรอบเช้าและรอบบ่ายจึงจะได้รับใบประกาศนียบัตร
+            <div style={{ background: locked ? "#fff7ed" : "#eff4ff", borderRadius: 8, border: `1px solid ${locked ? "#fed7aa" : "#c4cfee"}`,
+              padding: "10px 14px", fontSize: 13, color: locked ? "#9a3412" : "#0038C6", fontWeight: 700, marginBottom: 18 }}>
+              {locked
+                ? <>🔒 ขณะนี้ยังไม่เปิดเช็คชื่อ — เช็คได้เฉพาะ {winText}</>
+                : <>🕘 กำลังเช็คชื่อ{SESS_LABEL[sessionNow as Sess]} — ต้องเช็คทั้งรอบเช้าและรอบบ่ายจึงจะได้รับใบประกาศนียบัตร</>}
             </div>
           )}
 
@@ -426,7 +439,16 @@ export default function CheckinPage() {
           {course.course_date && course.course_date > today && (
             <div style={{ background: "#f5f3ff", borderRadius: 8, border: "1px solid #ddd6fe",
               padding: "10px 14px", fontSize: 12, color: "#6d28d9", marginBottom: 18 }}>
-              📅 ลงทะเบียนล่วงหน้าได้เลย — สแกน QR อีกครั้งในวันอบรมเพื่อเช็คชื่อ
+              {twoSessions ? (
+                <>
+                  📅 ลงทะเบียนล่วงหน้าได้เลย — <strong>ในวันอบรมต้องสแกน QR นี้ 2 รอบ</strong>
+                  <div style={{ marginTop: 6, color: "#5b21b6" }}>
+                    ☀️ รอบเช้า: สแกนหลังอบรมช่วงเช้าเสร็จ{windows ? ` (${windows.am_from}–${windows.am_to} น.)` : ""}<br />
+                    🌙 รอบบ่าย: สแกนหลังอบรมช่วงบ่ายเสร็จ{windows ? ` (${windows.pm_from}–${windows.pm_to} น.)` : ""}<br />
+                    สแกนนอกช่วงเวลาไม่ได้ · ต้องเช็คครบทั้งเช้าและบ่ายจึงจะได้รับใบประกาศนียบัตร
+                  </div>
+                </>
+              ) : "📅 ลงทะเบียนล่วงหน้าได้เลย — สแกน QR อีกครั้งในวันอบรมเพื่อเช็คชื่อ"}
             </div>
           )}
 
@@ -550,13 +572,13 @@ export default function CheckinPage() {
               fontSize: 13, color: "#dc2626", marginBottom: 14, border: "1px solid #fecaca" }}>{error}</div>
           )}
 
-          <button onClick={register} disabled={submitting}
+          <button onClick={register} disabled={submitting || locked}
             style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none",
-              background: partType === "attendee" ? "#0038C6" : "#16a34a",
+              background: locked ? "#94a3b8" : partType === "attendee" ? "#0038C6" : "#16a34a",
               color: "#fff", fontWeight: 800, fontSize: 16,
-              cursor: submitting ? "not-allowed" : "pointer", fontFamily: "inherit",
-              boxShadow: "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
-            {submitting ? "กำลังบันทึก…" : (twoSessions && onTrainingDay ? `✅ เช็คชื่อ${SESS_LABEL[sessionNow]}` : "✅ ยืนยันลงทะเบียน")}
+              cursor: submitting || locked ? "not-allowed" : "pointer", fontFamily: "inherit",
+              boxShadow: locked ? "none" : "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
+            {submitting ? "กำลังบันทึก…" : locked ? "🔒 ยังไม่เปิดเช็คชื่อ" : (twoSessions && onTrainingDay ? `✅ เช็คชื่อ${SESS_LABEL[sessionNow as Sess]}` : "✅ ยืนยันลงทะเบียน")}
           </button>
 
           <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", marginTop: 12 }}>

@@ -13,7 +13,7 @@ interface Course {
   location: string | null; month_label: string | null; target: number;
   budget: number; objectives: string | null; status: string; reg_open: number;
   qr_token: string | null; actual: number;
-  checkin_sessions?: number; pm_start_time?: string | null;
+  checkin_sessions?: number; am_from?: string | null; am_to?: string | null; pm_from?: string | null; pm_to?: string | null;
 }
 interface Props { course: Course | null; onClose: () => void; onSaved: () => void; canEdit: boolean; }
 
@@ -38,7 +38,10 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
   const [status,          setStatus]          = useState(course?.status ?? "planned");
   const [regOpen,         setRegOpen]         = useState(course?.reg_open !== 0);
   const [twoSessions,     setTwoSessions]     = useState(course?.checkin_sessions === 2);
-  const [pmStart,         setPmStart]         = useState(course?.pm_start_time ?? "13:00");
+  const [amFrom,          setAmFrom]          = useState(course?.am_from ?? "12:00");
+  const [amTo,            setAmTo]            = useState(course?.am_to ?? "13:00");
+  const [pmFrom,          setPmFrom]          = useState(course?.pm_from ?? "16:00");
+  const [pmTo,            setPmTo]            = useState(course?.pm_to ?? "17:00");
   const [saving,          setSaving]          = useState(false);
   const [error,           setError]           = useState("");
 
@@ -68,7 +71,8 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
       objectives: objectives || null, attachment_url: attachmentUrl || null,
       status, reg_open: regOpen ? 1 : 0,
       checkin_sessions: twoSessions ? 2 : 1,
-      pm_start_time: twoSessions ? (pmStart || "13:00") : null,
+      am_from: twoSessions ? (amFrom || "12:00") : null, am_to: twoSessions ? (amTo || "13:00") : null,
+      pm_from: twoSessions ? (pmFrom || "16:00") : null, pm_to: twoSessions ? (pmTo || "17:00") : null,
     };
     const url    = isNew ? "/api/training/courses" : `/api/training/courses/${course!.id}`;
     const method = isNew ? "POST" : "PUT";
@@ -286,11 +290,21 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
               </label>
             </div>
             {twoSessions && (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontSize: 12, color: "#475569" }}>
-                เวลาเริ่มรอบบ่าย
-                <input value={pmStart} onChange={e => setPmStart(e.target.value)} disabled={!canEdit} placeholder="13:00"
-                  style={{ ...inp, width: 90, padding: "5px 8px" }} />
-                น. (เช็คชื่อหลังอบรมแต่ละรอบเสร็จ ไม่มีสถานะสาย · สแกนก่อนเวลานี้ = รอบเช้า, ตั้งแต่เวลานี้เป็นต้นไป = รอบบ่าย)
+              <div style={{ marginTop: 10, fontSize: 12, color: "#475569" }}>
+                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+                  <span>🔒 ล็อกเวลาเช็คชื่อ — รอบเช้าเปิด</span>
+                  <input value={amFrom} onChange={e => setAmFrom(e.target.value)} disabled={!canEdit} placeholder="12:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
+                  <span>ถึง</span>
+                  <input value={amTo} onChange={e => setAmTo(e.target.value)} disabled={!canEdit} placeholder="13:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
+                  <span>น. · รอบบ่ายเปิด</span>
+                  <input value={pmFrom} onChange={e => setPmFrom(e.target.value)} disabled={!canEdit} placeholder="16:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
+                  <span>ถึง</span>
+                  <input value={pmTo} onChange={e => setPmTo(e.target.value)} disabled={!canEdit} placeholder="17:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
+                  <span>น.</span>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>
+                  สแกนได้เฉพาะในช่วงเวลานี้ นอกช่วงระบบปฏิเสธ (ตั้งให้เปิดหลังอบรมแต่ละรอบเสร็จ) · HR บันทึกแทนด้วยมือได้ทุกเวลา · ไม่มีสถานะสาย
+                </div>
               </div>
             )}
           </div>

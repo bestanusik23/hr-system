@@ -1,11 +1,12 @@
 import type { Env } from "../../lib/types";
-import { bangkokNow, findRegistered, parseHm, sessionAt, syncAttendeeStatus, type Session } from "../../lib/trainingSessions";
+import { bangkokNow, checkinWindows, findRegistered, openSession, parseHm, syncAttendeeStatus, windowStrings, windowsText, type Session } from "../../lib/trainingSessions";
 
 interface CourseRow {
   id: number; course_code: string; course: string; course_type: string;
   trainer: string | null; course_date: string | null; start_time: string | null;
   end_time: string | null; location: string | null; reg_open: number;
-  status: string; is_cancelled: number; checkin_sessions: number; pm_start_time: string | null;
+  status: string; is_cancelled: number; checkin_sessions: number;
+  am_from: string | null; am_to: string | null; pm_from: string | null; pm_to: string | null;
 }
 
 // GET /api/training/checkin?token=xxx  — public, get course info
@@ -18,7 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     SELECT id, course_code, course, course_type, trainer, course_date,
            start_time, end_time, location, reg_open, status,
            COALESCE(is_cancelled, 0) AS is_cancelled,
-           COALESCE(checkin_sessions, 1) AS checkin_sessions, pm_start_time
+           COALESCE(checkin_sessions, 1) AS checkin_sessions, am_from, am_to, pm_from, pm_to
     FROM training_courses WHERE qr_token = ?
   `).bind(token).first<CourseRow>();
 
@@ -30,9 +31,10 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   ).bind(course.id).first<{ n: number }>();
 
   const now = bangkokNow();
+  const win = checkinWindows(course);
   return Response.json({
     ok: true, course, registered: count?.n ?? 0,
-    today: now.date, session_now: sessionAt(now.minutes, course.pm_start_time),
+    today: now.date, session_now: openSession(now.minutes, win), windows: windowStrings(win),
   });
 };
 
@@ -53,10 +55,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   }
 
   const course = await ctx.env.HR_DB.prepare(
-    `SELECT id, reg_open, status, course_date, start_time, pm_start_time,
+    `SELECT id, reg_open, status, course_date, start_time, end_time, am_from, am_to, pm_from, pm_to,
             COALESCE(checkin_sessions, 1) AS checkin_sessions, COALESCE(is_cancelled, 0) AS is_cancelled
        FROM training_courses WHERE qr_token = ?`
-  ).bind(token).first<{ id: number; reg_open: number; status: string; course_date: string | null; start_time: string | null; pm_start_time: string | null; checkin_sessions: number; is_cancelled: number }>();
+  ).bind(token).first<{ id: number; reg_open: number; status: string; course_date: string | null; start_time: string | null; end_time: string | null; am_from: string | null; am_to: string | null; pm_from: string | null; pm_to: string | null; checkin_sessions: number; is_cancelled: number }>();
 
   if (!course) return Response.json({ ok: false, error: "QR Code ไม่ถูกต้อง" }, { status: 404 });
   if (course.is_cancelled) return Response.json({ ok: false, error: "หลักสูตรนี้ถูกยกเลิกแล้ว" }, { status: 410 });
@@ -70,6 +72,16 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   // หลักสูตรเช็คชื่อ 2 รอบ: เช็คได้เฉพาะวันอบรม (หลังวันอบรมไม่รับเช็คชื่อ — ให้ HR บันทึกให้แทน)
   if (twoSessions && course.course_date && course.course_date < now.date) {
     return Response.json({ ok: false, error: "หมดเวลาเช็คชื่อแล้ว (เลยวันอบรม) กรุณาติดต่อเจ้าหน้าที่ HR" }, { status: 410 });
+  }
+
+  // ล็อกเวลา: ในวันอบรมสแกนได้เฉพาะช่วงเวลาของรอบเช้า/บ่ายเท่านั้น (กันเช็คทั้ง 2 รอบรวดเดียว)
+  let openNow: Session | null = null;
+  if (twoSessions && !isPreReg) {
+    const win = checkinWindows(course);
+    openNow = openSession(now.minutes, win);
+    if (!openNow) {
+      return Response.json({ ok: false, error: `ขณะนี้ไม่อยู่ในช่วงเวลาเช็คชื่อ (${windowsText(win)})` }, { status: 403 });
+    }
   }
 
   const fullName = `${first_name.trim()} ${last_name.trim()}`;
@@ -113,7 +125,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       }, { status: existing ? 200 : 201 });
     }
 
-    const session: Session = sessionAt(now.minutes, course.pm_start_time);
+    const session: Session = openNow as Session;
     const ins = await ctx.env.HR_DB.prepare(
       "INSERT OR IGNORE INTO training_checkins (course_id, attendee_id, session, source) VALUES (?,?,?, 'qr')"
     ).bind(course.id, attendeeId, session).run();

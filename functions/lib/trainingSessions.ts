@@ -3,9 +3,10 @@ import type { Env } from "./types";
 export type Session = "am" | "pm";
 
 const BANGKOK_OFFSET_MS = 7 * 3600_000;
-// เส้นแบ่งรอบ: สแกนก่อนเวลาเริ่มรอบบ่าย (pm_start_time, ค่าเริ่มต้น 13:00) = รอบเช้า, ตั้งแต่เวลานั้นเป็นต้นไป = รอบบ่าย
-// (เช็คชื่อหลังอบรมแต่ละรอบเสร็จ จึงไม่มีสถานะ "สาย")
-const DEFAULT_PM_START_MIN = 13 * 60;
+// ช่วงเวลาที่สแกนเช็คชื่อได้ของแต่ละรอบ (ล็อกเวลา) — เช็คหลังอบรมแต่ละรอบเสร็จ จึงไม่มีสถานะ "สาย"
+// ค่าเริ่มต้นเมื่อหลักสูตรไม่ได้ตั้ง: เช้า 12:00–13:00, บ่าย = เวลาเลิกอบรม ถึง +1 ชม. (ไม่มีเวลาเลิก ใช้ 16:00)
+const DEFAULT_AM: [number, number] = [12 * 60, 13 * 60];
+const DEFAULT_PM_FROM = 16 * 60;
 
 /** วันที่ (YYYY-MM-DD) และนาทีนับจากเที่ยงคืน ตามเวลาประเทศไทย — Workers รันเป็น UTC จึงต้องบวก 7 ชม. เอง */
 export function bangkokNow(): { date: string; minutes: number } {
@@ -21,8 +22,31 @@ export function parseHm(s: string | null | undefined): number | null {
   return h > 23 || min > 59 ? null : h * 60 + min;
 }
 
-export function sessionAt(minutes: number, pmStartTime?: string | null): Session {
-  return minutes < (parseHm(pmStartTime) ?? DEFAULT_PM_START_MIN) ? "am" : "pm";
+export interface CheckinWindows { am: [number, number]; pm: [number, number] }
+export interface WindowCols { end_time: string | null; am_from: string | null; am_to: string | null; pm_from: string | null; pm_to: string | null }
+
+export function checkinWindows(c: WindowCols): CheckinWindows {
+  const amFrom = parseHm(c.am_from) ?? DEFAULT_AM[0];
+  const amTo   = parseHm(c.am_to)   ?? DEFAULT_AM[1];
+  const pmFrom = parseHm(c.pm_from) ?? parseHm(c.end_time) ?? DEFAULT_PM_FROM;
+  const pmTo   = parseHm(c.pm_to)   ?? pmFrom + 60;
+  return { am: [amFrom, amTo], pm: [pmFrom, pmTo] };
+}
+
+/** รอบที่เปิดให้สแกนอยู่ ณ นาทีนี้ (เริ่มต้นนับ ปลายไม่นับ) — ไม่อยู่ในช่วงไหนเลยคืน null */
+export function openSession(minutes: number, w: CheckinWindows): Session | null {
+  if (minutes >= w.am[0] && minutes < w.am[1]) return "am";
+  if (minutes >= w.pm[0] && minutes < w.pm[1]) return "pm";
+  return null;
+}
+
+const fmtHm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+export function windowStrings(w: CheckinWindows) {
+  return { am_from: fmtHm(w.am[0]), am_to: fmtHm(w.am[1]), pm_from: fmtHm(w.pm[0]), pm_to: fmtHm(w.pm[1]) };
+}
+export function windowsText(w: CheckinWindows): string {
+  const s = windowStrings(w);
+  return `รอบเช้า ${s.am_from}–${s.am_to} น. · รอบบ่าย ${s.pm_from}–${s.pm_to} น.`;
 }
 
 /**

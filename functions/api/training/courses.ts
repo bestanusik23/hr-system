@@ -19,7 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
            tc.project_owner, tc.trainer, tc.course_date, tc.start_time, tc.end_time,
            tc.location, tc.month_label, tc.target, tc.budget, tc.objectives,
            tc.attachment_url, tc.status, tc.reg_open, tc.qr_token,
-           COALESCE(tc.checkin_sessions, 1) AS checkin_sessions, tc.pm_start_time,
+           COALESCE(tc.checkin_sessions, 1) AS checkin_sessions, tc.am_from, tc.am_to, tc.pm_from, tc.pm_to,
            COALESCE(tc.is_cancelled, 0) AS is_cancelled, tc.cancel_reason,
            COUNT(ta.id) AS actual
     FROM training_courses tc
@@ -49,7 +49,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   const body = await ctx.request.json() as Record<string, unknown>;
   const { course, course_type, organizing_dept, project_owner, trainer,
           course_date, start_time, end_time, location, month_label,
-          target, budget, objectives, attachment_url, status, checkin_sessions, pm_start_time } = body;
+          target, budget, objectives, attachment_url, status, checkin_sessions, am_from, am_to, pm_from, pm_to } = body;
 
   if (!course) return Response.json({ ok: false, error: "กรุณากรอกชื่อหลักสูตร" }, { status: 400 });
 
@@ -69,8 +69,8 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       (course_code, course, course_type, organizing_dept, project_owner, trainer,
        course_date, start_time, end_time, location, month_label,
        target, budget, objectives, attachment_url, status, qr_token,
-       checkin_sessions, pm_start_time)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+       checkin_sessions, am_from, am_to, pm_from, pm_to)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `).bind(
     course_code,
     course,
@@ -90,7 +90,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     status           ?? "planned",
     qr_token,
     Number(checkin_sessions) === 2 ? 2 : 1,
-    Number(checkin_sessions) === 2 ? (pm_start_time ?? null) : null,
+    Number(checkin_sessions) === 2 ? (am_from ?? null) : null,
+    Number(checkin_sessions) === 2 ? (am_to ?? null) : null,
+    Number(checkin_sessions) === 2 ? (pm_from ?? null) : null,
+    Number(checkin_sessions) === 2 ? (pm_to ?? null) : null,
   ).run();
 
   return Response.json({ ok: true, id: result.meta.last_row_id, course_code, qr_token }, { status: 201 });
