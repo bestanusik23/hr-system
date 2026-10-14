@@ -58,7 +58,7 @@ export default function CheckinPage() {
   const [countdown, setCountdown] = useState(3);
   const [serverToday, setServerToday] = useState<string | null>(null);
   const [sessionNow,  setSessionNow]  = useState<Sess>("am");
-  const [sessResult,  setSessResult]  = useState<{ session: Sess; already: boolean; late: boolean; done: Sess[]; walkin: boolean } | null>(null);
+  const [sessResult,  setSessResult]  = useState<{ session: Sess; already: boolean; done: Sess[]; walkin: boolean } | null>(null);
   const [quick,       setQuick]       = useState<Saved | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -153,7 +153,7 @@ export default function CheckinPage() {
     const d = await r.json() as {
       ok: boolean; duplicate?: boolean; prereg?: boolean; updated?: boolean;
       attendee_id?: number; participant_type?: string; course_date?: string; error?: string;
-      two_sessions?: boolean; session?: Sess; already?: boolean; is_late?: boolean; sessions_done?: Sess[]; walkin?: boolean;
+      two_sessions?: boolean; session?: Sess; already?: boolean; sessions_done?: Sess[]; walkin?: boolean;
     };
     setSubmitting(false);
     if (!d.ok) { setError(d.error ?? "เกิดข้อผิดพลาด"); return; }
@@ -165,7 +165,7 @@ export default function CheckinPage() {
       try { localStorage.setItem(savedKey(token), JSON.stringify(v)); } catch { /* private mode */ }
     }
     if (d.two_sessions && d.session) {
-      setSessResult({ session: d.session, already: !!d.already, late: !!d.is_late, done: d.sessions_done ?? [d.session], walkin: !!d.walkin });
+      setSessResult({ session: d.session, already: !!d.already, done: d.sessions_done ?? [d.session], walkin: !!d.walkin });
       setStep("session");
       return;
     }
@@ -299,9 +299,6 @@ export default function CheckinPage() {
           <div style={{ textAlign: "center", fontSize: 20, fontWeight: 800, color: "#16a34a", marginBottom: 6 }}>
             {sessResult.already ? `เช็คชื่อ${SESS_LABEL[sessResult.session]}ไว้แล้ว` : `เช็คชื่อ${SESS_LABEL[sessResult.session]}สำเร็จ!`}
           </div>
-          {sessResult.late && !sessResult.already && (
-            <div style={{ textAlign: "center", fontSize: 13, color: "#d97706", fontWeight: 700, marginBottom: 4 }}>⏰ บันทึกเป็น "สาย"</div>
-          )}
           <div style={{ textAlign: "center", fontSize: 14, color: "#475569", marginBottom: 4 }}>{course?.course}</div>
           <div style={{ textAlign: "center", fontSize: 12, color: "#94a3b8", marginBottom: 20 }}>
             {new Date().toLocaleString("th-TH")}

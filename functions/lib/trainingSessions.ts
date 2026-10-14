@@ -3,8 +3,8 @@ import type { Env } from "./types";
 export type Session = "am" | "pm";
 
 const BANGKOK_OFFSET_MS = 7 * 3600_000;
-// ก่อน 12:30 น. นับเป็นรอบเช้า หลังจากนั้นเป็นรอบบ่าย
-const PM_CUTOFF_MIN = 12 * 60 + 30;
+// เส้นแบ่งรอบ: สแกนก่อนเวลาเริ่มรอบบ่าย (pm_start_time, ค่าเริ่มต้น 13:00) = รอบเช้า, ตั้งแต่เวลานั้นเป็นต้นไป = รอบบ่าย
+// (เช็คชื่อหลังอบรมแต่ละรอบเสร็จ จึงไม่มีสถานะ "สาย")
 const DEFAULT_PM_START_MIN = 13 * 60;
 
 /** วันที่ (YYYY-MM-DD) และนาทีนับจากเที่ยงคืน ตามเวลาประเทศไทย — Workers รันเป็น UTC จึงต้องบวก 7 ชม. เอง */
@@ -21,18 +21,13 @@ export function parseHm(s: string | null | undefined): number | null {
   return h > 23 || min > 59 ? null : h * 60 + min;
 }
 
-export function sessionAt(minutes: number): Session {
-  return minutes < PM_CUTOFF_MIN ? "am" : "pm";
-}
-
-export function isLateFor(session: Session, minutes: number, startTime: string | null, pmStartTime: string | null): boolean {
-  const start = session === "am" ? parseHm(startTime) : (parseHm(pmStartTime) ?? DEFAULT_PM_START_MIN);
-  return start !== null && minutes > start;
+export function sessionAt(minutes: number, pmStartTime?: string | null): Session {
+  return minutes < (parseHm(pmStartTime) ?? DEFAULT_PM_START_MIN) ? "am" : "pm";
 }
 
 /**
  * หลักสูตรเช็คชื่อ 2 รอบ: ปรับ attendance_status ของผู้เข้าอบรมให้ตรงกับรอบที่เช็คจริง
- *  - เช็คอย่างน้อย 1 รอบ  → checked_in / late (ตามรอบแรกที่เช็ค)
+ *  - เช็คอย่างน้อย 1 รอบ  → checked_in
  *  - ครบทั้ง 2 รอบ + ทำแบบประเมินแล้ว → completed (เงื่อนไขออกใบประกาศ)
  *  - ลดรอบจนไม่ครบ → completed กลับเป็น checked_in ; ไม่เหลือรอบเลย → registered
  * หลักสูตรเช็คครั้งเดียวไม่ถูกแตะ
@@ -46,8 +41,8 @@ export async function syncAttendeeStatus(db: Env["HR_DB"], attendeeId: number): 
   if (!att || att.ns !== 2) return;
 
   const rows = (await db.prepare(
-    "SELECT session, checked_at, is_late FROM training_checkins WHERE attendee_id = ? ORDER BY checked_at"
-  ).bind(attendeeId).all<{ session: Session; checked_at: string; is_late: number }>()).results ?? [];
+    "SELECT session, checked_at FROM training_checkins WHERE attendee_id = ? ORDER BY checked_at"
+  ).bind(attendeeId).all<{ session: Session; checked_at: string }>()).results ?? [];
 
   if (rows.length === 0) {
     if (["checked_in", "late", "completed"].includes(att.st)) {
@@ -59,7 +54,7 @@ export async function syncAttendeeStatus(db: Env["HR_DB"], attendeeId: number): 
   const bothDone = rows.length >= 2;
   const surveyed = !!(await db.prepare("SELECT 1 AS x FROM training_surveys WHERE attendee_id = ? LIMIT 1").bind(attendeeId).first());
   const first = rows[0];
-  const base = first.is_late ? "late" : "checked_in";
+  const base = "checked_in";
 
   let next = att.st;
   if (att.st === "registered" || att.st === "absent") next = base;

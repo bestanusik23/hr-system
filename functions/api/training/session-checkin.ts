@@ -24,7 +24,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
 
   if (body.present) {
     await ctx.env.HR_DB.prepare(
-      "INSERT OR IGNORE INTO training_checkins (course_id, attendee_id, session, is_late, source) VALUES (?,?,?,0,'manual')"
+      "INSERT OR IGNORE INTO training_checkins (course_id, attendee_id, session, source) VALUES (?,?,?,'manual')"
     ).bind(att.course_id, attendeeId, body.session).run();
   } else {
     await ctx.env.HR_DB.prepare("DELETE FROM training_checkins WHERE attendee_id = ? AND session = ?")

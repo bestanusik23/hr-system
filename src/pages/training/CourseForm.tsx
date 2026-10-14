@@ -287,10 +287,10 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
             </div>
             {twoSessions && (
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontSize: 12, color: "#475569" }}>
-                รอบเช้าเริ่มตามเวลาเริ่มอบรมด้านบน · รอบบ่ายเริ่ม
+                เวลาเริ่มรอบบ่าย
                 <input value={pmStart} onChange={e => setPmStart(e.target.value)} disabled={!canEdit} placeholder="13:00"
                   style={{ ...inp, width: 90, padding: "5px 8px" }} />
-                น. (เช็คหลังเวลานี้นับเป็นสาย · ก่อน 12:30 น. = รอบเช้า, หลังจากนั้น = รอบบ่าย)
+                น. (เช็คชื่อหลังอบรมแต่ละรอบเสร็จ ไม่มีสถานะสาย · สแกนก่อนเวลานี้ = รอบเช้า, ตั้งแต่เวลานี้เป็นต้นไป = รอบบ่าย)
               </div>
             )}
           </div>

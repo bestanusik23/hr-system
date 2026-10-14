@@ -8,7 +8,7 @@ function toThaiTime(utc: string | null): string {
   const d = new Date(utc.replace(" ", "T") + (utc.includes("Z") ? "" : "Z"));
   return new Date(d.getTime() + 7 * 3600_000).toISOString().slice(0, 16).replace("T", " ");
 }
-interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; participant_type?: string; am_time?: string | null; am_late?: number | null; pm_time?: string | null; pm_late?: number | null; }
+interface Reg { id: number; emp_code: string | null; name: string; department: string | null; position: string | null; attendance_status: string; checkin_time: string | null; reg_method: string; participant_type?: string; am_time?: string | null; pm_time?: string | null; }
 interface Photo { id: number; course_id: number; url: string; photo_type: string; caption: string | null; uploaded_at: string; }
 interface Survey { id: number; q1: number; q2: number; q3: number; q4: number; q5: number; comment: string | null; submitted_at: string; }
 
@@ -221,8 +221,7 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
     const attendees = regs.filter(r => !r.participant_type || r.participant_type === "attendee");
     const trainers  = regs.filter(r => r.participant_type === "trainer");
     const two = course.checkin_sessions === 2;
-    const sessCell = (t: string | null | undefined, late: number | null | undefined) =>
-      t ? `${toThaiTime(t).slice(11)}${late ? " (สาย)" : ""}` : "";
+    const sessCell = (t: string | null | undefined) => (t ? toThaiTime(t).slice(11) : "");
 
     const aoa: (string | number)[][] = [
       [course.course],
@@ -233,14 +232,14 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
       two ? ["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "ตำแหน่ง", "เช็คชื่อรอบเช้า", "เช็คชื่อรอบบ่าย", "ลายเซ็นเช้า", "ลายเซ็นบ่าย"]
           : ["#", "รหัสพนักงาน", "ชื่อ-นามสกุล", "ตำแหน่ง", "ลายเซ็น"],
       ...attendees.map((r, i) => two
-        ? [i + 1, r.emp_code ?? "", r.name, r.position ?? "", sessCell(r.am_time, r.am_late), sessCell(r.pm_time, r.pm_late), "", ""]
+        ? [i + 1, r.emp_code ?? "", r.name, r.position ?? "", sessCell(r.am_time), sessCell(r.pm_time), "", ""]
         : [i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]),
     ];
     if (trainers.length > 0) {
       aoa.push([]);
       aoa.push(["วิทยากร"]);
       trainers.forEach((r, i) => aoa.push(two
-        ? [i + 1, r.emp_code ?? "", r.name, r.position ?? "", sessCell(r.am_time, r.am_late), sessCell(r.pm_time, r.pm_late), "", ""]
+        ? [i + 1, r.emp_code ?? "", r.name, r.position ?? "", sessCell(r.am_time), sessCell(r.pm_time), "", ""]
         : [i + 1, r.emp_code ?? "", r.name, r.position ?? "", ""]));
     }
 
@@ -422,10 +421,10 @@ ${trainers.map((r, i) => `<tr><td>${i + 1}</td><td style="font-family:monospace;
                     <td style={{ padding: "9px 14px", fontWeight: 600, color: "#0a1628" }}>{r.name}</td>
                     <td style={{ padding: "9px 14px", color: "#64748b" }}>{r.department ?? "—"}</td>
                     <td style={{ padding: "9px 14px", color: "#64748b" }}>{r.position ?? "—"}</td>
-                    {twoSess ? ([["am", r.am_time, r.am_late], ["pm", r.pm_time, r.pm_late]] as const).map(([k, t, late]) => (
+                    {twoSess ? ([["am", r.am_time], ["pm", r.pm_time]] as const).map(([k, t]) => (
                       <td key={k} style={{ padding: "9px 14px", fontSize: 11, whiteSpace: "nowrap",
-                        color: t ? (late ? "#d97706" : "#16a34a") : "#cbd5e1", fontWeight: t ? 700 : 400 }}>
-                        {t ? `✓ ${toThaiTime(t).slice(11)}${late ? " สาย" : ""}` : "—"}
+                        color: t ? "#16a34a" : "#cbd5e1", fontWeight: t ? 700 : 400 }}>
+                        {t ? `✓ ${toThaiTime(t).slice(11)}` : "—"}
                       </td>
                     )) : (
                     <td style={{ padding: "9px 14px", color: "#64748b", fontSize: 11 }}>{toThaiTime(r.checkin_time)}</td>

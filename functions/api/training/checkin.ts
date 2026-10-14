@@ -1,5 +1,5 @@
 import type { Env } from "../../lib/types";
-import { bangkokNow, findRegistered, isLateFor, parseHm, sessionAt, syncAttendeeStatus, type Session } from "../../lib/trainingSessions";
+import { bangkokNow, findRegistered, parseHm, sessionAt, syncAttendeeStatus, type Session } from "../../lib/trainingSessions";
 
 interface CourseRow {
   id: number; course_code: string; course: string; course_type: string;
@@ -32,7 +32,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const now = bangkokNow();
   return Response.json({
     ok: true, course, registered: count?.n ?? 0,
-    today: now.date, session_now: sessionAt(now.minutes),
+    today: now.date, session_now: sessionAt(now.minutes, course.pm_start_time),
   });
 };
 
@@ -113,11 +113,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       }, { status: existing ? 200 : 201 });
     }
 
-    const session: Session = sessionAt(now.minutes);
-    const late = isLateFor(session, now.minutes, course.start_time, course.pm_start_time);
+    const session: Session = sessionAt(now.minutes, course.pm_start_time);
     const ins = await ctx.env.HR_DB.prepare(
-      "INSERT OR IGNORE INTO training_checkins (course_id, attendee_id, session, is_late, source) VALUES (?,?,?,?, 'qr')"
-    ).bind(course.id, attendeeId, session, late ? 1 : 0).run();
+      "INSERT OR IGNORE INTO training_checkins (course_id, attendee_id, session, source) VALUES (?,?,?, 'qr')"
+    ).bind(course.id, attendeeId, session).run();
     const already = (ins.meta.changes ?? 0) === 0;
     await syncAttendeeStatus(ctx.env.HR_DB, attendeeId);
 
@@ -126,7 +125,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     ).bind(attendeeId).all<{ session: Session }>()).results?.map(r => r.session) ?? [];
 
     return Response.json({
-      ok: true, two_sessions: true, session, already, is_late: late, sessions_done: done, walkin,
+      ok: true, two_sessions: true, session, already, sessions_done: done, walkin,
       attendee_id: attendeeId, participant_type: participantType, course_date: course.course_date,
     }, { status: already ? 200 : 201 });
   }

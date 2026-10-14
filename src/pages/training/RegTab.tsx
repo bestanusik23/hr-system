@@ -5,8 +5,8 @@ interface Reg {
   id: number; course_id: number; emp_code: string | null; name: string;
   department: string | null; position: string | null; phone: string | null;
   reg_method: string; attendance_status: string; checkin_time: string | null;
-  am_time?: string | null; am_late?: number | null; am_source?: string | null;
-  pm_time?: string | null; pm_late?: number | null; pm_source?: string | null;
+  am_time?: string | null; am_source?: string | null;
+  pm_time?: string | null; pm_source?: string | null;
 }
 interface EmpOption { id: number; emp_code: string | null; full_name: string; position: string | null; department_name: string | null; }
 
@@ -289,7 +289,7 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.department ?? "—"}</td>
                   <td style={{ padding: "10px 14px", color: "#64748b" }}>{reg.position ?? "—"}</td>
                   {twoSess ? (["am", "pm"] as const).map(k => {
-                    const t = reg[`${k}_time`], late = reg[`${k}_late`], src = reg[`${k}_source`];
+                    const t = reg[`${k}_time`], src = reg[`${k}_source`];
                     return (
                       <td key={k} style={{ padding: "8px 10px", whiteSpace: "nowrap" }}>
                         <button disabled={!canEdit}
@@ -297,10 +297,10 @@ export default function RegTab({ canEdit, initCourseId }: Props) {
                           title={canEdit ? (t ? "คลิกเพื่อยกเลิกการเช็คชื่อรอบนี้" : "คลิกเพื่อบันทึกว่ามาแล้ว (HR บันทึกแทน)") : undefined}
                           style={{ padding: "3px 9px", borderRadius: 6, fontSize: 11, fontWeight: 700, fontFamily: "inherit",
                             cursor: canEdit ? "pointer" : "default",
-                            border: `1.5px solid ${t ? (late ? "#fcd34d" : "#86efac") : "#e2e8f0"}`,
-                            background: t ? (late ? "#fffbeb" : "#f0fdf4") : "#f8fafc",
-                            color: t ? (late ? "#d97706" : "#16a34a") : "#94a3b8" }}>
-                          {t ? `✓ ${toThaiTime(t).slice(11)}${late ? " สาย" : ""}${src === "manual" ? " (HR)" : ""}` : "—"}
+                            border: `1.5px solid ${t ? "#86efac" : "#e2e8f0"}`,
+                            background: t ? "#f0fdf4" : "#f8fafc",
+                            color: t ? "#16a34a" : "#94a3b8" }}>
+                          {t ? `✓ ${toThaiTime(t).slice(11)}${src === "manual" ? " (HR)" : ""}` : "—"}
                         </button>
                       </td>
                     );
