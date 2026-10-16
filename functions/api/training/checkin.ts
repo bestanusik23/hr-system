@@ -81,15 +81,33 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     }
   }
 
-  const fullName = `${first_name.trim()} ${last_name.trim()}`;
+  let fullName = `${first_name.trim()} ${last_name.trim()}`;
+  let posText  = position?.trim() || null;
+  let deptText = department?.trim() || null;
   const ua = ctx.request.headers.get("user-agent") ?? "";
   const ip = ctx.request.headers.get("CF-Connecting-IP") ?? ctx.request.headers.get("X-Real-IP") ?? null;
   const code = emp_code?.trim() || null;
+  // จับคู่กับผู้ที่ลงทะเบียนไว้: รหัสพนักงานก่อน แล้วค่อยชื่อ (ไม่สนคำนำหน้า เช่น "น.ส." = "นางสาว")
+  let existing = await findRegistered(ctx.env.HR_DB, course.id, fullName, code);
+
+  // บังคับเลือกชื่อจากการค้นหาเท่านั้น: ถ้าไม่อยู่ในรายชื่อผู้ลงทะเบียน ต้องเป็นพนักงานในระบบ (ตรวจจากรหัสพนักงาน)
+  // และใช้ชื่อ/ตำแหน่งจากระบบพนักงาน ไม่ใช้ข้อความที่พิมพ์มา — กันพิมพ์ชื่อเองที่ไม่มีในระบบ
+  if (!existing) {
+    const emp = code ? await ctx.env.HR_DB.prepare(`
+      SELECT e.full_name, e.position, d.name AS department_name
+        FROM employees e LEFT JOIN departments d ON d.id = e.department_id
+       WHERE e.emp_code = ? AND e.emp_status NOT IN ('resigned','terminated')
+    `).bind(code).first<{ full_name: string; position: string | null; department_name: string | null }>() : null;
+    if (!emp) {
+      return Response.json({ ok: false, error: "ไม่พบชื่อท่านในระบบ กรุณาค้นหาและเลือกชื่อจากรายการ หากค้นหาไม่พบ กรุณาติดต่อเจ้าหน้าที่ HR" }, { status: 403 });
+    }
+    fullName = emp.full_name.replace(/\s+/g, " ").trim();
+    posText  = emp.position ?? posText;
+    deptText = emp.department_name ?? deptText;
+    existing = await findRegistered(ctx.env.HR_DB, course.id, fullName, code);
+  }
   // ประเภทผู้เข้าร่วมตัดสินจากรายชื่อวิทยากรของหลักสูตร (ไม่ให้ผู้สแกนเลือกเอง)
   const participant_type: "attendee" | "trainer" = isTrainerName(fullName, course.trainer) ? "trainer" : "attendee";
-
-  // จับคู่กับผู้ที่ลงทะเบียนไว้: รหัสพนักงานก่อน แล้วค่อยชื่อ (ไม่สนคำนำหน้า เช่น "น.ส." = "นางสาว")
-  const existing = await findRegistered(ctx.env.HR_DB, course.id, fullName, code);
   if (existing && existing.participant_type !== participant_type) {
     await ctx.env.HR_DB.prepare("UPDATE training_attendees SET participant_type = ? WHERE id = ?").bind(participant_type, existing.id).run();
     existing.participant_type = participant_type;
@@ -115,7 +133,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
           (course_id, emp_code, name, department, position, reg_method, attendance_status,
            device_info, ip_address, participant_type)
         VALUES (?, ?, ?, ?, ?, ?, 'registered', ?, ?, ?)
-      `).bind(course.id, code, fullName, department?.trim() || null, position?.trim() ?? null,
+      `).bind(course.id, code, fullName, deptText, posText,
               walkin ? "walkin" : "qr", ua.slice(0, 300), ip, participant_type).run();
       attendeeId = Number(ins.meta.last_row_id);
       participantType = participant_type;
@@ -173,7 +191,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
       VALUES (?, ?, ?, ?, ?, 'qr', ?, ${isPreReg ? "NULL" : "datetime('now')"}, ?, ?, ?)
     `).bind(
       course.id, code, fullName,
-      department?.trim() || null, position?.trim() ?? null,
+      deptText, posText,
       attendanceStatus, ua.slice(0, 300), ip, participant_type
     ).run();
   } catch {
@@ -184,7 +202,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
          checkin_time, device_info, ip_address, participant_type)
       VALUES (?, ?, ?, 'qr', ?, ${isPreReg ? "NULL" : "datetime('now')"}, ?, ?, ?)
     `).bind(
-      course.id, fullName, position?.trim() ?? null,
+      course.id, fullName, posText,
       attendanceStatus, ua.slice(0, 300), ip, participant_type
     ).run();
   }

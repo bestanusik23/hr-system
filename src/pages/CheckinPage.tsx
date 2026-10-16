@@ -135,9 +135,10 @@ export default function CheckinPage() {
     setSuggestions([]); setShowDrop(false);
   }
 
+  // บังคับเลือกชื่อจากผลการค้นหาเท่านั้น (ไม่ให้พิมพ์ชื่อเอง) — ค้นไม่พบให้ติดต่อ HR
   function register() {
-    if (!firstName.trim() || !lastName.trim() || !position.trim()) {
-      setError("กรุณากรอกชื่อ นามสกุล และตำแหน่งให้ครบถ้วน"); return;
+    if (!autoFilled || !firstName.trim()) {
+      setError("กรุณาค้นหาและเลือกชื่อของท่านจากรายการ หากค้นหาไม่พบ กรุณาติดต่อเจ้าหน้าที่ HR"); return;
     }
     return submit({ prefix, firstName: firstName.trim(), lastName: lastName.trim(), position: position.trim(), department: department.trim(), empCode });
   }
@@ -400,14 +401,14 @@ export default function CheckinPage() {
           )}
           <button onClick={() => submit(quick)} disabled={submitting || locked}
             style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none", background: locked ? "#94a3b8" : "#0038C6", color: "#fff",
-              fontWeight: 800, fontSize: 16, cursor: submitting || locked ? "not-allowed" : "pointer", fontFamily: "inherit",
-              boxShadow: locked ? "none" : "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
+              fontWeight: 800, fontSize: 16, cursor: submitting || locked || !autoFilled ? "not-allowed" : "pointer", fontFamily: "inherit",
+              boxShadow: locked || !autoFilled ? "none" : "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
             {submitting ? "กำลังบันทึก…" : locked ? "🔒 ยังไม่เปิดเช็คชื่อ" : `✅ ยืนยัน เช็คชื่อ${SESS_LABEL[sessionNow as Sess]}`}
           </button>
           <button onClick={() => { setQuick(null); setError(""); }}
             style={{ width: "100%", marginTop: 10, padding: "10px 0", borderRadius: 9, border: "1.5px solid #c4cfee",
               background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
-            ไม่ใช่ฉัน / กรอกข้อมูลใหม่
+            ไม่ใช่ฉัน / ค้นหาชื่อใหม่
           </button>
         </div>
 
@@ -446,13 +447,13 @@ export default function CheckinPage() {
           <div ref={searchRef} style={{ marginBottom: 18, position: "relative" }}>
             <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
               textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-              ค้นหาชื่อพนักงานในระบบ
+              ค้นหาชื่อของท่าน <span style={{ color: "#dc2626" }}>*</span>
             </label>
             <div style={{ position: "relative" }}>
               <input
                 value={empSearch}
                 onChange={e => { setEmpSearch(e.target.value); setAutoFilled(false); }}
-                placeholder="พิมพ์ชื่อหรือรหัสพนักงาน (ไม่บังคับ)"
+                placeholder="พิมพ์ชื่อ นามสกุล หรือรหัสพนักงาน แล้วเลือกจากรายการ"
                 style={{ ...inp, borderColor: autoFilled ? "#16a34a" : "#c4cfee",
                   paddingRight: autoFilled ? 36 : 12 }}
               />
@@ -493,66 +494,38 @@ export default function CheckinPage() {
             {showDrop && suggestions.length === 0 && !searching && empSearch.trim().length >= 2 && (
               <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff",
                 border: "1.5px solid #c4cfee", borderRadius: 10, boxShadow: "0 8px 28px rgba(0,56,198,.1)",
-                zIndex: 50, padding: "14px", textAlign: "center", color: "#94a3b8", fontSize: 13, marginTop: 3 }}>
-                ไม่พบพนักงานในระบบ — กรอกข้อมูลด้านล่างด้วยตนเอง
+                zIndex: 50, padding: "14px", textAlign: "center", color: "#dc2626", fontSize: 13, marginTop: 3 }}>
+                ไม่พบชื่อในระบบ — กรุณาติดต่อเจ้าหน้าที่ HR
               </div>
             )}
           </div>
 
-          {/* Auto-filled employee info card */}
+          {/* ข้อมูลจากระบบ (แสดงหลังเลือกชื่อจากรายการ — แก้ไขเองไม่ได้) */}
           {autoFilled && (
             <div style={{ background: "#f0fdf4", borderRadius: 9, border: "1.5px solid #86efac",
               padding: "12px 16px", marginBottom: 16, fontSize: 13 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", textTransform: "uppercase",
-                letterSpacing: "0.07em", marginBottom: 8 }}>✓ ดึงข้อมูลจากระบบพนักงาน</div>
+                letterSpacing: "0.07em", marginBottom: 8 }}>✓ ข้อมูลจากระบบ</div>
+              <div style={{ fontSize: 16, fontWeight: 800, color: "#0a1628", marginBottom: 6 }}>{empSearch}</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
                 <div><span style={{ color: "#475569" }}>รหัสพนักงาน: </span>
                   <strong style={{ color: "#0038C6", fontFamily: "monospace" }}>{empCode ?? "—"}</strong></div>
                 <div><span style={{ color: "#475569" }}>แผนก: </span>
                   <strong style={{ color: "#0a1628" }}>{department || "—"}</strong></div>
+                <div style={{ gridColumn: "1 / -1" }}><span style={{ color: "#475569" }}>ตำแหน่ง: </span>
+                  <strong style={{ color: "#0a1628" }}>{position || "—"}</strong></div>
               </div>
             </div>
           )}
-
-          {/* Name fields */}
-          <div style={{ marginBottom: 14 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-              ชื่อ-นามสกุล <span style={{ color: "#dc2626" }}>*</span>
-            </label>
-            <div style={{ display: "grid", gridTemplateColumns: "110px 1fr 1fr", gap: 8 }}>
-              <select value={prefix} onChange={e => setPrefix(e.target.value)}
-                style={{ ...inp, paddingRight: 4, background: autoFilled ? "#f8faff" : "#fff" }}
-                disabled={autoFilled}>
-                {["นาย","นาง","น.ส.","ดร.","นพ.","พญ.","ทพ.","ทพญ.","ภก.","ภกญ."].map(p =>
-                  <option key={p} value={p}>{p}</option>
-                )}
-              </select>
-              <input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="ชื่อจริง"
-                style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
-              <input value={lastName}  onChange={e => setLastName(e.target.value)}  placeholder="นามสกุล"
-                style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
-            </div>
-          </div>
-
-          <div style={{ marginBottom: 20 }}>
-            <label style={{ display: "block", fontSize: 11, fontWeight: 700, color: "#475569",
-              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
-              ตำแหน่ง <span style={{ color: "#dc2626" }}>*</span>
-            </label>
-            <input value={position} onChange={e => setPosition(e.target.value)}
-              placeholder="เช่น พยาบาลวิชาชีพ, เจ้าหน้าที่ธุรการ"
-              style={{ ...inp, background: autoFilled ? "#f8faff" : "#fff" }} readOnly={autoFilled} />
-          </div>
 
           {error && (
             <div style={{ background: "#fee2e2", borderRadius: 7, padding: "10px 14px",
               fontSize: 13, color: "#dc2626", marginBottom: 14, border: "1px solid #fecaca" }}>{error}</div>
           )}
 
-          <button onClick={register} disabled={submitting || locked}
+          <button onClick={register} disabled={submitting || locked || !autoFilled}
             style={{ width: "100%", padding: "14px 0", borderRadius: 9, border: "none",
-              background: locked ? "#94a3b8" : "#0038C6",
+              background: locked || !autoFilled ? "#94a3b8" : "#0038C6",
               color: "#fff", fontWeight: 800, fontSize: 16,
               cursor: submitting || locked ? "not-allowed" : "pointer", fontFamily: "inherit",
               boxShadow: locked ? "none" : "0 4px 16px rgba(0,56,198,0.3)", opacity: submitting ? 0.7 : 1 }}>
@@ -560,7 +533,7 @@ export default function CheckinPage() {
           </button>
 
           <div style={{ textAlign: "center", fontSize: 11, color: "#94a3b8", marginTop: 12 }}>
-            ระบบตรวจสอบชื่ออัตโนมัติ ป้องกันลงทะเบียนซ้ำ
+            ต้องเลือกชื่อจากระบบเท่านั้น · หากค้นหาไม่พบ กรุณาติดต่อเจ้าหน้าที่ HR
           </div>
         </div>
       ) : null}
