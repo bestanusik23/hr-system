@@ -1,5 +1,5 @@
 // ใบลงทะเบียนเข้าฝึกอบรมสำหรับหน่วยงานราชการ (หลักสูตรเช็คชื่อ 2 รอบ เช้า–บ่าย)
-// คอลัมน์: ลำดับที่ · เลขบัตรประชาชน · ชื่อ-สกุล · ตำแหน่ง · ภาคเช้า (ลงชื่อ) · ภาคบ่าย (ลงชื่อ)
+// - ไม่มีคอลัมน์รหัสพนักงาน · เลขบัตรประชาชน 13 หลักแสดงเป็นตัวเลขชัดเจนในช่องละ 1 หลัก
 // - แบ่งหน้าเอง: ตารางเต็มความสูงทุกหน้า (แถวขยายเท่า ๆ กัน) · ข้อความที่ยาวจะย่อขนาดให้อยู่ในช่อง
 // ระบบไม่เก็บเลขบัตรประชาชน: ถ้าไม่ส่ง idCard มา ช่องจะว่างไว้ให้เขียนด้วยมือ
 
@@ -31,44 +31,51 @@ export function trainerNames(field: string | null | undefined): string[] {
 const PAGE_H = 186;      // ความสูงที่ใช้ได้จริงต่อหน้า (A4 210 − ขอบ 22 − เผื่อ 2)
 const TOP_FIRST = 30;    // หัวเอกสารหน้าแรก
 const TOP_NEXT = 9;      // หัวย่อหน้าถัดไป
-const THEAD_H = 13;      // หัวตาราง 2 แถว
+const THEAD_H = 15;      // หัวตาราง 2 แถว
 const CERT_H = 29;       // ช่องผู้รับรอง (หน้าสุดท้าย)
 const GAP = 1.5;         // เผื่อเศษ
 const MIN_ROW = 9;       // ความสูงแถวต่ำสุด
 const MIN_BLANK = 3;     // แถวว่างขั้นต่ำท้ายรายชื่อ (สำหรับผู้ที่ไม่ได้ลงทะเบียนไว้)
-const COLS = 6;
 
 const rowsFit = (h: number) => Math.floor((h - GAP) / MIN_ROW);
 
-type Cell = { kind: "person"; no: number; p: SheetPerson | null } | { kind: "section"; label: string };
+type Cell = { kind: "person"; no: number; p: SheetPerson } | { kind: "blank"; no: number } | { kind: "section"; label: string };
 
 function fitClass(text: string, small: number, tiny: number): string {
   const n = text.length;
   return n > tiny ? "t3" : n > small ? "t2" : "";
 }
 
+function idBoxes(id: string | null | undefined): string {
+  const d = (id ?? "").replace(/\D/g, "");
+  const digits = d.length === 13 ? d.split("") : Array(13).fill("");
+  return `<div class="ids">${digits.map(c => `<i>${c}</i>`).join("")}</div>`;
+}
+
 function renderRow(c: Cell): string {
-  if (c.kind === "section") return `<tr class="sec"><td colspan="${COLS}">${esc(c.label)}</td></tr>`;
+  if (c.kind === "section") return `<tr class="sec"><td colspan="8">${esc(c.label)}</td></tr>`;
+  if (c.kind === "blank") {
+    return `<tr><td class="c">${c.no}</td><td></td><td></td><td class="idc">${idBoxes(null)}</td><td></td><td></td><td></td><td></td></tr>`;
+  }
   const p = c.p;
-  const id = (p?.idCard ?? "").replace(/\D/g, "");
-  const nm = p?.name.trim() ?? "";
-  const pos = p?.position ?? "";
+  const nm = p.name.trim();
+  const pos = p.position ?? "";
   return `<tr>
     <td class="c">${c.no || ""}</td>
-    <td class="idc">${id.length === 13 ? id : ""}</td>
-    <td class="nm ${fitClass(nm, 28, 38)}">${esc(nm)}</td>
-    <td class="pos ${fitClass(pos, 30, 52)}">${esc(pos)}</td>
-    <td></td><td></td>
+    <td class="nm ${fitClass(nm, 24, 34)}">${esc(nm)}</td>
+    <td class="pos ${fitClass(pos, 26, 46)}">${esc(pos)}</td>
+    <td class="idc">${idBoxes(p.idCard)}</td>
+    <td></td><td></td><td></td><td></td>
   </tr>`;
 }
 
 const THEAD = `<thead>
   <tr>
-    <th rowspan="2">ลำดับที่</th><th rowspan="2">เลขบัตรประจำตัวประชาชน</th>
-    <th rowspan="2">ชื่อ-สกุล</th><th rowspan="2">ตำแหน่ง</th>
-    <th>ภาคเช้า</th><th>ภาคบ่าย</th>
+    <th rowspan="2">ลำดับที่</th><th rowspan="2">ชื่อ-สกุล</th><th rowspan="2">ตำแหน่ง</th>
+    <th rowspan="2">เลขบัตรประจำตัวประชาชน (13 หลัก)</th>
+    <th colspan="2">ภาคเช้า</th><th colspan="2">ภาคบ่าย</th>
   </tr>
-  <tr><th>ลงชื่อ</th><th>ลงชื่อ</th></tr>
+  <tr><th>เวลาเข้าฝึก (น.)</th><th>ลงชื่อ</th><th>เวลาเข้าฝึก (น.)</th><th>ลงชื่อ</th></tr>
 </thead>`;
 
 export function buildTwoSessionSheetHtml(course: SheetCourse, attendees: SheetPerson[]): string {
@@ -92,7 +99,7 @@ export function buildTwoSessionSheetHtml(course: SheetCourse, attendees: SheetPe
 
   const seq: Cell[] = [
     ...sorted.map((p, i): Cell => ({ kind: "person", no: i + 1, p })),
-    ...Array.from({ length: blanks }, (_, i): Cell => ({ kind: "person", no: sorted.length + i + 1, p: null })),
+    ...Array.from({ length: blanks }, (_, i): Cell => ({ kind: "blank", no: sorted.length + i + 1 })),
     ...trainerBlock,
   ];
 
@@ -137,8 +144,8 @@ export function buildTwoSessionSheetHtml(course: SheetCourse, attendees: SheetPe
     sections.push(`<section class="pg" style="--rh:${rowH}mm">
 ${top}
 <table><colgroup>
-  <col style="width:10mm"><col style="width:46mm"><col style="width:64mm"><col style="width:55mm">
-  <col style="width:48mm"><col style="width:48mm">
+  <col style="width:10mm"><col style="width:56mm"><col style="width:46mm"><col style="width:65mm">
+  <col style="width:17mm"><col style="width:30mm"><col style="width:17mm"><col style="width:30mm">
 </colgroup>${THEAD}<tbody>${chunk.map(renderRow).join("")}</tbody></table>
 ${cert}
 </section>`);
@@ -161,15 +168,21 @@ ${cert}
   .sub{font-size:9pt;color:#64748b}
   .pgno{font-size:8.5pt;color:#64748b;text-align:right;line-height:1.35;flex-shrink:0}
   .meta{font-size:9.5pt;display:flex;flex-wrap:wrap;gap:1px 26px;line-height:1.35}
-  .top2{height:${TOP_NEXT}mm;display:flex;justify-content:space-between;align-items:flex-start;font-size:9pt;color:#64748b;border-bottom:1.5px solid #0038C6}
+  .top2{height:${TOP_NEXT}mm;display:flex;justify-content:space-between;align-items:flex-start;font-size:9pt;color:#64748b;border-bottom:1.5px solid #0038C6;margin-bottom:0}
   table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:10.5pt}
-  th{background:#e8eeff;color:#0038C6;border:1px solid #8aa0d6;padding:2px 3px;font-weight:700;text-align:center;line-height:1.2;font-size:10pt;height:6.5mm}
-  td{border:1px solid #9aa9cf;height:var(--rh);padding:0 5px;vertical-align:middle;overflow:hidden;line-height:1.15}
+  th{background:#e8eeff;color:#0038C6;border:1px solid #8aa0d6;padding:2px 3px;font-weight:700;text-align:center;line-height:1.2;font-size:9.5pt}
+  thead tr:first-child th{height:7.5mm}
+  thead tr:nth-child(2) th{height:7.5mm}
+  td{border:1px solid #9aa9cf;height:var(--rh);padding:0 4px;vertical-align:middle;overflow:hidden;line-height:1.15}
   td.c{text-align:center;padding:0}
-  td.idc{text-align:center;font-weight:700;font-size:11.5pt;letter-spacing:1.2px;white-space:nowrap;font-variant-numeric:tabular-nums}
   td.nm{white-space:nowrap;font-weight:600}
-  td.nm.t2{font-size:9.5pt} td.nm.t3{font-size:8.5pt}
+  td.t2{font-size:9.5pt} td.t3{font-size:8.5pt}
   td.pos.t2{font-size:9pt} td.pos.t3{font-size:8pt}
+  td.nm.t2{font-size:9.5pt} td.nm.t3{font-size:8.5pt}
+  td.idc{padding:0}
+  .ids{display:flex;height:var(--rh)}
+  .ids i{flex:1;border-left:1px solid #9aa9cf;display:flex;align-items:center;justify-content:center;font-style:normal;font-weight:700;font-size:12pt;color:#000;font-variant-numeric:tabular-nums}
+  .ids i:first-child{border-left:0}
   tr.sec td{background:#eff4ff;color:#0038C6;font-weight:700;height:var(--rh);padding:0 6px}
   .cert{height:${CERT_H}mm;display:flex;justify-content:flex-end;align-items:flex-end}
   .certbox{width:100mm;text-align:center;font-size:10pt;line-height:1.7}
