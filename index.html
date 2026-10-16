@@ -6,14 +6,43 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- โหลดฟอนต์แบบไม่บล็อกหน้า: ถ้า Google Fonts ช้า/ถูกบล็อก หน้ายังขึ้นได้ด้วยฟอนต์สำรอง -->
     <link
+      rel="preload" as="style"
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap"
-      rel="stylesheet"
+      onload="this.onload=null;this.rel='stylesheet'"
     />
     <title>ระบบบริหารทรัพยากรบุคคล · รพ.เชียงราย ราม</title>
+    <style>
+      #boot { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 14px; padding: 24px; background: #f0f5ff; color: #475569; font: 15px/1.5 sans-serif; text-align: center; }
+      #boot b { color: #0038C6; font-size: 16px; }
+      #boot button { padding: 10px 26px; border: 0; border-radius: 8px; background: #0038C6; color: #fff; font-size: 15px; font-weight: 700; }
+      #boot small { color: #94a3b8; font-size: 11px; word-break: break-all; max-width: 420px; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- แสดงทันทีก่อนแอปโหลดเสร็จ (React จะแทนที่เมื่อพร้อม) — กันหน้าขาวโล่ง -->
+    <div id="root"><div id="boot"><b>CHIANGRAI RAM+ HOSPITAL</b><span id="boot-msg">กำลังโหลด…</span></div></div>
+    <script>
+      (function () {
+        function fail(why) {
+          var boot = document.getElementById("boot");
+          if (!boot) return; // แอปขึ้นแล้ว
+          boot.innerHTML = "<b>CHIANGRAI RAM+ HOSPITAL</b>" +
+            "<span>เปิดหน้านี้ไม่สำเร็จ กรุณากดโหลดใหม่<br>หากยังไม่ได้ ให้เปิดลิงก์นี้ใน Safari หรือ Chrome โดยตรง</span>" +
+            "<button onclick='location.reload()'>โหลดใหม่</button>" +
+            "<small>" + String(why || "").replace(/[<>&]/g, "") + " · " + navigator.userAgent.replace(/[<>&]/g, "") + "</small>";
+        }
+        window.addEventListener("error", function (e) {
+          var t = e.target;
+          if (t && t.tagName === "SCRIPT") fail("script load error: " + t.src);
+          else if (e.message) fail(e.message);
+        }, true);
+        window.addEventListener("unhandledrejection", function (e) { fail(e.reason && (e.reason.message || e.reason)); });
+        setTimeout(function () { fail("timeout 15s"); }, 15000);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
