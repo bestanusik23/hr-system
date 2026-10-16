@@ -19,6 +19,9 @@ function gradeFromScore(s: number) {
   if (s >= 60) return "D"; if (s >= 50) return "E"; return "F";
 }
 
+// เกณฑ์ผ่านทดลองงาน: คะแนนรวมต่ำกว่านี้ = ไม่ผ่าน (เกรด D จึงแบ่งเป็น 60–64 ไม่ผ่าน / 65–69 ผ่าน)
+const PROBATION_PASS_SCORE = 65;
+
 // Tenure shown on the form is the round's fixed day-count (start date → evaluation
 // due date), not the actual elapsed time at print time — round 1 always reads
 // "30 วัน", round 2 "60 วัน", round 3 "90 วัน", per the round the form is for.
@@ -45,7 +48,7 @@ function generatePrintHTML(data: PrintData): string {
 
   const totalScore = Object.values(scoreMap).reduce((a: number, b: number) => a + b, 0);
   const grade   = gradeFromScore(totalScore);
-  const passed  = totalScore >= 60;
+  const passed  = totalScore >= PROBATION_PASS_SCORE;
   const round   = ev.round as number;
   const roundNo = round === 30 ? 1 : round === 60 ? 2 : round === 90 ? 3 : 4;
   const todayTH = new Date().toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" });
@@ -394,10 +397,15 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
       <td>บรรจุเป็นพนักงานประจำ (ดี)</td>
     </tr>
     <tr class="bg2">
-      <td class="center bold" style="font-size:14pt">D</td>
-      <td class="center">60 – 69</td>
+      <td class="center bold" style="font-size:14pt" rowspan="2">D</td>
+      <td class="center">${PROBATION_PASS_SCORE} – 69</td>
       <td class="center bold" style="color:#15803d">✓ ผ่าน</td>
       <td>บรรจุเป็นพนักงานประจำ (พอใช้)</td>
+    </tr>
+    <tr class="bg2">
+      <td class="center">60 – ${PROBATION_PASS_SCORE - 1}</td>
+      <td class="center bold" style="color:#dc2626">✗ ไม่ผ่าน</td>
+      <td>ทดลองงานต่อในรอบถัดไป หรือพิจารณายุติการจ้างงาน</td>
     </tr>
     <tr>
       <td class="center bold" style="font-size:14pt;color:#dc2626">E</td>
@@ -417,7 +425,7 @@ ${data.is_copy ? '<div class="watermark">COPY</div>' : ""}
   <div style="border:2px solid #b91c1c;border-radius:4px;padding:9px 14px;background:#fff8f8;margin-bottom:10px">
     <div class="bold" style="color:#b91c1c;margin-bottom:5px">⚠️ หมายเหตุสำคัญ</div>
     <ul style="padding-left:18px;line-height:1.85">
-      <li>พนักงานที่มีคะแนนรวม <strong>ต่ำกว่า 60 คะแนน (เกรดต่ำกว่า D)</strong> ถือว่า <strong>ไม่ผ่านการทดลองงาน</strong></li>
+      <li>พนักงานที่มีคะแนนรวม <strong>ต่ำกว่า ${PROBATION_PASS_SCORE} คะแนน</strong> ถือว่า <strong>ไม่ผ่านการทดลองงาน</strong></li>
       <li>สำเนาเอกสารเก็บที่ฝ่ายทรัพยากรบุคคล 1 ชุด และมอบพนักงาน 1 ชุด</li>
       <li>กรณีพิมพ์ซ้ำ เอกสารจะแสดงตราประทับ <strong>COPY</strong> และใช้เลขที่เดิม</li>
     </ul>
