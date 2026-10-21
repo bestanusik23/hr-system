@@ -9,7 +9,12 @@ interface Employee {
   color: string | null; initial: string | null; department_id: number | null; division_id: number | null;
   eval_rounds?: number;
 }
-interface EvalSummary { employee_id: number; round: number; status: string; id: number; }
+interface EvalSummary { employee_id: number; round: number; status: string; id: number; total_score?: number | null; }
+
+const EVAL_STATUS_LABEL: Record<string, string> = {
+  draft: "ร่าง", pending_head: "รอหัวหน้าแผนก", pending_deputy: "รอรองผู้อำนวยการ", pending_hr: "รอ HR",
+  pending_final: "รออนุมัติสุดท้าย", approved: "อนุมัติแล้ว", rejected: "ไม่อนุมัติ / ปิดรอบ",
+};
 
 const STATUS_LABEL: Record<string, string> = {
   probation: "ทดลองงาน", passed: "ผ่านทดลองงาน", transferred: "ย้ายแผนก", resigned: "ลาออก",
@@ -233,7 +238,7 @@ export default function EmployeeList() {
                         ✏️
                       </button>
                     )}
-                    {canDelete && (
+                    {canDelete && emp.emp_status !== "resigned" && (
                       <button onClick={() => { setConfirmDelete(emp); setDeleteError(""); }}
                         style={{ background: "#fee2e2", border: "none", borderRadius: 8,
                           padding: "6px 12px", cursor: "pointer", fontSize: 13, fontFamily: "inherit",
@@ -244,6 +249,27 @@ export default function EmployeeList() {
                     )}
                   </div>
                 </div>
+
+                {/* ประวัติการประเมิน (ลาออก / ผ่านทดลองงาน / ย้ายแผนก) — ดูย้อนหลังได้ ไม่สร้างใบใหม่ */}
+                {emp.emp_status !== "probation" && (() => {
+                  const history = evals.filter(e => e.employee_id === emp.id).sort((a, b) => a.round - b.round);
+                  return (
+                    <div style={{ borderTop: "1px solid #f8fafc", background: "#fafbff",
+                      padding: "10px 20px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#64748b" }}>ประวัติการประเมิน:</span>
+                      {history.length === 0 ? (
+                        <span style={{ fontSize: 12, color: "#94a3b8" }}>ไม่มีใบประเมินในระบบ</span>
+                      ) : history.map(h => (
+                        <button key={h.id} onClick={() => setOpenEvalId(h.id)}
+                          style={{ padding: "5px 12px", borderRadius: 8, border: "1px solid #dce4f5", background: "#fff",
+                            fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#0f172a" }}>
+                          รอบ {h.round} วัน · {EVAL_STATUS_LABEL[h.status] ?? h.status}
+                          {h.total_score != null && <> · {h.total_score} คะแนน</>}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* 30/60/90 progress row */}
                 {emp.emp_status === "probation" && (

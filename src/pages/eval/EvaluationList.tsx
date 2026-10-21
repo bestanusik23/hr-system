@@ -5,7 +5,7 @@ import EvaluationForm from "./EvaluationForm";
 interface Evaluation {
   id: number; round: number; status: string; grade: string | null; total_score: number | null;
   full_name: string; emp_code: string | null; position: string | null; department_name: string | null; division_name: string | null;
-  start_date: string | null; updated_at: string;
+  start_date: string | null; updated_at: string; emp_status?: string;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -162,6 +162,10 @@ export default function EvaluationList() {
                 <div style={{ fontWeight: 700, fontSize: 15 }}>
                   {ev.emp_code && <span style={{ fontFamily: "monospace", fontSize: 11, color: "#0038c6", fontWeight: 700, marginRight: 6, background: "#eff6ff", padding: "2px 6px", borderRadius: 5 }}>{ev.emp_code}</span>}
                   {ev.full_name}
+                  {ev.emp_status === "resigned" && (
+                    <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: "#64748b", background: "#f1f5f9",
+                      border: "1px solid #e2e8f0", borderRadius: 5, padding: "1px 7px" }}>ลาออก</span>
+                  )}
                 </div>
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>รอบ {ev.round} วัน · {ev.department_name ?? "—"} · {ev.division_name ?? "—"}</div>
                 {ev.total_score !== null && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>คะแนน {ev.total_score}/100 · เกรด {gradeFromScore(ev.total_score)}</div>}
@@ -195,7 +199,7 @@ export default function EvaluationList() {
                 </div>
               )}
               {/* Delete button: HR/admin can delete any status */}
-              {(isHR || ["draft", "pending_head"].includes(ev.status)) && (
+              {ev.emp_status !== "resigned" && (isHR || ["draft", "pending_head"].includes(ev.status)) && (
                 <button
                   onClick={e => deleteEval(ev, e)}
                   disabled={deleting === ev.id}

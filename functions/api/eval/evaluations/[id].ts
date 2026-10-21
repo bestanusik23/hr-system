@@ -378,11 +378,13 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
 
   const id = ctx.params.id as string;
   const ev = await ctx.env.HR_DB.prepare(`
-    SELECT ev.status, e.department_id FROM evaluations ev
+    SELECT ev.status, e.department_id, e.emp_status FROM evaluations ev
     JOIN employees e ON e.id = ev.employee_id WHERE ev.id = ?
-  `).bind(id).first<{ status: string; department_id: number }>();
+  `).bind(id).first<{ status: string; department_id: number; emp_status: string }>();
 
   if (!ev) return Response.json({ ok: false, error: "Not found" }, { status: 404 });
+  if (ev.emp_status === "resigned")
+    return Response.json({ ok: false, error: "พนักงานลาออกแล้ว — ใบประเมินเก็บไว้เป็นประวัติ ลบไม่ได้" }, { status: 409 });
 
   // head can only delete draft/pending_head; HR/admin can delete any status
   if (hasRole(user, "head") && !hasRole(user, "hr", "admin")) {

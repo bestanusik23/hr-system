@@ -139,11 +139,12 @@ export const onRequestDelete: PagesFunction<Env> = async (ctx) => {
   const emp = await ctx.env.HR_DB.prepare("SELECT full_name FROM employees WHERE id=?").bind(id).first<{ full_name: string }>();
   if (!emp) return Response.json({ ok: false, error: "ไม่พบพนักงาน" }, { status: 404 });
 
-  const approved = await ctx.env.HR_DB.prepare(
-    "SELECT COUNT(*) AS n FROM evaluations WHERE employee_id=? AND status='approved'"
+  // เก็บประวัติการประเมิน: ลบได้เฉพาะพนักงานที่มีแต่ใบร่าง — ลาออกให้ใช้เมนูบันทึกลาออก
+  const history = await ctx.env.HR_DB.prepare(
+    "SELECT COUNT(*) AS n FROM evaluations WHERE employee_id=? AND status != 'draft'"
   ).bind(id).first<{ n: number }>();
-  if ((approved?.n ?? 0) > 0) {
-    return Response.json({ ok: false, error: "ไม่สามารถลบได้ — มีใบประเมินที่อนุมัติแล้ว ใช้เมนูบันทึกลาออกแทน" }, { status: 409 });
+  if ((history?.n ?? 0) > 0) {
+    return Response.json({ ok: false, error: "ไม่สามารถลบได้ — มีประวัติการประเมินที่ต้องเก็บไว้ ใช้เมนูบันทึกลาออกแทน" }, { status: 409 });
   }
 
   await ctx.env.HR_DB.prepare("DELETE FROM evaluation_scores WHERE evaluation_id IN (SELECT id FROM evaluations WHERE employee_id=?)").bind(id).run();
