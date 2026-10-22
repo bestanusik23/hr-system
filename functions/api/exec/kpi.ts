@@ -6,7 +6,7 @@ import { monthBounds } from "../../lib/periodBounds";
 import {
   computeOrientation, computeProbationPass, computeLicense, computeTrainingPlan,
   computeTurnover, computeEvalCoverage, computeEvalOnTime, listEvalOnTime, computeSatisfaction, ISO_TO_EXEC_KPI_KEY,
-  ORIENTATION_KPI_DATE,
+  ORIENTATION_KPI_DATE, TRAINING_PLAN_DEDUP,
 } from "../../lib/hrKpiFormulas";
 
 // GET /api/exec/kpi?period=month&value=2026-07   (or period=year&value=2026)
@@ -155,22 +155,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     ORDER BY start_date ASC
   `).bind(pStart, pEnd, ASSUMED_COMPLIANT_START, ASSUMED_COMPLIANT_END).all<{ employee_id: number; full_name: string; position: string | null; start_date: string }>();
 
-  // Same "resolved by reschedule" rule as computeTrainingPlan (see hrKpiFormulas.ts) —
-  // drop a cancelled row once its topic was actually held elsewhere in the same month,
-  // so this list stays consistent with the % above it.
+  // Same dedup rule as computeTrainingPlan (TRAINING_PLAN_DEDUP in hrKpiFormulas.ts) —
+  // a cancelled row drops out once its topic was held or rescheduled, so this list
+  // stays consistent with the % above it.
   const trainingPlanList = await db.prepare(`
     SELECT id, course, course_date, status, COALESCE(is_cancelled,0) AS is_cancelled
     FROM training_courses tc
     WHERE course_date >= ? AND course_date <= ? AND course NOT LIKE '%(สำเนา)%'
-      AND NOT (
-        COALESCE(is_cancelled,0)=1
-        AND EXISTS (
-          SELECT 1 FROM training_courses tc2
-          WHERE TRIM(tc2.course) = TRIM(tc.course) AND tc2.id <> tc.id
-            AND COALESCE(tc2.is_cancelled,0)=0 AND tc2.status = 'done'
-            AND strftime('%Y-%m', tc2.course_date) = strftime('%Y-%m', tc.course_date)
-        )
-      )
+      AND ${TRAINING_PLAN_DEDUP}
     ORDER BY course_date ASC
   `).bind(pStart, pEnd).all<{ id: number; course: string; course_date: string | null; status: string; is_cancelled: number }>();
 

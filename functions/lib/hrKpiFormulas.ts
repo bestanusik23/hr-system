@@ -131,6 +131,27 @@ export async function computeLicense(db: D1Database, pStart: string, pEnd: strin
 // A cancelled row is dropped entirely (both sides) when the same course name was
 // actually held (status='done', not cancelled) elsewhere in the same calendar month —
 // that's a reschedule, not a missed plan, so it shouldn't count against the KPI.
+// แต่ละหัวข้ออบรมนับในแผนครั้งเดียว — ตัดแถวที่ "ยกเลิก" ออกเมื่อหัวข้อเดียวกัน
+//  (ก) จัดจริงแล้วในเดือนเดียวกัน หรือ
+//  (ข) ถูกเลื่อนไปวันที่หลังกว่าในรอบรายงานเดือนเดียวกัน (26–25) — เลื่อนแล้วยกเลิกซ้ำก็นับ 1 เช่น Triage 30 ก.ย. → 21 ต.ค.
+//      หลักสูตรที่จัดทุกเดือน (เช่น ปฐมนิเทศ) คนละรอบเดือนจึงยังนับแยกกัน
+// ต้องใช้ alias tc
+const REPORT_CYCLE = (col: string) =>
+  `(CASE WHEN CAST(strftime('%d', ${col}) AS INTEGER) >= 26 THEN strftime('%Y-%m', date(${col}, 'start of month', '+1 month')) ELSE strftime('%Y-%m', ${col}) END)`;
+export const TRAINING_PLAN_DEDUP = `NOT (
+  COALESCE(tc.is_cancelled,0)=1
+  AND EXISTS (
+    SELECT 1 FROM training_courses tc2
+    WHERE TRIM(tc2.course) = TRIM(tc.course) AND tc2.id <> tc.id AND tc2.course NOT LIKE '%(สำเนา)%'
+      AND (
+        (COALESCE(tc2.is_cancelled,0)=0 AND tc2.status = 'done'
+          AND strftime('%Y-%m', tc2.course_date) = strftime('%Y-%m', tc.course_date))
+        OR (${REPORT_CYCLE('tc2.course_date')} = ${REPORT_CYCLE('tc.course_date')}
+          AND (tc2.course_date > tc.course_date OR (tc2.course_date = tc.course_date AND tc2.id > tc.id)))
+      )
+  )
+)`;
+
 export async function computeTrainingPlan(db: D1Database, pStart: string, pEnd: string): Promise<KpiResult & { cancelled: number }> {
   const counts = await db.prepare(`
     SELECT
@@ -139,15 +160,7 @@ export async function computeTrainingPlan(db: D1Database, pStart: string, pEnd: 
       SUM(CASE WHEN COALESCE(is_cancelled,0)=1 THEN 1 ELSE 0 END) AS cancelled
     FROM training_courses tc
     WHERE course_date >= ? AND course_date <= ? AND course NOT LIKE '%(สำเนา)%'
-      AND NOT (
-        COALESCE(is_cancelled,0)=1
-        AND EXISTS (
-          SELECT 1 FROM training_courses tc2
-          WHERE TRIM(tc2.course) = TRIM(tc.course) AND tc2.id <> tc.id
-            AND COALESCE(tc2.is_cancelled,0)=0 AND tc2.status = 'done'
-            AND strftime('%Y-%m', tc2.course_date) = strftime('%Y-%m', tc.course_date)
-        )
-      )
+      AND ${TRAINING_PLAN_DEDUP}
   `).bind(pStart, pEnd).first<{ planned_total: number; actual_done: number; cancelled: number }>();
   const result = toPct(counts?.actual_done ?? 0, counts?.planned_total ?? 0);
   return { ...result, cancelled: counts?.cancelled ?? 0 };
