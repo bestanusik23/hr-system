@@ -60,6 +60,12 @@ const SHARED_ISO_KPI_KEYS: KpiKey[] = ["license", "orientation", "probation_pass
 const REPORT_DOC_APPROVER = { name: "นายแพทย์วัชระ  เตชะธีราวัฒน์", title: "ผู้อำนวยการโรงพยาบาล" };
 const DEFAULT_ACK = { name: "อนุสิกข์  ทองแผ่น", title: "รองผู้อำนวยการฝ่ายบริหารค่าตอบแทนและพัฒนาคุณภาพ" };
 
+// แผนทั้งหมด = จัดจริง + ยกเลิก + รอจัด (หลักสูตรที่ยังไม่ถึงวัน/ยังไม่ปิดเป็น "จัดแล้ว") — แสดงให้ครบเพื่อให้ตัวเลขรวมกันได้
+function trainingPlanDetail(t: { actual: number; cancelled: number; total: number }): string {
+  const pending = t.total - t.actual - t.cancelled;
+  return `จัดจริง ${t.actual} / ยกเลิก ${t.cancelled}${pending > 0 ? ` / รอจัด ${pending}` : ""} / แผนทั้งหมด ${t.total} หลักสูตร`;
+}
+
 function fmtShortDate(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
@@ -434,7 +440,7 @@ export default function ExecPage() {
         ...withOverride("probation_pass", kpiData.probation_pass.pct, kpiData.probation_pass.total > 0 ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน` : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้") },
       { label: "ร้อยละที่อบรมตามแผน",
         ...withOverride("training_plan", kpiData.training_plan.pct, kpiData.training_plan.total > 0
-          ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
+          ? trainingPlanDetail(kpiData.training_plan)
           : "ยังไม่มีแผนอบรมในช่วงนี้") },
       { label: "ร้อยละของบุคลากรที่มีใบประกอบวิชาชีพถูกต้อง",
         ...withOverride("license", kpiData.license.pct, kpiData.license.total > 0
@@ -688,7 +694,7 @@ export default function ExecPage() {
           ? `ผ่าน ${kpiData.probation_pass.passed} / ประเมินแล้ว ${kpiData.probation_pass.total} คน`
           : "ยังไม่มีการประเมินครบกำหนดในช่วงนี้");
         const trainingPlanD = disp("training_plan", kpiData.training_plan.pct, kpiData.training_plan.total > 0
-          ? `จัดจริง ${kpiData.training_plan.actual} / ยกเลิก ${kpiData.training_plan.cancelled} / แผนทั้งหมด ${kpiData.training_plan.total} หลักสูตร`
+          ? trainingPlanDetail(kpiData.training_plan)
           : "ยังไม่มีแผนอบรมในช่วงนี้");
         const licenseD = disp("license", kpiData.license.pct, kpiData.license.total > 0
           ? `ใบฯ ไม่หมดอายุ ${kpiData.license.valid} / ตำแหน่งที่ต้องมีใบฯ ${kpiData.license.total} คน`
