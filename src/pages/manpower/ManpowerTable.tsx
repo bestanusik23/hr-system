@@ -298,9 +298,6 @@ export default function ManpowerTable() {
   const [orgDepts, setOrgDepts] = useState<OrgDept[]>([]);
   // Plan rows — start with static file instantly, then hydrate from DB
   const [planRows, setPlanRows] = useState<ManpowerRow[]>(MANPOWER_ROWS);
-  // Note editing
-  const [editingNoteIdx, setEditingNoteIdx] = useState<number | null>(null);
-  const [noteVal,        setNoteVal]        = useState("");
   // Name editing (manual emp assignment)
   const [editingNameIdx, setEditingNameIdx] = useState<number | null>(null);
   const [nameEditVal,    setNameEditVal]    = useState("");
@@ -414,15 +411,6 @@ export default function ManpowerTable() {
     await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
       method: "PATCH", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    }).catch(() => { /* silent */ });
-  }
-
-  async function saveNote(rowIdx: number, val: string) {
-    setEditingNoteIdx(null);
-    setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, note: val } : r));
-    await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: val }),
     }).catch(() => { /* silent */ });
   }
 
@@ -729,7 +717,7 @@ export default function ManpowerTable() {
                   <th style={{ ...th, textAlign: "center", width: 70 }}>รับแล้ว</th>
                   <th style={{ ...th, textAlign: "center", width: 70 }}>คงเหลือ</th>
                   <th style={{ ...th, minWidth: 180 }}>ชื่อ-นามสกุล</th>
-                  <th style={{ ...th, minWidth: 120 }}>หมายเหตุ</th>
+                  <th style={{ ...th, minWidth: 120 }}>สถานะพนักงาน</th>
                   {canEdit && <th style={{ ...th, width: 50 }}></th>}
                 </tr>
               </thead>
@@ -964,29 +952,12 @@ export default function ManpowerTable() {
                             </span>
                           )}
                         </td>
-                        <td style={{ ...td, color: "#94a3b8", fontSize: 11.5, minWidth: 120 }}>
-                          {r.liveEmpRemark ? (
-                            <span>{r.liveEmpRemark}</span>
-                          ) : editingNoteIdx === r._rowIdx && r._rowIdx >= 0 ? (
-                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                              <input autoFocus value={noteVal}
-                                onChange={e => setNoteVal(e.target.value)}
-                                onKeyDown={e => { if (e.key === "Enter") saveNote(r._rowIdx, noteVal); if (e.key === "Escape") setEditingNoteIdx(null); }}
-                                style={{ fontSize: 11.5, padding: "2px 6px", border: "1px solid #93c5fd", borderRadius: 4, width: 160 }} />
-                              <button onClick={() => saveNote(r._rowIdx, noteVal)}
-                                style={{ fontSize: 10, padding: "2px 7px", background: "#0038C6", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>บันทึก</button>
-                              <button onClick={() => setEditingNoteIdx(null)}
-                                style={{ fontSize: 10, padding: "2px 7px", background: "none", border: "1px solid #e2e8f0", borderRadius: 4, cursor: "pointer" }}>ยกเลิก</button>
-                            </div>
+                        {/* สถานะพนักงาน — ประเภทการจ้างจากข้อมูลพนักงาน (emp_type) */}
+                        <td style={{ ...td, fontSize: 11.5, minWidth: 120 }}>
+                          {r.liveEmpObj?.emp_type ? (
+                            <span style={{ color: "#475569" }}>{r.liveEmpObj.emp_type}</span>
                           ) : (
-                            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                              <span style={{ color: r.note ? "#64748b" : "#cbd5e1" }}>{r.note || (canEdit && r._rowIdx >= 0 ? "—" : "")}</span>
-                              {canEdit && r._rowIdx >= 0 && (
-                                <button onClick={() => { setEditingNoteIdx(r._rowIdx); setNoteVal(r.note || ""); }}
-                                  title="แก้ไขหมายเหตุ"
-                                  style={{ background: "none", border: "none", cursor: "pointer", padding: 0, color: "#94a3b8", fontSize: 12, lineHeight: 1 }}>✏️</button>
-                              )}
-                            </span>
+                            <span style={{ color: "#cbd5e1" }}>—</span>
                           )}
                         </td>
                         {canEdit && (
