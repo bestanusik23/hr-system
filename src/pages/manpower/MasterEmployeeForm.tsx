@@ -15,7 +15,7 @@ export interface MasterEmployee {
 interface Division { id: number; name: string; }
 interface Department { id: number; division_id: number; name: string; }
 
-export const EMP_TYPES = ["พนักงานประจำ", "สัญญาจ้าง", "สัญญาทุน 5 ปี", "Part time", "รายวัน", "ฝึกงาน"];
+export const EMP_TYPES = ["พนักงานประจำ", "สัญญาจ้างรายปี", "สัญญาจ้าง","สัญญาทุน 5 ปี", "Part time", "รายวัน", "ฝึกงาน"];
 export const NAME_PREFIXES = ["นาย", "นาง", "นางสาว", "นพ.", "พญ.", "ทพ.", "ทพญ.", "ภก.", "ภญ."];
 
 const inp: React.CSSProperties = {
