@@ -19,7 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     SELECT id, course_code, course, course_type, trainer, course_date,
            start_time, end_time, location, reg_open, status,
            COALESCE(is_cancelled, 0) AS is_cancelled,
-           COALESCE(checkin_sessions, 1) AS checkin_sessions, am_from, am_to, pm_from, pm_to
+           1 AS checkin_sessions, am_from, am_to, pm_from, pm_to
     FROM training_courses WHERE qr_token = ?
   `).bind(token).first<CourseRow>();
 
@@ -53,7 +53,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
 
   const course = await ctx.env.HR_DB.prepare(
     `SELECT id, reg_open, status, course_date, start_time, end_time, trainer, am_from, am_to, pm_from, pm_to,
-            COALESCE(checkin_sessions, 1) AS checkin_sessions, COALESCE(is_cancelled, 0) AS is_cancelled
+            1 AS checkin_sessions, COALESCE(is_cancelled, 0) AS is_cancelled
        FROM training_courses WHERE qr_token = ?`
   ).bind(token).first<{ id: number; reg_open: number; status: string; course_date: string | null; start_time: string | null; end_time: string | null; trainer: string | null; am_from: string | null; am_to: string | null; pm_from: string | null; pm_to: string | null; checkin_sessions: number; is_cancelled: number }>();
 

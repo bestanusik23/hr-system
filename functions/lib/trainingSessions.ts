@@ -58,7 +58,7 @@ export function windowsText(w: CheckinWindows): string {
  */
 export async function syncAttendeeStatus(db: Env["HR_DB"], attendeeId: number): Promise<void> {
   const att = await db.prepare(
-    `SELECT ta.id, ta.attendance_status AS st, tc.checkin_sessions AS ns
+    `SELECT ta.id, ta.attendance_status AS st, 1 AS ns
        FROM training_attendees ta JOIN training_courses tc ON tc.id = ta.course_id
       WHERE ta.id = ?`
   ).bind(attendeeId).first<{ id: number; st: string; ns: number }>();

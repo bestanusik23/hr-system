@@ -16,7 +16,7 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     return Response.json({ ok: false, error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
 
   const att = await ctx.env.HR_DB.prepare(
-    `SELECT ta.id, ta.course_id, COALESCE(tc.checkin_sessions, 1) AS ns
+    `SELECT ta.id, ta.course_id, 1 AS ns
        FROM training_attendees ta JOIN training_courses tc ON tc.id = ta.course_id WHERE ta.id = ?`
   ).bind(attendeeId).first<{ id: number; course_id: number; ns: number }>();
   if (!att) return Response.json({ ok: false, error: "ไม่พบผู้เข้าอบรม" }, { status: 404 });

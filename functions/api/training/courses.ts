@@ -19,7 +19,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
            tc.project_owner, tc.trainer, tc.course_date, tc.start_time, tc.end_time,
            tc.location, tc.month_label, tc.target, tc.budget, tc.objectives,
            tc.attachment_url, tc.status, tc.reg_open, tc.qr_token,
-           COALESCE(tc.checkin_sessions, 1) AS checkin_sessions, tc.am_from, tc.am_to, tc.pm_from, tc.pm_to,
+           1 AS checkin_sessions, tc.am_from, tc.am_to, tc.pm_from, tc.pm_to,
            COALESCE(tc.is_cancelled, 0) AS is_cancelled, tc.cancel_reason,
            COUNT(ta.id) AS actual
     FROM training_courses tc

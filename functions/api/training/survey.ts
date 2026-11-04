@@ -23,7 +23,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   }
 
   const course = await ctx.env.HR_DB.prepare(
-    "SELECT id, COALESCE(checkin_sessions, 1) AS checkin_sessions FROM training_courses WHERE qr_token = ? AND COALESCE(is_cancelled, 0) = 0"
+    "SELECT id, 1 AS checkin_sessions FROM training_courses WHERE qr_token = ? AND COALESCE(is_cancelled, 0) = 0"
   ).bind(token).first<{ id: number; checkin_sessions: number }>();
 
   if (!course) return Response.json({ ok: false, error: "ไม่พบหลักสูตร" }, { status: 404 });

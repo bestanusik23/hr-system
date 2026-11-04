@@ -37,11 +37,6 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
   const [attachmentUrl,   setAttachmentUrl]   = useState(course?.attachment_url ?? "");
   const [status,          setStatus]          = useState(course?.status ?? "planned");
   const [regOpen,         setRegOpen]         = useState(course?.reg_open !== 0);
-  const [twoSessions,     setTwoSessions]     = useState(course?.checkin_sessions === 2);
-  const [amFrom,          setAmFrom]          = useState(course?.am_from ?? "12:00");
-  const [amTo,            setAmTo]            = useState(course?.am_to ?? "13:00");
-  const [pmFrom,          setPmFrom]          = useState(course?.pm_from ?? "16:00");
-  const [pmTo,            setPmTo]            = useState(course?.pm_to ?? "17:00");
   const [saving,          setSaving]          = useState(false);
   const [error,           setError]           = useState("");
 
@@ -70,9 +65,8 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
       target: Number(target) || 0, budget: Number(budget) || 0,
       objectives: objectives || null, attachment_url: attachmentUrl || null,
       status, reg_open: regOpen ? 1 : 0,
-      checkin_sessions: twoSessions ? 2 : 1,
-      am_from: twoSessions ? (amFrom || "12:00") : null, am_to: twoSessions ? (amTo || "13:00") : null,
-      pm_from: twoSessions ? (pmFrom || "16:00") : null, pm_to: twoSessions ? (pmTo || "17:00") : null,
+      // ยกเลิกระบบเช็คชื่อ 2 รอบ (ล็อกเวลา) — กลับไปเช็คชื่อครั้งเดียวแบบเดิม
+      checkin_sessions: 1, am_from: null, am_to: null, pm_from: null, pm_to: null,
     };
     const url    = isNew ? "/api/training/courses" : `/api/training/courses/${course!.id}`;
     const method = isNew ? "POST" : "PUT";
@@ -277,36 +271,6 @@ export default function CourseForm({ course, onClose, onSaved, canEdit }: Props)
             <label htmlFor="regOpen" style={{ fontSize: 13, fontWeight: 600, color: "#0a1628", cursor: "pointer" }}>
               เปิดรับลงทะเบียน (QR Check-in)
             </label>
-          </div>
-
-          {/* เช็คชื่อ 2 รอบ */}
-          <div style={{ marginBottom: 16, background: "#f0f5ff", borderRadius: 8, padding: "10px 14px", border: "1px solid #dce4f5" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <input type="checkbox" id="twoSessions" checked={twoSessions}
-                onChange={e => setTwoSessions(e.target.checked)} disabled={!canEdit}
-                style={{ width: 16, height: 16, accentColor: "#0038C6", cursor: "pointer" }} />
-              <label htmlFor="twoSessions" style={{ fontSize: 13, fontWeight: 600, color: "#0a1628", cursor: "pointer" }}>
-                เช็คชื่อ 2 รอบ (เช้า + บ่าย) — ต้องเช็คครบทั้งสองรอบจึงได้ใบประกาศ
-              </label>
-            </div>
-            {twoSessions && (
-              <div style={{ marginTop: 10, fontSize: 12, color: "#475569" }}>
-                <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-                  <span>🔒 ล็อกเวลาเช็คชื่อ — รอบเช้าเปิด</span>
-                  <input value={amFrom} onChange={e => setAmFrom(e.target.value)} disabled={!canEdit} placeholder="12:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
-                  <span>ถึง</span>
-                  <input value={amTo} onChange={e => setAmTo(e.target.value)} disabled={!canEdit} placeholder="13:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
-                  <span>น. · รอบบ่ายเปิด</span>
-                  <input value={pmFrom} onChange={e => setPmFrom(e.target.value)} disabled={!canEdit} placeholder="16:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
-                  <span>ถึง</span>
-                  <input value={pmTo} onChange={e => setPmTo(e.target.value)} disabled={!canEdit} placeholder="17:00" style={{ ...inp, width: 70, padding: "5px 8px" }} />
-                  <span>น.</span>
-                </div>
-                <div style={{ marginTop: 6, fontSize: 11, color: "#64748b" }}>
-                  สแกนได้เฉพาะในช่วงเวลานี้ นอกช่วงระบบปฏิเสธ (ตั้งให้เปิดหลังอบรมแต่ละรอบเสร็จ) · HR บันทึกแทนด้วยมือได้ทุกเวลา · ไม่มีสถานะสาย
-                </div>
-              </div>
-            )}
           </div>
 
           {!isNew && course!.qr_token && (
