@@ -56,7 +56,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     if (rows.length <= 1) return Response.json({ ok: true, applications: [], headers: rows[0] ?? [] });
 
     const headers = rows[0];
-    let applications = rows.slice(1).map((row, i) => {
+    const applications = rows.slice(1).map((row, i) => {
       const obj: Record<string, string> = { _row: String(i + 2) };
       headers.forEach((h, j) => { obj[h] = row[j] ?? ""; });
       return obj;
@@ -69,26 +69,19 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   }
 };
 
-// PATCH /api/recruit/applications  — update a cell (e.g. status column)
-// hr/deputyHR/admin: full access to all statuses
-// head/deputy: can ONLY set "รอนัดสัมภาษณ์" (send to HR for contact)
+// PATCH /api/recruit/applications  — update a cell (the status column)
+// hr/deputyHR/admin only. Head/deputy refer applicants to HR via
+// POST /api/recruit/appointments { action: "refer" } instead (no status change).
+const RECRUIT_STATUSES = ["ยังไม่ได้ติดต่อ", "ติดต่อให้มากรอกใบสมัครแล้ว", "สัมภาษณ์แล้ว ทราบผลแล้ว"];
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  if (!["hr", "deputy", "deputyHR", "admin", "head"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  if (!["hr", "deputyHR", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const body = await ctx.request.json() as { row: number; col: string; value: string };
   const { row, col, value } = body;
   if (!row || !col) return Response.json({ ok: false, error: "Missing row/col" }, { status: 400 });
-
-  // head and deputy can ONLY send to interview queue
-  if (["head", "deputy"].includes(user.role)) {
-    if (value !== "กรอกใบสมัครและสัมภาษณ์") {
-      return Response.json({ ok: false, error: "หัวหน้าและรองผู้อำนวยการสามารถส่งเข้ากระบวนการสัมภาษณ์เท่านั้น" }, { status: 403 });
-    }
-  } else if (!["hr", "deputyHR", "admin"].includes(user.role)) {
-    return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
+  if (!RECRUIT_STATUSES.includes(value)) return Response.json({ ok: false, error: "สถานะไม่ถูกต้อง" }, { status: 400 });
 
   try {
     const token = await getGoogleAccessToken(ctx.env);
@@ -105,15 +98,6 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
     );
     const d = await res.json() as { updatedCells?: number };
     if (!d.updatedCells) return Response.json({ ok: false, error: "อัปเดตไม่สำเร็จ" }, { status: 500 });
-
-    // Notify HR when head/deputy sends applicant for interview
-    if (["head", "deputy"].includes(user.role)) {
-      const text = `${user.full_name} ส่งใบสมัคร (แถว ${row}) เพื่อนัดสัมภาษณ์`;
-      await ctx.env.HR_DB.prepare(
-        `INSERT INTO notifications (target_role, icon, text, kind, link, created_at)
-         VALUES ('hr', '📋', ?, 'recruit', '/recruit', datetime('now','localtime'))`
-      ).bind(text).run().catch(() => { /* non-fatal */ });
-    }
 
     return Response.json({ ok: true });
   } catch (e) {

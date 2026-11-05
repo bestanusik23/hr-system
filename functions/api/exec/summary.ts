@@ -114,14 +114,24 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         const total   = appRows.length;
         let pending = 0, interview = 0, passed = 0, hired = 0, rejected = 0;
         if (statusIdx >= 0) {
-          for (const row of appRows) {
+          // Interview result (ผ่าน/ไม่ผ่าน) for status "สัมภาษณ์แล้ว ทราบผลแล้ว" lives in D1
+          const resRows = await ctx.env.HR_DB.prepare(
+            "SELECT row_idx, interview_result FROM recruit_appointments WHERE interview_result <> ''"
+          ).all<{ row_idx: number; interview_result: string }>().catch(() => ({ results: [] as { row_idx: number; interview_result: string }[] }));
+          const resultByRow = new Map((resRows.results ?? []).map(r => [r.row_idx, r.interview_result]));
+          appRows.forEach((row, i) => {
             const st = row[statusIdx] ?? "";
-            if (st === "" || st === "รอพิจารณา")           pending++;
-            else if (st === "รอนัดสัมภาษณ์" || st === "รอกรอกใบสมัคร") interview++;
-            else if (st === "ผ่านการสัมภาษณ์")              passed++;
+            if (st === "" || st === "รอพิจารณา" || st === "ยังไม่ได้ติดต่อ") pending++;
+            else if (st === "กรอกใบสมัครและสัมภาษณ์" || st === "ติดต่อให้มากรอกใบสมัครแล้ว"
+                  || st === "รอนัดสัมภาษณ์" || st === "รอกรอกใบสมัคร") interview++;
+            else if (st === "ผ่านการพิจารณา" || st === "ผ่านการสัมภาษณ์") passed++;
             else if (st === "รับเข้างาน")                   hired++;
-            else if (st === "ไม่ผ่าน")                      rejected++;
-          }
+            else if (st === "ไม่ผ่านการพิจารณา" || st === "ผู้สมัครยกเลิกการสัมภาษณ์" || st === "ไม่ผ่าน") rejected++;
+            else if (st === "สัมภาษณ์แล้ว ทราบผลแล้ว") {
+              const r = resultByRow.get(i + 2);
+              if (r === "pass") passed++; else if (r === "fail") rejected++;
+            }
+          });
         } else {
           pending = total;
         }
@@ -130,7 +140,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       } else {
         recruit = { total: 0, pending: 0, interview: 0, passed: 0, hired: 0, rejected: 0, hiring_rate: 0, no_data: false };
       }
-    } catch (_e) {
+    } catch {
       // Google Sheets unavailable — keep no_data: true
     }
   }
