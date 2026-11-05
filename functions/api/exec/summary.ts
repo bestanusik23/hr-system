@@ -126,7 +126,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
                   || st === "รอนัดสัมภาษณ์" || st === "รอกรอกใบสมัคร") interview++;
             else if (st === "ผ่านการพิจารณา" || st === "ผ่านการสัมภาษณ์") passed++;
             else if (st === "รับเข้างาน")                   hired++;
-            else if (st === "ไม่ผ่านการพิจารณา" || st === "ผู้สมัครยกเลิกการสัมภาษณ์" || st === "ไม่ผ่าน") rejected++;
+            else if (st === "ไม่ผ่านการพิจารณา" || st === "ผู้สมัครยกเลิกการสัมภาษณ์" || st === "ผู้สมัครยกเลิก" || st === "ไม่ผ่าน") rejected++;
             else if (st === "สัมภาษณ์แล้ว ทราบผลแล้ว") {
               const r = resultByRow.get(i + 2);
               if (r === "pass") passed++; else if (r === "fail") rejected++;

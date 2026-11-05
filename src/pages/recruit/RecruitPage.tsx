@@ -19,6 +19,7 @@ type ApptDraft = Pick<Appointment, "appointment_date" | "note" | "has_filled_app
 const S_NEW       = "ยังไม่ได้ติดต่อ";
 const S_CONTACTED = "ติดต่อให้มากรอกใบสมัครแล้ว";
 const S_DONE      = "สัมภาษณ์แล้ว ทราบผลแล้ว";
+const S_CANCEL    = "ผู้สมัครยกเลิก";
 
 // Old Sheet values → new status (data written before the 3-status change)
 const LEGACY_STATUS: Record<string, string> = {
@@ -27,13 +28,12 @@ const LEGACY_STATUS: Record<string, string> = {
   "กรอกใบสมัครและสัมภาษณ์": S_CONTACTED,
   "ผ่านการพิจารณา": S_DONE,
   "ไม่ผ่านการพิจารณา": S_DONE,
-  "ผู้สมัครยกเลิกการสัมภาษณ์": S_DONE,
+  "ผู้สมัครยกเลิกการสัมภาษณ์": S_CANCEL,
 };
 // Old Sheet values that imply an interview result (used when D1 has no result yet)
 const LEGACY_RESULT: Record<string, { result: InterviewResult; reason: string }> = {
   "ผ่านการพิจารณา": { result: "pass", reason: "" },
   "ไม่ผ่านการพิจารณา": { result: "fail", reason: "" },
-  "ผู้สมัครยกเลิกการสัมภาษณ์": { result: "fail", reason: "ผู้สมัครยกเลิกการสัมภาษณ์" },
 };
 
 const OTHER_REASON = "อื่น ๆ";
@@ -49,10 +49,18 @@ const FAIL_REASONS = [
   "ประสบการณ์ไม่เพียงพอ",
   "อัตราจ้างที่คาดหวังสูงกว่ากรอบ",
   "ทัศนคติ/บุคลิกภาพไม่เหมาะสม",
-  "ผู้สมัครยกเลิกการสัมภาษณ์",
-  "ผู้สมัครไม่มาตามนัด",
   "ผู้สมัครปฏิเสธข้อเสนอ",
   "ตำแหน่งได้รับการบรรจุแล้ว",
+  OTHER_REASON,
+];
+
+const CANCEL_REASONS = [
+  "ได้งานที่อื่นแล้ว",
+  "ค่าตอบแทน/สวัสดิการไม่ตรงความต้องการ",
+  "ไม่สะดวกเรื่องการเดินทาง/ที่พัก",
+  "ไม่มาตามนัด / ติดต่อไม่ได้",
+  "ติดธุระหรือเหตุผลส่วนตัว",
+  "เปลี่ยนใจไม่สนใจตำแหน่งนี้แล้ว",
   OTHER_REASON,
 ];
 
@@ -63,7 +71,7 @@ interface StatusDraft {
 
 function normalizeStatus(raw: string | undefined): string {
   const v = (raw ?? "").trim();
-  if (v === S_NEW || v === S_CONTACTED || v === S_DONE) return v;
+  if (v === S_NEW || v === S_CONTACTED || v === S_DONE || v === S_CANCEL) return v;
   return LEGACY_STATUS[v] ?? S_NEW;
 }
 
@@ -79,6 +87,7 @@ const STATUS_COLOR: Record<string, { bg: string; text: string; border: string }>
   [S_NEW]:       { bg: "#fef9c3", text: "#b45309", border: "#fde68a" },
   [S_CONTACTED]: { bg: "#ede9fe", text: "#7c3aed", border: "#ddd6fe" },
   [S_DONE]:      { bg: "#e0f2fe", text: "#0369a1", border: "#bae6fd" },
+  [S_CANCEL]:    { bg: "#e2e8f0", text: "#475569", border: "#cbd5e1" },
 };
 const RESULT_COLOR = {
   pass: { bg: "#dcfce7", text: "#16a34a", border: "#bbf7d0", label: "✅ ผ่าน" },
@@ -161,7 +170,7 @@ export default function RecruitPage() {
   const canUpdate   = !!isHR;
   const canSendToHR = isHead || isDeputy;
 
-  const ALL_STATUSES = [S_NEW, S_CONTACTED, S_DONE];
+  const ALL_STATUSES = [S_NEW, S_CONTACTED, S_DONE, S_CANCEL];
   const allowedStatuses = ALL_STATUSES;
 
   const statusColIdx = headers.findIndex(h => isStatusCol(h));
@@ -282,7 +291,8 @@ export default function RecruitPage() {
 
       const existing = appointments[app._row];
       const merged: Appointment = { ...(existing ?? EMPTY_APPT), ...extra };
-      if (value !== S_DONE) { merged.interview_result = ""; merged.result_reason = ""; merged.result_note = ""; }
+      if (value === S_CANCEL) merged.interview_result = "";
+      else if (value !== S_DONE) { merged.interview_result = ""; merged.result_reason = ""; merged.result_note = ""; }
       // Nothing to store for "ยังไม่ได้ติดต่อ" on a row that has no D1 record yet
       if (existing || value !== S_NEW) {
         if (!await postAppointment(app._row, merged)) return false;
@@ -297,7 +307,7 @@ export default function RecruitPage() {
     }
   }
 
-  // Current result: D1 first, else implied by a legacy Sheet value (ผ่าน/ไม่ผ่าน/ยกเลิก)
+  // Current result: D1 first, else implied by a legacy Sheet value (ผ่าน/ไม่ผ่าน)
   function getResult(app: Application): { result: InterviewResult; reason: string; note: string } {
     const a = appointments[app._row];
     if (a?.interview_result) return { result: a.interview_result, reason: a.result_reason, note: a.result_note };
@@ -305,12 +315,24 @@ export default function RecruitPage() {
     return legacy ? { result: legacy.result, reason: legacy.reason, note: "" } : { result: "", reason: "", note: "" };
   }
 
-  // Pick a status: status 1 applies right away; 2 and 3 open a dialog for date / result + reason.
+  // Cancellation reason (status "ผู้สมัครยกเลิก") — stored in result_reason / result_note
+  function getCancelReason(app: Application): { reason: string; note: string } {
+    const a = appointments[app._row];
+    return getAppStatus(app) === S_CANCEL && a ? { reason: a.result_reason, note: a.result_note } : { reason: "", note: "" };
+  }
+
+  // Pick a status: status 1 applies right away; others open a dialog for date / result / reason.
   function chooseStatus(app: Application, value: string, presetResult?: InterviewResult) {
     if (!value) return;
     if (value === S_NEW) {
-      if (getAppStatus(app) !== S_NEW && !confirm(`เปลี่ยนสถานะกลับเป็น "${S_NEW}" ? (ผลสัมภาษณ์ที่บันทึกไว้จะถูกล้าง)`)) return;
+      if (getAppStatus(app) !== S_NEW && !confirm(`เปลี่ยนสถานะกลับเป็น "${S_NEW}" ? (ผลสัมภาษณ์/สาเหตุที่บันทึกไว้จะถูกล้าง)`)) return;
       void applyStatus(app, S_NEW, {});
+      return;
+    }
+    if (value === S_CANCEL) {
+      const c = getCancelReason(app);
+      setStatusDraft({ app, status: value, appointment_date: appointments[app._row]?.appointment_date ?? "",
+        interview_result: "", result_reason: c.reason, result_note: c.note });
       return;
     }
     const cur = getResult(app);
@@ -332,9 +354,15 @@ export default function RecruitPage() {
       if (!result_reason) { alert("กรุณาเลือกเหตุผล"); return; }
       if (result_reason === OTHER_REASON && !result_note.trim()) { alert("กรุณาระบุรายละเอียดเหตุผล"); return; }
     }
+    if (status === S_CANCEL) {
+      if (!result_reason) { alert("กรุณาเลือกสาเหตุที่ผู้สมัครยกเลิก"); return; }
+      if (result_reason === OTHER_REASON && !result_note.trim()) { alert("กรุณาระบุรายละเอียดสาเหตุ"); return; }
+    }
     const extra: Partial<Appointment> = status === S_DONE
       ? { interview_result, result_reason, result_note: result_note.trim() }
-      : { appointment_date };
+      : status === S_CANCEL
+        ? { interview_result: "", result_reason, result_note: result_note.trim() }
+        : { appointment_date };
     if (await applyStatus(app, status, extra)) setStatusDraft(null);
   }
 
@@ -428,6 +456,12 @@ export default function RecruitPage() {
       return appt?.appointment_date
         ? <div style={{ fontSize: 11, color: "#c2410c", fontWeight: 700, marginTop: 4 }}>📅 เข้ามา {formatApptDate(appt.appointment_date)}</div>
         : <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>ยังไม่ระบุวันที่เข้ามา</div>;
+    }
+    if (st === S_CANCEL) {
+      const c = getCancelReason(app);
+      const why = [c.reason, c.note].filter(Boolean).join(" — ");
+      return <div style={{ fontSize: 11, color: "#475569", marginTop: 4, maxWidth: 260, overflow: "hidden",
+        textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={why}>🚫 {why || "ไม่ระบุสาเหตุ"}</div>;
     }
     if (st === S_DONE) {
       const r = getResult(app);
@@ -621,6 +655,13 @@ export default function RecruitPage() {
                       fontFamily: "inherit", color: "#dc2626", fontWeight: 600,
                       opacity: updating === app._row ? 0.6 : 1 }}>
                     ✗ สัมภาษณ์แล้ว — ไม่ผ่าน
+                  </button>
+                  <button onClick={() => chooseStatus(app, S_CANCEL)} disabled={updating === app._row}
+                    style={{ padding: "7px 14px", borderRadius: 9, border: "1.5px solid #cbd5e1",
+                      background: "#fff", fontSize: 12, cursor: "pointer",
+                      fontFamily: "inherit", color: "#475569", fontWeight: 600,
+                      opacity: updating === app._row ? 0.6 : 1 }}>
+                    🚫 ผู้สมัครยกเลิก
                   </button>
                 </div>
               </div>
@@ -910,6 +951,21 @@ export default function RecruitPage() {
                       );
                     })}
                   </div>
+                  {getAppStatus(detail) === S_CANCEL && (() => {
+                    const c = getCancelReason(detail);
+                    return (
+                      <div style={{ marginTop: 12, fontSize: 13, color: "#475569", background: "#f8fafc",
+                        border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 14px" }}>
+                        <b>สาเหตุที่ยกเลิก:</b> {c.reason || "ไม่ระบุ"}
+                        {c.note && <div style={{ marginTop: 4, color: "#64748b" }}>📝 {c.note}</div>}
+                        <button onClick={() => chooseStatus(detail, S_CANCEL)}
+                          style={{ marginLeft: 10, padding: "3px 10px", borderRadius: 8, border: "1px solid #cbd5e1",
+                            background: "#fff", fontSize: 12, cursor: "pointer", fontFamily: "inherit", color: "#334155" }}>
+                          ✏️ แก้ไขสาเหตุ
+                        </button>
+                      </div>
+                    );
+                  })()}
                   {getAppStatus(detail) === S_DONE && (() => {
                     const r = getResult(detail);
                     return (
@@ -944,7 +1000,8 @@ export default function RecruitPage() {
       {/* ── Status dialog: visit date (status 2) / result + reason (status 3) ── */}
       {statusDraft && (() => {
         const d = statusDraft;
-        const reasons = d.interview_result === "pass" ? PASS_REASONS : d.interview_result === "fail" ? FAIL_REASONS : [];
+        const reasons = d.status === S_CANCEL ? CANCEL_REASONS
+          : d.interview_result === "pass" ? PASS_REASONS : d.interview_result === "fail" ? FAIL_REASONS : [];
         const busy = updating === d.app._row;
         const appName = nameCol?.key ? d.app[nameCol.key] || "—" : "—";
         return (
@@ -963,6 +1020,27 @@ export default function RecruitPage() {
                     onChange={e => setStatusDraft({ ...d, appointment_date: e.target.value })}
                     style={{ padding: "9px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontFamily: "inherit", fontSize: 14 }} />
                   <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6 }}>ถ้ายังไม่ทราบวันที่ เว้นว่างไว้แล้วกลับมาแก้ภายหลังได้</div>
+                </div>
+              )}
+
+              {d.status === S_CANCEL && (
+                <div>
+                  <label style={DLG_LABEL}>สาเหตุที่ผู้สมัครยกเลิก</label>
+                  <select value={d.result_reason} onChange={e => setStatusDraft({ ...d, result_reason: e.target.value })}
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                      fontFamily: "inherit", fontSize: 14, marginBottom: 12 }}>
+                    <option value="">-- เลือกสาเหตุ --</option>
+                    {d.result_reason && !reasons.includes(d.result_reason) && <option value={d.result_reason}>{d.result_reason}</option>}
+                    {reasons.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <label style={DLG_LABEL}>
+                    รายละเอียดเพิ่มเติม{d.result_reason === OTHER_REASON ? " (จำเป็น)" : " (ถ้ามี)"}
+                  </label>
+                  <textarea value={d.result_note} rows={3}
+                    onChange={e => setStatusDraft({ ...d, result_note: e.target.value })}
+                    placeholder="พิมพ์สาเหตุหรือรายละเอียดเพิ่มเติม"
+                    style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                      fontFamily: "inherit", fontSize: 13, resize: "vertical", boxSizing: "border-box" }} />
                 </div>
               )}
 

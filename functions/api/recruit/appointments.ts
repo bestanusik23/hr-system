@@ -80,7 +80,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
         updated_by=excluded.updated_by, updated_at=datetime('now')
     `).bind(
       body.row_idx, body.appointment_date ?? "", body.note ?? "", body.has_filled_application ? 1 : 0,
-      result, result ? (body.result_reason ?? "") : "", result ? (body.result_note ?? "") : "",
+      result, body.result_reason ?? "", body.result_note ?? "",
       actor,
     ).run();
   } catch (err) {

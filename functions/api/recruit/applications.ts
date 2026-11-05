@@ -72,7 +72,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
 // PATCH /api/recruit/applications  — update a cell (the status column)
 // hr/deputyHR/admin only. Head/deputy refer applicants to HR via
 // POST /api/recruit/appointments { action: "refer" } instead (no status change).
-const RECRUIT_STATUSES = ["ยังไม่ได้ติดต่อ", "ติดต่อให้มากรอกใบสมัครแล้ว", "สัมภาษณ์แล้ว ทราบผลแล้ว"];
+const RECRUIT_STATUSES = ["ยังไม่ได้ติดต่อ", "ติดต่อให้มากรอกใบสมัครแล้ว", "สัมภาษณ์แล้ว ทราบผลแล้ว", "ผู้สมัครยกเลิก"];
 export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
