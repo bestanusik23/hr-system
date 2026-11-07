@@ -238,6 +238,12 @@ const SYSTEMS: SystemCard[] = [
     desc: "กรอกงบประมาณและยอดจ่ายจริงค่าล่วงเวลารายเดือน แยกตามหมวดงาน พร้อมรายงานเปรียบเทียบ Budget vs Actual และลำดับตรวจสอบ/อนุมัติ",
     roles: ["hr","deputyHR","admin"],
   },
+  {
+    key: "hq-report", no: "17", icon: <IcFileText />,
+    title: "รายงาน RAM GROUP",
+    desc: "สรุป HR Dashboard รายไตรมาส/รายปี (อัตรากำลัง ผู้เริ่มงาน ผู้ลาออก แยกตามสายงาน) และ export เป็น Excel ตามแบบที่ส่งสำนักงานใหญ่",
+    roles: ["admin"],
+  },
 ];
 
 const CSS = `

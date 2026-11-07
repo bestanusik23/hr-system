@@ -21,6 +21,7 @@ import InternsPage from "./pages/interns/InternsPage";
 import InternCertVerifyPage from "./pages/interns/InternCertVerifyPage";
 import AnnualEvalPage from "./pages/annualEval/AnnualEvalPage";
 import OtBudgetPage from "./pages/otbudget/OtBudgetPage";
+import HqReportPage from "./pages/hqReport/HqReportPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/manpower" element={<RequireAuth><ManpowerPage /></RequireAuth>} />
           <Route path="/bar-management" element={<RequireAuth><BarManagementPage /></RequireAuth>} />
           <Route path="/ot-budget" element={<RequireAuth><OtBudgetPage /></RequireAuth>} />
+          <Route path="/hq-report" element={<RequireAuth><HqReportPage /></RequireAuth>} />
           {/* ลิงก์เดิมของ Workforce Timeline — ส่งต่อไปเมนูใหม่ เพื่อไม่ให้ลิงก์ที่บันทึกไว้เสีย */}
           <Route path="/workforce-timeline" element={<Navigate to="/bar-management" replace />} />
           <Route path="/order-out" element={<RequireAuth><OrderOutPage /></RequireAuth>} />
