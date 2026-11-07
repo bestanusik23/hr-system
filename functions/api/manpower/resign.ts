@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { upsertHqExtra, parseAge, parseText } from "../../lib/hqExtra";
 
 // POST /api/manpower/resign — record a resignation
 // → Master DB status=resigned, removed from active lists, eval rounds closed (filtered out)
@@ -9,7 +10,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   if (!["hr", "admin"].includes(user.role)) return Response.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const b = await ctx.request.json() as Record<string, unknown>;
-  const { employee_id, resign_date, resign_reason, resign_type } = b;
+  const { employee_id, resign_date, resign_reason, resign_type, age, hq_reason } = b;
 
   if (!employee_id) return Response.json({ ok: false, error: "กรุณาเลือกพนักงาน" }, { status: 400 });
   if (!resign_date)  return Response.json({ ok: false, error: "กรุณาระบุวันที่ลาออก" }, { status: 400 });
@@ -33,6 +34,14 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
   await ctx.env.HR_DB.prepare(
     "UPDATE evaluations SET status='rejected', updated_at=datetime('now') WHERE employee_id=? AND status NOT IN ('approved')"
   ).bind(employee_id).run();
+
+  // อายุ + เหตุผลตามรายการสำนักงานใหญ่ → ใช้ในรายงาน RAM GROUP
+  const extra = { age: parseAge(age), reason: parseText(hq_reason) };
+  if (extra.age != null || extra.reason) {
+    await upsertHqExtra(ctx.env.HR_DB, Number(employee_id), {
+      ...(extra.age != null ? { age: extra.age } : {}), ...(extra.reason ? { reason: extra.reason } : {}),
+    }, user.full_name);
+  }
 
   await ctx.env.HR_DB.prepare(
     "INSERT INTO activity_log (user_id, actor_name, module, action, entity_type, entity_id) VALUES (?,?,'manpower','resign','employee',?)"

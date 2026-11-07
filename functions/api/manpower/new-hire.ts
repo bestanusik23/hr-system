@@ -1,5 +1,6 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
+import { upsertHqExtra, parseText } from "../../lib/hqExtra";
 
 const PALETTE = ["#0038C6", "#16a34a", "#0891b2", "#7c3aed", "#d97706", "#db2777", "#0d9488", "#dc2626"];
 
@@ -14,6 +15,7 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     emp_type, probation_days,
     license_number, license_expiry,
     car_plate_1, car_plate_2, moto_plate_1, moto_plate_2,
+    sourcing_channel,
   } = b;
 
   if (!full_name || !String(full_name).trim())
@@ -53,6 +55,10 @@ export const onRequestPost: PagesFunction<Env> = async (ctx) => {
     await ctx.env.HR_DB.prepare("UPDATE employees SET emp_code = ? WHERE id = ?")
       .bind(empCode, newId).run();
   } catch { /* emp_code column not yet in schema */ }
+
+  // ช่องทางสรรหา → ใช้ในรายงาน RAM GROUP (Data_Sourcing)
+  const channel = parseText(sourcing_channel);
+  if (channel) await upsertHqExtra(ctx.env.HR_DB, newId, { sourcing_channel: channel }, user.full_name);
 
   try {
     await ctx.env.HR_DB.prepare(

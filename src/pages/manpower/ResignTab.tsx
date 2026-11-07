@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { formatThaiDate } from "../../utils/date";
 import { useAuth } from "../../context/AuthContext";
+import { useHqLists } from "../hqReport/useHqLists";
 
 interface ActiveEmp {
   id: number; full_name: string; position: string | null;
@@ -89,6 +90,9 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
   const [resignDate, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [resignType, setType] = useState("ลาออกเอง");
   const [reason, setReason]   = useState("");
+  const [hqReason, setHqReason] = useState("");
+  const [age, setAge]         = useState("");
+  const hqLists = useHqLists();
   const [saving, setSaving]   = useState(false);
   const [error, setError]     = useState("");
 
@@ -143,10 +147,12 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
   async function save() {
     if (!empId) { setError("กรุณาเลือกพนักงาน"); return; }
     if (!resignDate) { setError("กรุณาระบุวันที่ลาออก"); return; }
+    if (age && (Number(age) < 15 || Number(age) > 90)) { setError("อายุต้องอยู่ระหว่าง 15–90 ปี"); return; }
     setSaving(true); setError("");
     const r = await fetch("/api/manpower/resign", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ employee_id: empId, resign_date: resignDate, resign_reason: reason || null, resign_type: resignType }),
+      body: JSON.stringify({ employee_id: empId, resign_date: resignDate, resign_reason: reason || hqReason || null, resign_type: resignType,
+        age: age || null, hq_reason: hqReason || null }),
     });
     const d = await r.json() as { ok: boolean; error?: string };
     setSaving(false);
@@ -255,7 +261,16 @@ export default function ResignTab({ onSaved }: { onSaved: () => void }) {
           ))}
         </div>
       </Field>
-      <Field label="เหตุผลการลาออก">
+      <Field label="เหตุผลการลาออก (ตามรายการสำนักงานใหญ่)">
+        <select value={hqReason} onChange={e => setHqReason(e.target.value)} style={inp}>
+          <option value="">-- เลือก --</option>
+          {(hqLists?.reasons ?? []).map(r => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </Field>
+      <Field label="อายุ (ปี)">
+        <input type="number" min={15} max={90} value={age} onChange={e => setAge(e.target.value)} style={inp} placeholder="ใช้ในรายงาน RAM GROUP" />
+      </Field>
+      <Field label="รายละเอียดเหตุผลเพิ่มเติม">
         <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} style={{ ...inp, resize: "vertical" }} />
       </Field>
 

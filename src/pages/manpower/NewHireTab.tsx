@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { formatThaiDate, toGregorian } from "../../utils/date";
 import { EMP_TYPES } from "./MasterEmployeeForm";
 import { MANPOWER_ROWS } from "../../data/manpowerPlan";
+import { useHqLists } from "../hqReport/useHqLists";
 
 interface Division { id: number; name: string; }
 interface Department { id: number; division_id: number; name: string; }
@@ -138,6 +139,8 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   const [deptId, setDeptId]     = useState<number | "">("");
   const [position, setPos]      = useState("");
   const [empType, setType]      = useState("");
+  const [channel, setChannel]   = useState("");
+  const hqLists = useHqLists();
   const [probDays, setProbDays] = useState(119);
   // License
   const [licenseNo, setLicNo]   = useState("");
@@ -188,7 +191,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
   }, [licenseExp]);
 
   function reset() {
-    setName(""); setNameEn(""); setEmpCode(""); setStart(""); setDivId(""); setDeptId(""); setPos("");
+    setName(""); setNameEn(""); setEmpCode(""); setStart(""); setDivId(""); setDeptId(""); setPos(""); setChannel("");
     setType(""); setProbDays(119);
     setLicNo(""); setLicExp("");
     setCar1(""); setCar2(""); setMoto1(""); setMoto2("");
@@ -208,6 +211,7 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
           license_number: licenseNo || null, license_expiry: licenseExp || null,
           car_plate_1: car1 || null, car_plate_2: car2 || null,
           moto_plate_1: moto1 || null, moto_plate_2: moto2 || null,
+          sourcing_channel: channel || null,
         }),
       });
       let d: { ok: boolean; error?: string; probation_end_date?: string | null; emp_code?: string | null };
@@ -308,6 +312,12 @@ export default function NewHireTab({ onSaved }: { onSaved: () => void }) {
       <Field label="ประเภทพนักงาน">
         <input value={empType} onChange={e => setType(e.target.value)} style={inp} list="newhire-types" placeholder="เลือกหรือพิมพ์…" />
         <datalist id="newhire-types">{EMP_TYPES.map(t => <option key={t} value={t} />)}</datalist>
+      </Field>
+      <Field label="ช่องทางสรรหา" hint="ใช้ในรายงาน RAM GROUP (ส่งสำนักงานใหญ่)">
+        <select value={channel} onChange={e => setChannel(e.target.value)} style={inp}>
+          <option value="">-- ไม่ระบุ --</option>
+          {(hqLists?.channels ?? []).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
       </Field>
       <Field label="ระยะทดลองงาน (วัน)">
         <input type="number" value={probDays} onChange={e => setProbDays(Number(e.target.value))} style={inp} />
