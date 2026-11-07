@@ -7,13 +7,14 @@ import {
   type ApiData, type PeriodKey, type PersonRow, type TemplateLists,
 } from "./hqReportCalc";
 import { exportHqDashboard } from "./hqExport";
+import AnalysisTab from "./AnalysisTab";
 
 // เมนู "รายงาน RAM GROUP" (รายงานส่งสำนักงานใหญ่) — admin only.
 // สรุป HR Dashboard รายไตรมาส/รายปี จากข้อมูลพนักงาน + แผนอัตรากำลัง แล้ว export เป็น
 // xlsx ตามแม่แบบที่ส่งสำนักงานใหญ่ ช่องที่ระบบไม่มี (อายุผู้ลาออก ช่องทางสรรหา หมวดเหตุผล)
 // ให้ผู้ดูแลกรอกในแท็บของแต่ละกลุ่ม
 
-type Tab = "summary" | "resign" | "hire" | "map";
+type Tab = "summary" | "analysis" | "resign" | "hire" | "map";
 
 const card: React.CSSProperties = { background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: 16, boxShadow: "0 4px 14px rgba(20,40,90,.05)", marginBottom: 14 };
 const th: React.CSSProperties = { textAlign: "left", padding: "8px 10px", background: "#F2F5FB", fontWeight: 700, fontSize: 12.5, color: "#334155", borderBottom: "1px solid #E6EBF5", whiteSpace: "nowrap" };
@@ -85,6 +86,7 @@ export default function HqReportPage() {
 
   const TABS: { key: Tab; label: string; badge?: number }[] = [
     { key: "summary", label: "📊 สรุปอัตรากำลัง" },
+    { key: "analysis", label: "📈 วิเคราะห์" },
     { key: "resign", label: "🚪 ผู้ลาออก", badge: missingAge + missingReason },
     { key: "hire", label: "🆕 พนักงานใหม่", badge: missingChannel },
     { key: "map", label: "🧭 จับคู่สายงาน", badge: rep?.unmapped.length },
@@ -185,6 +187,8 @@ export default function HqReportPage() {
               </p>
             </div>
           )}
+
+          {tab === "analysis" && data && <AnalysisTab data={data} rep={rep} lists={lists} />}
 
           {tab === "resign" && (
             <div style={card}>

@@ -86,6 +86,7 @@ export interface TemplateLists {
   reasons: string[];                   // raw resignation reason (Map!T)
   reasonCat: Record<string, string>;   // raw → category (Map!U)
   reasonType: Record<string, string>;  // category → Voluntary/Involuntary (Map!W→X)
+  turnoverTarget: number;              // annual turnover target (Map!AF5, e.g. 0.12)
 }
 
 export async function loadTemplate(): Promise<XLSX.WorkBook> {
@@ -106,7 +107,8 @@ export function readTemplateLists(wb: XLSX.WorkBook): TemplateLists {
     return out;
   };
   const O = col("O"), P = col("P"), T = col("T"), U = col("U"), W = col("W"), X = col("X");
-  const lists: TemplateLists = { channels: [], channelCat: {}, reasons: [], reasonCat: {}, reasonType: {} };
+  const target = Number(ws?.["AF5"]?.v);
+  const lists: TemplateLists = { channels: [], channelCat: {}, reasons: [], reasonCat: {}, reasonType: {}, turnoverTarget: Number.isFinite(target) && target > 0 ? target : 0.12 };
   O.forEach((v, i) => { if (v) { lists.channels.push(v); lists.channelCat[v] = P[i]; } });
   T.forEach((v, i) => { if (v) { lists.reasons.push(v); lists.reasonCat[v] = U[i]; } });
   W.forEach((v, i) => { if (v) lists.reasonType[v] = X[i]; });
@@ -200,7 +202,26 @@ export function displayName(e: ApiEmployee): string {
 }
 
 export function buildReport(data: ApiData, year: number, period: PeriodKey, lists: TemplateLists | null): HqReport {
-  const months = periodMonths(year, period);
+  return buildReportForMonths(data, periodMonths(year, period), lists);
+}
+
+/** Same months count, immediately before the given months (e.g. previous quarter). */
+export function previousMonths(months: string[]): string[] {
+  const [y, m] = months[0].split("-").map(Number);
+  return months.map((_, i) => {
+    const idx = y * 12 + (m - 1) - months.length + i;
+    return `${Math.floor(idx / 12)}-${pad((idx % 12) + 1)}`;
+  });
+}
+/** January of the same year up to the last month given (year-to-date). */
+export function ytdMonths(months: string[]): string[] {
+  const last = months[months.length - 1];
+  const y = last.slice(0, 4), m = Number(last.slice(5, 7));
+  return Array.from({ length: m }, (_, i) => `${y}-${pad(i + 1)}`);
+}
+
+export function buildReportForMonths(data: ApiData, months: string[], lists: TemplateLists | null): HqReport {
+  const year = Number(months[months.length - 1].slice(0, 4));
   const monthSet = new Set(months);
   const resolve = makeLineResolver(data.lineMap);
   const extra = new Map(data.extras.map(x => [x.employee_id, x]));
