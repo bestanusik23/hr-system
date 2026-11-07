@@ -404,6 +404,16 @@ export default function ManpowerDashboard() {
   const divMax      = Math.max(1, ...byDivision.map(d => d.n));
   const typeTotal   = Math.max(1, byType.reduce((s, t) => s + t.n, 0));
   const statusTotal = Math.max(1, byStatus.reduce((s, t) => s + t.n, 0));
+  const divSum      = byDivision.reduce((s, d) => s + d.n, 0);
+  const typeSum     = byType.reduce((s, t) => s + t.n, 0);
+  const statusSum   = byStatus.reduce((s, t) => s + t.n, 0);
+  const totalRow = (n: number) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12,
+      paddingTop: 10, borderTop: "1.5px solid #e2e8f0", fontSize: 13 }}>
+      <span style={{ fontWeight: 800, color: "#0a1628" }}>รวมทั้งหมด</span>
+      <span style={{ fontWeight: 800, color: "#0038C6" }}>{n.toLocaleString()} คน</span>
+    </div>
+  );
   const TYPE_MULTI  = byType.length > 1;
 
   const latestSaved     = months[0];
@@ -860,6 +870,7 @@ export default function ManpowerDashboard() {
                 </div>
               ))}
           </div>
+          {byDivision.length > 0 && totalRow(divSum)}
         </div>
 
         {/* By status + type */}
@@ -884,6 +895,7 @@ export default function ManpowerDashboard() {
                 </div>
               ))}
             </div>
+            {byStatus.length > 0 && totalRow(statusSum)}
           </div>
 
           <div>
@@ -913,6 +925,7 @@ export default function ManpowerDashboard() {
                 </div>
               ))}
             </div>
+            {byType.length > 0 && totalRow(typeSum)}
           </div>
         </div>
       </div>
