@@ -166,8 +166,8 @@ export default function AnalysisTab({ data, rep, lists }: { data: ApiData; rep: 
         </div>
         <div style={card}>
           <h3 style={h3}>ผู้ลาออกตามช่วงอายุ</h3>
-          <p style={sub}>{cur.ageMissing > 0 ? `ยังไม่ได้กรอกอายุ ${cur.ageMissing} คน (แท็บผู้ลาออก)` : "กรอกอายุครบแล้ว"}</p>
-          {countBars(cur.age, cur.total.resigns - cur.ageMissing)}
+          <p style={sub}>{cur.ageMissing > 0 ? `ยังไม่ได้กรอกอายุ ${cur.ageMissing} คน (แท็บผู้ลาออก)` : "กรอกอายุครบแล้ว"} · นับเฉพาะคนที่มีอายุ (เริ่มเก็บ ต.ค. 2569)</p>
+          {countBars(cur.age, cur.age.reduce((a, c) => a + c.value, 0))}
         </div>
         <div style={card}>
           <h3 style={h3}>หมวดเหตุผลการลาออก</h3>
@@ -200,8 +200,8 @@ export default function AnalysisTab({ data, rep, lists }: { data: ApiData; rep: 
         </div>
         <div style={card}>
           <h3 style={h3}>ช่องทางสรรหาที่ได้คน</h3>
-          <p style={sub}>{cur.channelMissing > 0 ? `ยังไม่ได้เลือกช่องทาง ${cur.channelMissing} คน (แท็บพนักงานใหม่)` : "ระบุช่องทางครบแล้ว"}</p>
-          {cur.channelCat.length ? countBars(cur.channelCat, cur.hires - cur.channelMissing) : <div style={{ fontSize: 13, color: MUTED }}>ยังไม่มีข้อมูล</div>}
+          <p style={sub}>{cur.channelMissing > 0 ? `ยังไม่ได้เลือกช่องทาง ${cur.channelMissing} คน (แท็บพนักงานใหม่)` : "ระบุช่องทางครบแล้ว"} · เริ่มเก็บ ต.ค. 2569</p>
+          {cur.channelCat.length ? countBars(cur.channelCat, cur.channelCat.reduce((a, c) => a + c.value, 0)) : <div style={{ fontSize: 13, color: MUTED }}>ยังไม่มีข้อมูล</div>}
         </div>
       </div>
     </>

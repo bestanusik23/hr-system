@@ -77,9 +77,9 @@ export function analyze(rep: HqReport, lists: TemplateLists | null): Analysis {
   const channelCat = tally(rep.hires.filter(p => p.channel).map(p => lists?.channelCat[p.channel!] || p.channel!));
 
   return {
-    months: n, total, byLine, monthly, lineTrend, tenure, age, ageMissing: rep.resigns.length - withAge.length,
+    months: n, total, byLine, monthly, lineTrend, tenure, age, ageMissing: rep.resigns.filter(p => p.required && p.age === null).length,
     reasonCat, leaveType, probationLeavers, hiresVsResigns, channelCat,
-    channelMissing: rep.hires.filter(p => !p.channel).length, hires: rep.hires.length,
+    channelMissing: rep.hires.filter(p => p.required && !p.channel).length, hires: rep.hires.length,
   };
 }
 

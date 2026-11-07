@@ -16,6 +16,11 @@ export const LINES = ["สายการพยาบาล", "สายบั�
 export type Line = typeof LINES[number];
 export const EXCLUDED_LINE = "ไม่นับ";
 
+// อายุ / ช่องทางสรรหา / เหตุผล เริ่มเก็บตั้งแต่รอบเดือน ต.ค. 2569 (2026-10) เป็นต้นไป
+// รายการก่อนหน้านั้นไม่บังคับกรอก และไม่นับเป็น "ยังกรอกไม่ครบ"
+export const TRACK_FROM = "2026-10";
+export const TRACK_FROM_LABEL = "ต.ค. 2569";
+
 export const LINE_FUNC: Record<Line, string> = {
   "สายการพยาบาล": "Nursing",
   "สายบัญชีและการเงิน": "Back Office",
@@ -186,6 +191,8 @@ export interface PersonRow {
   id: number; name: string; position: string; division: string; line: Line;
   month: string; start: string | null; resign: string | null;
   age: number | null; channel: string | null; reason: string | null; resignReasonText: string | null;
+  /** true = อยู่ในช่วงที่ต้องกรอก (ตั้งแต่ TRACK_FROM) */
+  required: boolean;
 }
 export interface UnmappedItem { division: string; position: string; employees: number; planQty: number }
 export interface HqReport {
@@ -282,6 +289,7 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
       id: e.id, name: displayName(e), position: norm(e.position), division: norm(e.division_name), line, month,
       start: isoDate(e.start_date), resign: isoDate(e.resign_date),
       age: x?.age ?? null, channel: x?.sourcing_channel ?? null, reason, resignReasonText: txt,
+      required: month >= TRACK_FROM,
     };
   };
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LINES, EXCLUDED_LINE, PERIOD_LABEL, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
+  LINES, EXCLUDED_LINE, PERIOD_LABEL, TRACK_FROM, TRACK_FROM_LABEL, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
   loadTemplate, readTemplateLists, buildReport,
   type ApiData, type PeriodKey, type PersonRow, type TemplateLists,
 } from "./hqReportCalc";
@@ -26,7 +26,10 @@ const nowYear = new Date().getFullYear();
 const defaultPeriod = (): { year: number; period: PeriodKey } => {
   // Most recent finished quarter
   const q = Math.floor(new Date().getMonth() / 3); // 0..3 = current quarter index
-  return q === 0 ? { year: nowYear - 1, period: "Q4" } : { year: nowYear, period: (`Q${q}` as PeriodKey) };
+  const last = q === 0 ? { year: nowYear - 1, period: "Q4" as PeriodKey } : { year: nowYear, period: (`Q${q}` as PeriodKey) };
+  // ไม่ย้อนไปก่อนงวดที่เริ่มเก็บข้อมูล (ไตรมาส 4 ปี 2026)
+  const startYear = Number(TRACK_FROM.slice(0, 4)), startQ = `Q${Math.ceil(Number(TRACK_FROM.slice(5, 7)) / 3)}` as PeriodKey;
+  return last.year < startYear || (last.year === startYear && last.period < startQ) ? { year: startYear, period: startQ } : last;
 };
 const thDate = (iso: string | null) => {
   if (!iso) return "—";
@@ -80,9 +83,9 @@ export default function HqReportPage() {
     finally { setBusy(false); }
   };
 
-  const missingAge = rep?.resigns.filter(p => p.age === null).length ?? 0;
-  const missingReason = rep?.resigns.filter(p => !p.reason).length ?? 0;
-  const missingChannel = rep?.hires.filter(p => !p.channel).length ?? 0;
+  const missingAge = rep?.resigns.filter(p => p.required && p.age === null).length ?? 0;
+  const missingReason = rep?.resigns.filter(p => p.required && !p.reason).length ?? 0;
+  const missingChannel = rep?.hires.filter(p => p.required && !p.channel).length ?? 0;
 
   const TABS: { key: Tab; label: string; badge?: number }[] = [
     { key: "summary", label: "📊 สรุปอัตรากำลัง" },
@@ -226,13 +229,14 @@ function PeopleTable({ rows, kind, lists, onChange }: {
         <tbody>
           {rows.map(p => (
             <tr key={`${kind}-${p.id}`}>
-              <td style={td}>{monthAbbr(p.month)}</td><td style={td}>{p.name}</td><td style={td}>{p.position}</td>
+              <td style={td}>{monthAbbr(p.month)}</td>
+              <td style={td}>{p.name}{!p.required && <div style={{ fontSize: 11, color: "#94A3B8" }}>ก่อน {TRACK_FROM_LABEL} — ไม่บังคับกรอก</div>}</td><td style={td}>{p.position}</td>
               <td style={td}>{p.line}</td><td style={td}>{thDate(p.start)}</td>
               {kind === "resign" ? (
                 <>
                   <td style={td}>{thDate(p.resign)}</td>
                   <td style={td}>
-                    <input type="number" min={15} max={90} defaultValue={p.age ?? ""} style={{ ...inp, width: 70, borderColor: p.age === null ? "#F59E0B" : "#D5DCEB" }}
+                    <input type="number" min={15} max={90} defaultValue={p.age ?? ""} style={{ ...inp, width: 70, borderColor: p.required && p.age === null ? "#F59E0B" : "#D5DCEB" }}
                       onBlur={e => {
                         const v = e.target.value === "" ? null : Number(e.target.value);
                         if (v !== p.age) onChange(p, { age: v });
@@ -240,7 +244,7 @@ function PeopleTable({ rows, kind, lists, onChange }: {
                   </td>
                   <td style={td}>
                     <select value={p.reason ?? ""} onChange={e => onChange(p, { reason: e.target.value || null })}
-                      style={{ ...inp, maxWidth: 260, borderColor: p.reason ? "#D5DCEB" : "#F59E0B" }}>
+                      style={{ ...inp, maxWidth: 260, borderColor: !p.required || p.reason ? "#D5DCEB" : "#F59E0B" }}>
                       <option value="">— เลือก —</option>
                       {(lists?.reasons ?? []).map(r => <option key={r} value={r}>{r}{lists?.reasonCat[r] ? ` → ${lists.reasonCat[r]}` : ""}</option>)}
                     </select>
@@ -252,7 +256,7 @@ function PeopleTable({ rows, kind, lists, onChange }: {
               ) : (
                 <td style={td}>
                   <select value={p.channel ?? ""} onChange={e => onChange(p, { channel: e.target.value || null })}
-                    style={{ ...inp, borderColor: p.channel ? "#D5DCEB" : "#F59E0B" }}>
+                    style={{ ...inp, borderColor: !p.required || p.channel ? "#D5DCEB" : "#F59E0B" }}>
                     <option value="">— เลือก —</option>
                     {(lists?.channels ?? []).map(c => <option key={c} value={c}>{c}{lists?.channelCat[c] ? ` → ${lists.channelCat[c]}` : ""}</option>)}
                   </select>
