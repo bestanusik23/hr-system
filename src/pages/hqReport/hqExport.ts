@@ -167,7 +167,7 @@ export async function exportHqDashboard(rep: HqReport): Promise<string> {
   const first = monthAbbr(rep.months[0]), last = monthAbbr(rep.months[rep.months.length - 1]);
   const now = new Date();
   const stamp = `${String(now.getDate()).padStart(2, "0")}${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
-  const fileName = `HR_Dashboard_RAM_CRR_${first}-${last}_${rep.year}_${stamp}.xlsx`;
+  const fileName = `HR_Dashboard_RAM_CRR_${first === last ? first : `${first}-${last}`}_${rep.year}_${stamp}.xlsx`;
   XLSX.writeFile(wb, fileName, { bookType: "xlsx", compression: true });
   return fileName;
 }

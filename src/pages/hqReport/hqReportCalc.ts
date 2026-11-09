@@ -121,11 +121,16 @@ export function readTemplateLists(wb: XLSX.WorkBook): TemplateLists {
 }
 
 // ── Period helpers ────────────────────────────────────────────────────────────
-export type PeriodKey = "Q1" | "Q2" | "Q3" | "Q4" | "Y";
+export type PeriodKey = "Q1" | "Q2" | "Q3" | "Q4" | "Y" | `M${number}`; // M01 … M12 = single month
+const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
+export const MONTH_PERIODS = THAI_MONTHS.map((_, i) => `M${String(i + 1).padStart(2, "0")}` as PeriodKey);
+export const RANGE_PERIODS: PeriodKey[] = ["Q1", "Q2", "Q3", "Q4", "Y"];
 export const PERIOD_LABEL: Record<PeriodKey, string> = {
   Q1: "ไตรมาส 1 (ม.ค.–มี.ค.)", Q2: "ไตรมาส 2 (เม.ย.–มิ.ย.)", Q3: "ไตรมาส 3 (ก.ค.–ก.ย.)", Q4: "ไตรมาส 4 (ต.ค.–ธ.ค.)", Y: "ทั้งปี (ม.ค.–ธ.ค.)",
+  ...Object.fromEntries(MONTH_PERIODS.map((k, i) => [k, THAI_MONTHS[i]])),
 };
 export function periodMonths(year: number, p: PeriodKey): string[] {
+  if (p[0] === "M") return [`${year}-${p.slice(1)}`];
   const start = p === "Y" ? 1 : (Number(p[1]) - 1) * 3 + 1;
   const n = p === "Y" ? 12 : 3;
   return Array.from({ length: n }, (_, i) => `${year}-${String(start + i).padStart(2, "0")}`);
@@ -375,10 +380,13 @@ function summaryRows(rep: HqReport, snapshot: string, flowMonths: string[]): Sum
   return rows;
 }
 
-/** Whole-period summary first, then one block per month. */
+/** Whole-period summary first, then one block per month (a single-month period has just its own block). */
 export function buildSummaryBlocks(rep: HqReport, periodLabel: string): SummaryBlock[] {
   const lastMonth = rep.months[rep.months.length - 1];
   const beYear = (ym: string) => Number(ym.slice(0, 4)) + 543;
+  if (rep.months.length === 1) {
+    return [{ key: lastMonth, title: `${periodLabel} ${beYear(lastMonth)}`, note: "", rows: summaryRows(rep, lastMonth, rep.months) }];
+  }
   return [
     {
       key: "period",

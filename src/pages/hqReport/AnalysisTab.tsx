@@ -78,7 +78,9 @@ export default function AnalysisTab({ data, rep, lists }: { data: ApiData; rep: 
   const ytdRep = useMemo(() => buildReportForMonths(data, ytdMonths(rep.months), lists), [data, rep.months, lists]);
   const ytd = useMemo(() => analyze(ytdRep, lists), [ytdRep, lists]);
 
-  const range = (r: HqReport) => `${monthAbbr(r.months[0])}–${monthAbbr(r.months[r.months.length - 1])} ${r.year}`;
+  const range = (r: HqReport) => r.months.length === 1
+    ? `${monthAbbr(r.months[0])} ${r.year}`
+    : `${monthAbbr(r.months[0])}–${monthAbbr(r.months[r.months.length - 1])} ${r.year}`;
   const delta = cur.total.annualized - prev.total.annualized;
   const lastMonth = cur.monthly[cur.monthly.length - 1];
   const vacancy = lastMonth && lastMonth.planned > 0 ? 1 - lastMonth.headcount / lastMonth.planned : 0;

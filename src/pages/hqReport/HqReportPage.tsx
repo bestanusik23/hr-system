@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LINES, EXCLUDED_LINE, PERIOD_LABEL, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
+  LINES, EXCLUDED_LINE, PERIOD_LABEL, MONTH_PERIODS, RANGE_PERIODS, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
   loadTemplate, readTemplateLists, buildReport, buildSummaryBlocks,
   type ApiData, type PeriodKey, type PersonRow, type TemplateLists,
 } from "./hqReportCalc";
@@ -11,7 +11,7 @@ import { printHqSummary } from "./hqPrint";
 import AnalysisTab from "./AnalysisTab";
 
 // เมนู "รายงาน RAM GROUP" (รายงานส่งสำนักงานใหญ่) — admin only.
-// สรุป HR Dashboard รายไตรมาส/รายปี จากข้อมูลพนักงาน + แผนอัตรากำลัง แล้ว export เป็น
+// สรุป HR Dashboard รายเดือน/รายไตรมาส/รายปี จากข้อมูลพนักงาน + แผนอัตรากำลัง แล้ว export เป็น
 // xlsx ตามแม่แบบที่ส่งสำนักงานใหญ่ ช่องที่ระบบไม่มี (อายุผู้ลาออก ช่องทางสรรหา หมวดเหตุผล)
 // ให้ผู้ดูแลกรอกในแท็บของแต่ละกลุ่ม
 
@@ -120,7 +120,12 @@ export default function HqReportPage() {
         </label>
         <label style={{ fontSize: 13 }}>งวด&nbsp;
           <select value={period} onChange={e => setPeriod(e.target.value as PeriodKey)} style={inp}>
-            {(Object.keys(PERIOD_LABEL) as PeriodKey[]).map(k => <option key={k} value={k}>{PERIOD_LABEL[k]}</option>)}
+            <optgroup label="รายไตรมาส / รายปี">
+              {RANGE_PERIODS.map(k => <option key={k} value={k}>{PERIOD_LABEL[k]}</option>)}
+            </optgroup>
+            <optgroup label="รายเดือน">
+              {MONTH_PERIODS.map(k => <option key={k} value={k}>{PERIOD_LABEL[k]}</option>)}
+            </optgroup>
           </select>
         </label>
         <button onClick={() => rep && printHqSummary(blocks, PERIOD_LABEL[period], year, rep.unmapped.length)} disabled={!rep}
