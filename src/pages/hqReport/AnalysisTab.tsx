@@ -110,7 +110,7 @@ function LaborCompareCard({ rep }: { rep: HqReport }) {
   if (!html) return null;
   return (
     <div style={card}>
-      <h3 style={h3}>เทียบสัดส่วนจำนวนคนกับสัดส่วนค่าใช้จ่ายเงินเดือน</h3>
+      <h3 style={h3}>เทียบสัดส่วนจำนวนคน เงินเดือน และค่าเวร กับตำแหน่งว่าง</h3>
       {costWarning && <p style={{ ...sub, color: "#9A6700", fontWeight: 600 }}>⚠ ยังไม่ครบ: {costWarning}</p>}
       {/* Built only from fixed labels and computed numbers (see hqCharts.ts). */}
       <div dangerouslySetInnerHTML={{ __html: html }} />

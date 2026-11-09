@@ -137,6 +137,36 @@ export function laborCompare(rep: HqReport): { byLabor: CompareRow[]; byFunc: Co
   };
 }
 
+export interface VacancyRow {
+  label: string;
+  /** Average vacant posts / planned posts over the months that have shift pay */
+  vacant: number; planned: number; vacancyRate: number;
+  shift: number;
+  vacantShare: number; shiftShare: number; gap: number; verdict: Verdict;
+}
+
+/** Shift pay (ค่าเวร, not OT) per สายงาน against its vacant posts. Null until a month in the period has that pay. */
+export function vacancyCompare(rep: HqReport): { rows: VacancyRow[]; total: VacancyRow } | null {
+  const months = rep.laborStatus.filter(s => s.hasOt).map(s => s.month);
+  if (!months.length) return null;
+  const base = SUMMARY_LINE_ORDER.map(line => {
+    const mp = rep.manpower.filter(m => m.line === line && months.includes(m.month));
+    return {
+      label: line as string,
+      vacant: mp.reduce((s, m) => s + Math.max(0, m.planned - m.ft - m.pt), 0) / months.length,
+      planned: mp.reduce((s, m) => s + m.planned, 0) / months.length,
+      shift: rep.labor.filter(x => x.line === line && months.includes(x.month)).reduce((s, x) => s + x.shift, 0),
+    };
+  });
+  const sum = (k: "vacant" | "planned" | "shift") => base.reduce((s, r) => s + r[k], 0);
+  const allVacant = sum("vacant"), allShift = sum("shift");
+  const build = (r: typeof base[number]): VacancyRow => {
+    const vacantShare = allVacant ? r.vacant / allVacant : 0, shiftShare = allShift ? r.shift / allShift : 0, gap = (shiftShare - vacantShare) * 100;
+    return { ...r, vacancyRate: r.planned ? r.vacant / r.planned : 0, vacantShare, shiftShare, gap, verdict: Math.abs(gap) <= NEAR_POINTS ? "near" : gap > 0 ? "above" : "below" };
+  };
+  return { rows: base.map(build), total: build({ label: "รวมทั้งหมด", vacant: allVacant, planned: sum("planned"), shift: allShift }) };
+}
+
 export const rangeLabel = (r: HqReport) => r.months.length === 1
   ? `${monthAbbr(r.months[0])} ${r.year}`
   : `${monthAbbr(r.months[0])}–${monthAbbr(r.months[r.months.length - 1])} ${r.year}`;

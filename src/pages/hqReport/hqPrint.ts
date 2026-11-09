@@ -28,7 +28,7 @@ export function printHqReport(rep: HqReport, summary: SummaryBlock, periodLabel:
   if (!win) { alert("ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาต popup สำหรับเว็บไซต์นี้"); return; }
 
   const period = `${periodLabel} ${rep.year + 543}`;
-  const compare = laborCompareHtml(rep, true);
+  const compare = laborCompareHtml(rep);
 
   win.document.write(`<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">
 <title>รายงาน RAM GROUP ${period}</title>
@@ -73,7 +73,7 @@ ${rep.unmapped.length ? `<div class="warn">มีตำแหน่งที่�
 <h2>1. สรุปอัตรากำลัง ตาม Labor Cost / Function / สายงาน</h2>
 ${summaryTable(summary)}
 
-<h2>2. เทียบสัดส่วนจำนวนคนกับสัดส่วนค่าใช้จ่ายเงินเดือน</h2>
+<h2>2. เทียบสัดส่วนจำนวนคน เงินเดือน และค่าเวร กับตำแหน่งว่าง</h2>
 ${compare || `<div class="empty">ยังไม่มีข้อมูลเงินเดือนในงวดนี้</div>`}
 
 <div class="foot">Planned = แผนอัตรากำลังปัจจุบัน · Existing นับ ณ สิ้นเดือน · เริ่มงาน/ลาออก นับรอบวันที่ 26 เดือนก่อน – 25 ของเดือน · Labor Cost = รายได้รวมจากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง โดยค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย</div>
