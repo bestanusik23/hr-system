@@ -1,8 +1,8 @@
 // Printable full report of รายงาน RAM GROUP (A4 landscape): summary grouped
-// Labor Cost → Function → สายงาน, the analysis tab, and the leaver / new-hire lists.
+// Labor Cost → Function → สายงาน, and the analysis tab. Figures only — no staff names.
 import {
-  SUMMARY_COLUMNS, summaryCell, monthAbbr, thDate,
-  type ApiData, type HqReport, type PersonRow, type SummaryBlock, type SummaryRow, type TemplateLists,
+  LINES, SUMMARY_COLUMNS, summaryCell, monthAbbr,
+  type ApiData, type HqReport, type SummaryBlock, type SummaryRow, type TemplateLists,
 } from "./hqReportCalc";
 import { buildAnalysisView, pct, rangeLabel, type Count } from "./hqAnalysis";
 
@@ -56,7 +56,25 @@ const panel = (title: string, sub: string, body: string, cls = "") => `<div clas
   <div class="p-t">${title}</div>${sub ? `<div class="p-s">${sub}</div>` : ""}${body}
 </div>`;
 
-function analysisHtml(view: ReturnType<typeof buildAnalysisView>, rep: HqReport): { tiles: string; panels: string } {
+function laborPanel(rep: HqReport, warning: string): string {
+  const title = "Labor Cost แยกสายงาน";
+  if (!rep.laborStatus.some(s => s.hasRegular || s.hasOt)) return panel(title, "", `<div class="empty">ยังไม่มีข้อมูลเงินเดือนในงวดนี้</div>`, "wide");
+  const baht = (v: number) => Math.round(v).toLocaleString("en-US");
+  const row = (label: string, regular: number, otShift: number, heads: number, cls = "") => {
+    const cost = regular + otShift;
+    return `<tr class="${cls}"><td>${label}</td><td class="n">${baht(regular)}</td><td class="n">${baht(otShift)}</td><td class="n">${baht(cost)}</td><td class="n">${heads ? baht(cost / heads) : "—"}</td></tr>`;
+  };
+  const sumOf = (rows: typeof rep.labor) => ({
+    regular: rows.reduce((s, x) => s + x.regular, 0), otShift: rows.reduce((s, x) => s + x.otShift, 0), heads: rows.reduce((s, x) => s + x.headcount, 0),
+  });
+  const body = LINES.map(line => { const s = sumOf(rep.labor.filter(x => x.line === line)); return row(line, s.regular, s.otShift, s.heads); }).join("");
+  const all = sumOf(rep.labor);
+  const table = `<table><thead><tr><th>สายงาน</th><th class="n">เงินเดือน + รายได้ประจำ</th><th class="n">ค่านอกเวลา + ค่าเวร</th><th class="n">Labor Cost รวม (บาท)</th><th class="n">เฉลี่ย/คน/เดือน</th></tr></thead>
+    <tbody>${body}${row("รวมทั้งหมด", all.regular, all.otShift, all.heads, "total")}</tbody></table>`;
+  return panel(title, `รายได้จากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง · ค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย${warning ? ` · <span class="cwarn">⚠ ยังไม่ครบ: ${warning}</span>` : ""}`, table, "wide");
+}
+
+function analysisHtml(view: ReturnType<typeof buildAnalysisView>, rep: HqReport, costWarning: string): { tiles: string; panels: string } {
   const { target, cur, prev, prevRep, ytd, ytdRep, lastMonth, delta, vacancy, net } = view;
   const tiles = [
     tile(`Turnover งวดนี้ (${rangeLabel(rep)}) คิดเป็นรายปี`, pct(cur.total.annualized),
@@ -87,6 +105,7 @@ function analysisHtml(view: ReturnType<typeof buildAnalysisView>, rep: HqReport)
       bars(cur.byLine.map(b => ({ label: b.line, value: b.annualized, text: pct(b.annualized) })), target)),
     panel("รายเดือน", "คน ณ สิ้นเดือน · เริ่มงาน/ลาออกตามรอบ 26–25", monthly),
     panel("รับเข้า vs ลาออก แยกสายงาน", `สุทธิทั้งงวด ${net >= 0 ? "+" : ""}${net} คน (รับเข้า ${cur.hires} · ลาออก ${cur.total.resigns})`, flows),
+    laborPanel(rep, costWarning),
     panel("แนวโน้มอัตรากำลัง — % บรรจุเทียบแผน แยกสายงาน", "มีคน ÷ แผน ณ สิ้นเดือน", trend, "wide"),
     panel("ผู้ลาออกตามอายุงาน",
       `ลาออกช่วงทดลองงาน (&lt; 4 เดือน) ${cur.probationLeavers} คน${cur.total.resigns ? ` (${pct(cur.probationLeavers / cur.total.resigns, 0)} ของผู้ลาออก)` : ""}`,
@@ -101,27 +120,12 @@ function analysisHtml(view: ReturnType<typeof buildAnalysisView>, rep: HqReport)
   return { tiles, panels };
 }
 
-// ── People ───────────────────────────────────────────────────────────────────
-function peopleTable(rows: PersonRow[], kind: "resign" | "hire"): string {
-  if (rows.length === 0) return `<div class="empty">ไม่มีรายการในงวดนี้</div>`;
-  const head = kind === "resign"
-    ? `<th>วันลาออก</th><th class="n">อายุ</th><th>เหตุผล</th>`
-    : `<th>ช่องทางสรรหา</th>`;
-  const tail = (p: PersonRow) => kind === "resign"
-    ? `<td>${thDate(p.resign)}</td><td class="n">${p.age ?? "—"}</td><td>${esc(p.reason || p.resignReasonText || "—")}</td>`
-    : `<td>${esc(p.channel || "—")}</td>`;
-  return `<table class="people">
-    <thead><tr><th class="n">ลำดับ</th><th>เดือน</th><th>ชื่อ-สกุล</th><th>ตำแหน่ง</th><th>สายงาน</th><th>วันเริ่มงาน</th>${head}</tr></thead>
-    <tbody>${rows.map((p, i) => `<tr><td class="n">${i + 1}</td><td>${monthAbbr(p.month)}</td><td>${esc(p.name)}</td><td>${esc(p.position)}</td><td>${esc(p.line)}</td><td>${thDate(p.start)}</td>${tail(p)}</tr>`).join("")}</tbody>
-  </table>`;
-}
-
 // ── Document ─────────────────────────────────────────────────────────────────
 export function printHqReport(data: ApiData, rep: HqReport, lists: TemplateLists | null, blocks: SummaryBlock[], periodLabel: string) {
   const win = window.open("", "_blank", "width=1200,height=800,scrollbars=yes");
   if (!win) { alert("ไม่สามารถเปิดหน้าต่างพิมพ์ได้ กรุณาอนุญาต popup สำหรับเว็บไซต์นี้"); return; }
 
-  const { tiles, panels } = analysisHtml(buildAnalysisView(data, rep, lists), rep);
+  const { tiles, panels } = analysisHtml(buildAnalysisView(data, rep, lists), rep, blocks[0]?.costWarning ?? "");
   const period = `${periodLabel} ${rep.year + 543}`;
   const missing = [
     rep.unmapped.length ? `ตำแหน่งที่ยังไม่จับคู่สายงาน ${rep.unmapped.length} รายการ (ยังไม่รวมในตัวเลข)` : "",
@@ -208,13 +212,6 @@ ${missing ? `<div class="warn">ข้อมูลยังไม่ครบ: ${
 <div class="page">
   <h2>2. วิเคราะห์</h2>
   <div class="panels">${panels}</div>
-</div>
-
-<div class="page">
-  <h2>3. รายชื่อผู้ลาออก (${rep.resigns.length} คน)</h2>
-  ${peopleTable(rep.resigns, "resign")}
-  <h2>4. รายชื่อพนักงานใหม่ (${rep.hires.length} คน)</h2>
-  ${peopleTable(rep.hires, "hire")}
   <div class="foot">Planned = แผนอัตรากำลังปัจจุบัน · Existing นับ ณ สิ้นเดือน · เริ่มงาน/ลาออก นับรอบวันที่ 26 เดือนก่อน – 25 ของเดือน · ไม่นับผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม นักศึกษาฝึกงาน และตำแหน่งที่ตั้งเป็น "ไม่นับ" · Labor Cost = รายได้รวมจากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง โดยค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย</div>
 </div>
 <div class="btns noprint"><button onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button></div>
