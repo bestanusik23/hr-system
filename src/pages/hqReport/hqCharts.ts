@@ -25,7 +25,7 @@ function barPath(x: number, y: number, w: number, h: number): string {
 }
 
 function barsChart(title: string, rows: CompareRow[]): string {
-  const W = 240, labelW = 82, valueW = 40, barH = 13, rowGap = 12;
+  const W = 240, labelW = 82, valueW = 40, barH = 13, rowGap = 8;
   const plot = W - labelW - valueW;
   const top = Math.max(0.01, ...rows.flatMap(r => [r.headShare, r.costShare]));
   const body = rows.map((r, i) => {
@@ -44,7 +44,7 @@ function barsChart(title: string, rows: CompareRow[]): string {
 }
 
 function pieChart(title: string, slices: { label: string; value: number }[]): string {
-  const cx = 100, cy = 70, r = 50;
+  const cx = 100, cy = 63, r = 50;
   const parts = slices.filter(s => s.value > 0);
   let start = -Math.PI / 2;
   const body = parts.map(s => {
@@ -61,7 +61,7 @@ function pieChart(title: string, slices: { label: string; value: number }[]): st
       <text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" font-weight="700" fill="${INK}">${pct(s.value)}</text></g>`;
   }).join("");
   return `<div style="flex:1 1 140px;min-width:0">${chartTitle(title)}
-    <svg viewBox="0 0 200 140" width="100%" role="img" aria-label="${title}" style="display:block;font-family:inherit">${body}</svg>
+    <svg viewBox="0 0 200 126" width="100%" role="img" aria-label="${title}" style="display:block;font-family:inherit">${body}</svg>
     ${legend(slices.map(s => [s.label, GROUP_COLOR[s.label]]))}</div>`;
 }
 
@@ -74,7 +74,7 @@ function vacancyTable(rep: HqReport): string {
     const waiting = rep.laborStatus.map(s => monthAbbr(nextMonth(s.month))).join(", ");
     return `<div style="${box};font-size:11px;color:${MUTED}">ยังไม่มีค่าเวรของงวดนี้ จึงยังเทียบกับตำแหน่งว่างไม่ได้ (รอไฟล์เงินเดือนงวด ${waiting})</div>`;
   }
-  const c = "padding:2px 5px;border:1px solid #D5DCEB";
+  const c = "padding:1px 5px;border:1px solid #D5DCEB";
   const n = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   const row = (r: VacancyRow, isTotal: boolean) => {
     const style = isTotal ? "background:#EEF2F8;font-weight:700" : "";
@@ -103,7 +103,7 @@ export function laborCompareHtml(rep: HqReport): string {
   const vacancy = vacancyTable(rep);
   if (!rep.laborStatus.some(s => s.hasRegular)) return `<div style="display:flex;flex-wrap:wrap;gap:10px 16px">${vacancy}</div>`;
   const { byLabor, byFunc } = laborCompare(rep);
-  const cell = "padding:2px 7px;border:1px solid #D5DCEB";
+  const cell = "padding:1px 7px;border:1px solid #D5DCEB";
   const row = (r: CompareRow, first: boolean) => `<tr style="${first ? "border-top:2px solid #475569" : ""}">
     <td style="${cell};font-weight:700;color:${INK}">${r.label}</td>
     <td style="${cell};text-align:right">${pct(r.headShare)}</td>

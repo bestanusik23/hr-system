@@ -125,7 +125,7 @@ export default function HqReportPage() {
             </optgroup>
           </select>
         </label>
-        <button onClick={() => rep && printHqReport(rep, blocks[0], PERIOD_LABEL[period])} disabled={!rep}
+        <button onClick={() => data && rep && printHqReport(rep, blocks[0], PERIOD_LABEL[period], data.lineMap)} disabled={!rep}
           style={{ marginLeft: "auto", padding: "9px 16px", borderRadius: 9, border: "1px solid #1F3864", background: "#fff", color: "#1F3864", fontWeight: 700, fontFamily: "inherit", cursor: "pointer", opacity: !rep ? 0.5 : 1 }}>
           🖨️ พิมพ์รายงานทั้งหมด
         </button>
