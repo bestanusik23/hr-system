@@ -37,13 +37,13 @@ function barsChart(title: string, rows: CompareRow[]): string {
       ${bar(r.headShare, y, PEOPLE, "% จำนวนคน")}${bar(r.costShare, y + barH + 2, COST, "% ค่าใช้จ่ายเงินเดือน")}`;
   }).join("");
   const H = rows.length * (barH * 2 + 2 + rowGap);
-  return `<div style="flex:1 1 240px;min-width:0">${chartTitle(title)}
+  return `<div style="flex:1 1 210px;min-width:0">${chartTitle(title)}
     <svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${title}" style="display:block;font-family:inherit">
       <line x1="${labelW}" y1="0" x2="${labelW}" y2="${H - rowGap + 4}" stroke="#CBD5E1"/>${body}
     </svg>${legend([["% จำนวนคน", PEOPLE], ["% ค่าใช้จ่ายเงินเดือน", COST]])}</div>`;
 }
 
-function pieChart(title: string, slices: { label: string; value: number }[]): string {
+function pieChart(title: string, slices: { label: string; value: number }[], maxHeight: string): string {
   const cx = 120, cy = 82, r = 58;
   const parts = slices.filter(s => s.value > 0);
   let start = -Math.PI / 2;
@@ -61,23 +61,25 @@ function pieChart(title: string, slices: { label: string; value: number }[]): st
       <text x="${lx.toFixed(1)}" y="${(ly + 4).toFixed(1)}" text-anchor="${anchor}" font-size="10.5" font-weight="700" fill="${INK}">${pct(s.value)}</text></g>`;
   }).join("");
   return `<div style="flex:1 1 200px;min-width:0">${chartTitle(title)}
-    <svg viewBox="0 0 240 164" width="100%" role="img" aria-label="${title}" style="display:block;font-family:inherit">${body}</svg>
+    <svg viewBox="0 0 240 164" width="100%" role="img" aria-label="${title}" style="display:block;font-family:inherit;${maxHeight}">${body}</svg>
     ${legend(slices.map(s => [s.label, GROUP_COLOR[s.label]]))}</div>`;
 }
 
-export function laborCompareHtml(rep: HqReport): string {
+/** `forPrint` shrinks the charts so the whole report fits one A4 page. */
+export function laborCompareHtml(rep: HqReport, forPrint = false): string {
   if (!rep.laborStatus.some(s => s.hasRegular)) return "";
   const { byLabor, byFunc } = laborCompare(rep);
-  const cell = "padding:3px 7px;border:1px solid #D5DCEB";
+  const pieHeight = forPrint ? "max-height:122px" : "";
+  const cell = `padding:${forPrint ? 2 : 3}px 7px;border:1px solid #D5DCEB`;
   const row = (r: CompareRow, first: boolean) => `<tr style="${first ? "border-top:2px solid #475569" : ""}">
     <td style="${cell};font-weight:700;color:${INK}">${r.label}</td>
     <td style="${cell};text-align:right">${pct(r.headShare)}</td>
     <td style="${cell};text-align:right">${pct(r.costShare)}</td>
     <td style="${cell};text-align:right;font-weight:700;background:${VERDICT_BG[r.verdict]}">${r.gap >= 0 ? "+" : ""}${r.gap.toFixed(1)}%</td>
-    <td style="${cell};font-weight:600;background:${VERDICT_BG[r.verdict]}">${VERDICT_TEXT[r.verdict]}</td>
+    <td style="${cell};font-weight:600;white-space:nowrap;background:${VERDICT_BG[r.verdict]}">${VERDICT_TEXT[r.verdict]}</td>
   </tr>`;
-  const head = "padding:4px 7px;background:#1F3864;color:#fff;font-weight:700;text-align:center";
-  const table = `<div style="flex:2 1 440px;min-width:0">
+  const head = "padding:3px 7px;background:#1F3864;color:#fff;font-weight:700;text-align:center";
+  const table = `<div style="flex:3 1 540px;min-width:0">
     <table style="width:100%;border-collapse:collapse;font-size:11.5px">
       <thead><tr><th style="${head};text-align:left">กลุ่ม</th><th style="${head}">% จำนวนคน</th><th style="${head}">% ค่าใช้จ่ายเงินเดือน</th><th style="${head}">ส่วนต่าง (จุด %)</th><th style="${head}">สรุป</th></tr></thead>
       <tbody>${byLabor.map(r => row(r, false)).join("")}${byFunc.map((r, i) => row(r, i === 0)).join("")}</tbody>
@@ -87,9 +89,9 @@ export function laborCompareHtml(rep: HqReport): string {
   const slices = (rows: CompareRow[], k: "costShare" | "headShare") => rows.map(r => ({ label: r.label, value: r[k] }));
   return `<div style="display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-start">${table}${barsChart("Labor Cost: % คน เทียบ % เงินเดือน", byLabor)}${barsChart("Functional: % คน เทียบ % เงินเดือน", byFunc)}</div>
   <div style="display:flex;flex-wrap:wrap;gap:10px 16px;margin-top:10px">
-    ${pieChart("สัดส่วนค่าใช้จ่ายเงินเดือนตาม Labor Cost", slices(byLabor, "costShare"))}
-    ${pieChart("สัดส่วนค่าใช้จ่ายเงินเดือนตาม Functional", slices(byFunc, "costShare"))}
-    ${pieChart("สัดส่วนจำนวนคนตาม Labor Cost", slices(byLabor, "headShare"))}
-    ${pieChart("สัดส่วนจำนวนคนตาม Functional", slices(byFunc, "headShare"))}
+    ${pieChart("สัดส่วนค่าใช้จ่ายเงินเดือนตาม Labor Cost", slices(byLabor, "costShare"), pieHeight)}
+    ${pieChart("สัดส่วนค่าใช้จ่ายเงินเดือนตาม Functional", slices(byFunc, "costShare"), pieHeight)}
+    ${pieChart("สัดส่วนจำนวนคนตาม Labor Cost", slices(byLabor, "headShare"), pieHeight)}
+    ${pieChart("สัดส่วนจำนวนคนตาม Functional", slices(byFunc, "headShare"), pieHeight)}
   </div>`;
 }
