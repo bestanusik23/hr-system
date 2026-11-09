@@ -136,6 +136,11 @@ export function periodMonths(year: number, p: PeriodKey): string[] {
   return Array.from({ length: n }, (_, i) => `${year}-${String(start + i).padStart(2, "0")}`);
 }
 export const monthAbbr = (ym: string) => MONTH_ABBR[Number(ym.slice(5, 7)) - 1];
+export const thDate = (iso: string | null) => {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d}/${m}/${y + 543}`;
+};
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const isoDate = (s: string | null) => (s && /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : null);

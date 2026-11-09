@@ -3,8 +3,11 @@
 // file sent to HQ never disagree.
 import {
   LINES, LINE_FUNC, TENURE_BANDS, AGE_BANDS, tenureBand, ageBand, monthsBetween,
-  type HqReport, type Line, type TemplateLists,
+  buildReportForMonths, previousMonths, ytdMonths, monthAbbr,
+  type ApiData, type HqReport, type Line, type TemplateLists,
 } from "./hqReportCalc";
+
+export const pct = (v: number, d = 1) => `${(v * 100).toFixed(d)}%`;
 
 export interface Turnover { resigns: number; avgHeadcount: number; rate: number; annualized: number }
 export interface Count { label: string; value: number }
@@ -84,3 +87,24 @@ export function analyze(rep: HqReport, lists: TemplateLists | null): Analysis {
 }
 
 export const funcOf = (l: Line) => LINE_FUNC[l];
+
+export const rangeLabel = (r: HqReport) => r.months.length === 1
+  ? `${monthAbbr(r.months[0])} ${r.year}`
+  : `${monthAbbr(r.months[0])}–${monthAbbr(r.months[r.months.length - 1])} ${r.year}`;
+
+/** Everything the analysis tab and the printed report show, so the two always agree. */
+export function buildAnalysisView(data: ApiData, rep: HqReport, lists: TemplateLists | null) {
+  const target = lists?.turnoverTarget ?? 0.12;
+  const cur = analyze(rep, lists);
+  const prevRep = buildReportForMonths(data, previousMonths(rep.months), lists);
+  const prev = analyze(prevRep, lists);
+  const ytdRep = buildReportForMonths(data, ytdMonths(rep.months), lists);
+  const ytd = analyze(ytdRep, lists);
+  const lastMonth = cur.monthly[cur.monthly.length - 1];
+  return {
+    target, cur, prev, prevRep, ytd, ytdRep, lastMonth,
+    delta: cur.total.annualized - prev.total.annualized,
+    vacancy: lastMonth && lastMonth.planned > 0 ? 1 - lastMonth.headcount / lastMonth.planned : 0,
+    net: cur.hires - cur.total.resigns,
+  };
+}

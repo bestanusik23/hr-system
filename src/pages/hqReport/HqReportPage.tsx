@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LINES, EXCLUDED_LINE, PERIOD_LABEL, MONTH_PERIODS, RANGE_PERIODS, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
+  LINES, EXCLUDED_LINE, PERIOD_LABEL, MONTH_PERIODS, RANGE_PERIODS, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, monthAbbr, thDate, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
   loadTemplate, readTemplateLists, buildReport, buildSummaryBlocks,
   type ApiData, type PeriodKey, type PersonRow, type TemplateLists,
 } from "./hqReportCalc";
 import { exportHqDashboard } from "./hqExport";
-import { printHqSummary } from "./hqPrint";
+import { printHqReport } from "./hqPrint";
 import AnalysisTab from "./AnalysisTab";
 
 // เมนู "รายงาน RAM GROUP" (รายงานส่งสำนักงานใหญ่) — admin only.
@@ -31,11 +31,6 @@ const defaultPeriod = (): { year: number; period: PeriodKey } => {
   // ไม่ย้อนไปก่อนงวดที่เริ่มเก็บข้อมูล (ไตรมาส 4 ปี 2026)
   const startYear = Number(TRACK_FROM.slice(0, 4)), startQ = `Q${Math.ceil(Number(TRACK_FROM.slice(5, 7)) / 3)}` as PeriodKey;
   return last.year < startYear || (last.year === startYear && last.period < startQ) ? { year: startYear, period: startQ } : last;
-};
-const thDate = (iso: string | null) => {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-").map(Number);
-  return `${d}/${m}/${y + 543}`;
 };
 
 export default function HqReportPage() {
@@ -128,9 +123,9 @@ export default function HqReportPage() {
             </optgroup>
           </select>
         </label>
-        <button onClick={() => rep && printHqSummary(blocks, PERIOD_LABEL[period], year, rep.unmapped.length)} disabled={!rep}
+        <button onClick={() => data && rep && printHqReport(data, rep, lists, blocks, PERIOD_LABEL[period])} disabled={!rep}
           style={{ marginLeft: "auto", padding: "9px 16px", borderRadius: 9, border: "1px solid #1F3864", background: "#fff", color: "#1F3864", fontWeight: 700, fontFamily: "inherit", cursor: "pointer", opacity: !rep ? 0.5 : 1 }}>
-          🖨️ พิมพ์สรุป
+          🖨️ พิมพ์รายงานทั้งหมด
         </button>
         <button onClick={doExport} disabled={!rep || !lists || busy}
           style={{ padding: "9px 16px", borderRadius: 9, border: "none", background: "#1F7A3D", color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: busy ? "wait" : "pointer", opacity: !rep || !lists ? 0.5 : 1 }}>

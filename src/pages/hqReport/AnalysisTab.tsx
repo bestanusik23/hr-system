@@ -1,9 +1,6 @@
 import { useMemo } from "react";
-import {
-  buildReportForMonths, previousMonths, ytdMonths, monthAbbr,
-  type ApiData, type HqReport, type TemplateLists,
-} from "./hqReportCalc";
-import { analyze, type Count } from "./hqAnalysis";
+import { monthAbbr, type ApiData, type HqReport, type TemplateLists } from "./hqReportCalc";
+import { buildAnalysisView, pct, rangeLabel as range, type Count } from "./hqAnalysis";
 
 // แท็บ "วิเคราะห์" — turnover เทียบเป้า, แนวโน้มอัตรากำลัง, เจาะลึกผู้ลาออก, การสรรหา
 // One hue for all bars (single-series charts); status is shown with an icon + label,
@@ -19,7 +16,6 @@ const th: React.CSSProperties = { textAlign: "left", padding: "7px 10px", backgr
 const td: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid #EEF2F8", fontSize: 13 };
 const num: React.CSSProperties = { ...td, textAlign: "right", fontVariantNumeric: "tabular-nums" };
 
-const pct = (v: number, d = 1) => `${(v * 100).toFixed(d)}%`;
 const grid: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14 };
 
 function Tile({ label, value, note, status }: { label: string; value: string; note?: string; status?: "good" | "bad" }) {
@@ -71,20 +67,8 @@ const countBars = (c: Count[], total: number) => (
 );
 
 export default function AnalysisTab({ data, rep, lists }: { data: ApiData; rep: HqReport; lists: TemplateLists | null }) {
-  const target = lists?.turnoverTarget ?? 0.12;
-  const cur = useMemo(() => analyze(rep, lists), [rep, lists]);
-  const prevRep = useMemo(() => buildReportForMonths(data, previousMonths(rep.months), lists), [data, rep.months, lists]);
-  const prev = useMemo(() => analyze(prevRep, lists), [prevRep, lists]);
-  const ytdRep = useMemo(() => buildReportForMonths(data, ytdMonths(rep.months), lists), [data, rep.months, lists]);
-  const ytd = useMemo(() => analyze(ytdRep, lists), [ytdRep, lists]);
-
-  const range = (r: HqReport) => r.months.length === 1
-    ? `${monthAbbr(r.months[0])} ${r.year}`
-    : `${monthAbbr(r.months[0])}–${monthAbbr(r.months[r.months.length - 1])} ${r.year}`;
-  const delta = cur.total.annualized - prev.total.annualized;
-  const lastMonth = cur.monthly[cur.monthly.length - 1];
-  const vacancy = lastMonth && lastMonth.planned > 0 ? 1 - lastMonth.headcount / lastMonth.planned : 0;
-  const net = cur.hires - cur.total.resigns;
+  const { target, cur, prev, prevRep, ytd, ytdRep, lastMonth, delta, vacancy, net } =
+    useMemo(() => buildAnalysisView(data, rep, lists), [data, rep, lists]);
 
   return (
     <>
