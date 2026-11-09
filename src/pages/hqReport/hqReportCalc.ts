@@ -317,3 +317,75 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
     unmapped: [...unmapped.values()].sort((a, b) => a.division.localeCompare(b.division) || a.position.localeCompare(b.position)),
   };
 }
+
+// ── Summary grouped Labor Cost → Function → สายงาน (screen + print) ─────────────
+// Display order follows the template's "Labor Cost" sheet. The Excel export keeps LINES.
+const SUMMARY_LINE_ORDER: Line[] = ["สายการพยาบาล", "สนับสนุนทางการแพทย์", "สายสนับสนุนบริการ", "สายบัญชีและการเงิน", "สายสำนักงาน"];
+
+export interface SummaryCounts { planned: number; ft: number; pt: number; vacant: number; hired: number; resigned: number }
+export const SUMMARY_COLUMNS: { key: keyof SummaryCounts; label: string }[] = [
+  { key: "planned", label: "Planned" }, { key: "ft", label: "Existing FT" }, { key: "pt", label: "Existing PT" },
+  { key: "vacant", label: "Vacant" }, { key: "hired", label: "เริ่มงาน" }, { key: "resigned", label: "ลาออก" },
+];
+export interface SummaryRow extends SummaryCounts {
+  kind: "line" | "labor" | "total";
+  /** สายงาน, or the subtotal caption */
+  label: string;
+  labor: string; func: string;
+  /** rowSpan of the merged cell; 0 = covered by the row above */
+  laborSpan: number; funcSpan: number;
+}
+export interface SummaryBlock { key: string; title: string; note: string; rows: SummaryRow[] }
+
+const addCounts = (rows: SummaryCounts[]): SummaryCounts => rows.reduce(
+  (a, r) => ({ planned: a.planned + r.planned, ft: a.ft + r.ft, pt: a.pt + r.pt, vacant: a.vacant + r.vacant, hired: a.hired + r.hired, resigned: a.resigned + r.resigned }),
+  { planned: 0, ft: 0, pt: 0, vacant: 0, hired: 0, resigned: 0 },
+);
+
+/** Headcount is taken at `snapshot`; hires/resignations are summed over `flowMonths`. */
+function summaryRows(rep: HqReport, snapshot: string, flowMonths: string[]): SummaryRow[] {
+  const flow = new Set(flowMonths);
+  const countsOf = (line: Line): SummaryCounts => {
+    const m = rep.manpower.find(x => x.month === snapshot && x.line === line);
+    const planned = m?.planned ?? 0, ft = m?.ft ?? 0, pt = m?.pt ?? 0;
+    return {
+      planned, ft, pt, vacant: planned - ft - pt,
+      hired: rep.hires.filter(p => p.line === line && flow.has(p.month)).length,
+      resigned: rep.resigns.filter(p => p.line === line && flow.has(p.month)).length,
+    };
+  };
+  const rows: SummaryRow[] = [];
+  const subtotals: SummaryCounts[] = [];
+  for (const labor of new Set(SUMMARY_LINE_ORDER.map(l => LINE_LABOR[l]))) {
+    const lines = SUMMARY_LINE_ORDER.filter(l => LINE_LABOR[l] === labor);
+    const counts = lines.map(countsOf);
+    lines.forEach((line, i) => {
+      const func = LINE_FUNC[line];
+      rows.push({
+        kind: "line", label: line, labor, func, ...counts[i],
+        laborSpan: i === 0 ? lines.length : 0,
+        funcSpan: i > 0 && LINE_FUNC[lines[i - 1]] === func ? 0 : lines.filter(l => LINE_FUNC[l] === func).length,
+      });
+    });
+    const subtotal = addCounts(counts);
+    subtotals.push(subtotal);
+    rows.push({ kind: "labor", label: `รวม ${labor}`, labor, func: "", laborSpan: 0, funcSpan: 0, ...subtotal });
+  }
+  rows.push({ kind: "total", label: "รวมทั้งหมด", labor: "", func: "", laborSpan: 0, funcSpan: 0, ...addCounts(subtotals) });
+  return rows;
+}
+
+/** Whole-period summary first, then one block per month. */
+export function buildSummaryBlocks(rep: HqReport, periodLabel: string): SummaryBlock[] {
+  const lastMonth = rep.months[rep.months.length - 1];
+  const beYear = (ym: string) => Number(ym.slice(0, 4)) + 543;
+  return [
+    {
+      key: "period",
+      title: `สรุปทั้งงวด · ${periodLabel} ${rep.year + 543}`,
+      note: `Planned / Existing / Vacant ณ สิ้น ${monthAbbr(lastMonth)} · เริ่มงาน / ลาออก รวมทั้งงวด`,
+      rows: summaryRows(rep, lastMonth, rep.months),
+    },
+    ...rep.months.map(ym => ({ key: ym, title: `${monthAbbr(ym)} ${beYear(ym)}`, note: "", rows: summaryRows(rep, ym, [ym]) })),
+  ];
+}

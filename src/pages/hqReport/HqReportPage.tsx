@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LINES, EXCLUDED_LINE, PERIOD_LABEL, TRACK_FROM, TRACK_FROM_LABEL, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
-  loadTemplate, readTemplateLists, buildReport,
+  LINES, EXCLUDED_LINE, PERIOD_LABEL, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, monthAbbr, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
+  loadTemplate, readTemplateLists, buildReport, buildSummaryBlocks,
   type ApiData, type PeriodKey, type PersonRow, type TemplateLists,
 } from "./hqReportCalc";
 import { exportHqDashboard } from "./hqExport";
+import { printHqSummary } from "./hqPrint";
 import AnalysisTab from "./AnalysisTab";
 
 // เมนู "รายงาน RAM GROUP" (รายงานส่งสำนักงานใหญ่) — admin only.
@@ -60,6 +61,7 @@ export default function HqReportPage() {
   }, [isAdmin]);
 
   const rep = useMemo(() => (data ? buildReport(data, year, period, lists) : null), [data, year, period, lists]);
+  const blocks = useMemo(() => (rep ? buildSummaryBlocks(rep, PERIOD_LABEL[period]) : []), [rep, period]);
 
   if (!isAdmin) return <Navigate to="/" replace />;
 
@@ -107,7 +109,7 @@ export default function HqReportPage() {
         รายงาน RAM GROUP
       </h2>
       <p style={{ margin: "6px 0 14px 17px", color: "#6B7A99", fontSize: 13.5 }}>
-        HR Dashboard (RAM Group) — สรุปอัตรากำลัง ผู้เริ่มงาน ผู้ลาออก แยกตามสายงาน และ export เป็นไฟล์ Excel ตามแบบที่ส่งสำนักงานใหญ่
+        HR Dashboard (RAM Group) — สรุปอัตรากำลัง ผู้เริ่มงาน ผู้ลาออก แยกตาม Labor Cost / Function / สายงาน พิมพ์สรุป และ export เป็นไฟล์ Excel ตามแบบที่ส่งสำนักงานใหญ่
       </p>
 
       <div style={{ ...card, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
@@ -121,8 +123,12 @@ export default function HqReportPage() {
             {(Object.keys(PERIOD_LABEL) as PeriodKey[]).map(k => <option key={k} value={k}>{PERIOD_LABEL[k]}</option>)}
           </select>
         </label>
+        <button onClick={() => rep && printHqSummary(blocks, PERIOD_LABEL[period], year, rep.unmapped.length)} disabled={!rep}
+          style={{ marginLeft: "auto", padding: "9px 16px", borderRadius: 9, border: "1px solid #1F3864", background: "#fff", color: "#1F3864", fontWeight: 700, fontFamily: "inherit", cursor: "pointer", opacity: !rep ? 0.5 : 1 }}>
+          🖨️ พิมพ์สรุป
+        </button>
         <button onClick={doExport} disabled={!rep || !lists || busy}
-          style={{ marginLeft: "auto", padding: "9px 16px", borderRadius: 9, border: "none", background: "#1F7A3D", color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: busy ? "wait" : "pointer", opacity: !rep || !lists ? 0.5 : 1 }}>
+          style={{ padding: "9px 16px", borderRadius: 9, border: "none", background: "#1F7A3D", color: "#fff", fontWeight: 700, fontFamily: "inherit", cursor: busy ? "wait" : "pointer", opacity: !rep || !lists ? 0.5 : 1 }}>
           {busy ? "กำลังสร้างไฟล์…" : "⬇ Export HR Dashboard (.xlsx)"}
         </button>
         {msg && <div style={{ width: "100%", fontSize: 12.5, color: msg.startsWith("Export ไม่") ? "#B42318" : "#1F7A3D" }}>{msg}</div>}
@@ -152,36 +158,38 @@ export default function HqReportPage() {
           {tab === "summary" && (
             <div style={card}>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 760 }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860 }}>
                   <thead><tr>
-                    <th style={th}>เดือน</th><th style={th}>สายงาน</th>
-                    <th style={{ ...th, textAlign: "right" }}>Planned</th><th style={{ ...th, textAlign: "right" }}>Existing FT</th>
-                    <th style={{ ...th, textAlign: "right" }}>Existing PT</th><th style={{ ...th, textAlign: "right" }}>Vacant</th>
-                    <th style={{ ...th, textAlign: "right" }}>เริ่มงาน</th><th style={{ ...th, textAlign: "right" }}>ลาออก</th>
+                    <th style={th}>Labor Cost</th><th style={th}>Function</th><th style={th}>สายงาน</th>
+                    {SUMMARY_COLUMNS.map(c => <th key={c.key} style={{ ...th, textAlign: "right" }}>{c.label}</th>)}
                   </tr></thead>
-                  <tbody>
-                    {rep.months.map(ym => {
-                      const rows = rep.manpower.filter(m => m.month === ym);
-                      const sum = rows.reduce((a, m) => ({ planned: a.planned + m.planned, ft: a.ft + m.ft, pt: a.pt + m.pt }), { planned: 0, ft: 0, pt: 0 });
-                      const h = rep.hires.filter(p => p.month === ym), r = rep.resigns.filter(p => p.month === ym);
-                      return [
-                        ...rows.map((m, i) => (
-                          <tr key={`${ym}-${m.line}`}>
-                            <td style={td}>{i === 0 ? monthAbbr(ym) : ""}</td><td style={td}>{m.line}</td>
-                            <td style={num}>{m.planned}</td><td style={num}>{m.ft}</td><td style={num}>{m.pt}</td>
-                            <td style={num}>{m.planned - m.ft - m.pt}</td>
-                            <td style={num}>{h.filter(p => p.line === m.line).length}</td>
-                            <td style={num}>{r.filter(p => p.line === m.line).length}</td>
+                  {blocks.map(b => (
+                    <tbody key={b.key}>
+                      <tr>
+                        <td colSpan={3 + SUMMARY_COLUMNS.length} style={{ ...td, background: "#DDE6F5", color: "#1F3864", fontWeight: 800 }}>
+                          {b.title}
+                          {b.note && <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 400, color: "#6B7A99" }}>{b.note}</span>}
+                        </td>
+                      </tr>
+                      {b.rows.map(r => {
+                        const cells = SUMMARY_COLUMNS.map(c => <td key={c.key} style={num}>{r[c.key]}</td>);
+                        if (r.kind !== "line") {
+                          return (
+                            <tr key={r.label} style={{ background: r.kind === "total" ? "#EEF2F8" : "#F8FAFD", fontWeight: r.kind === "total" ? 800 : 700 }}>
+                              <td colSpan={3} style={td}>{r.label}</td>{cells}
+                            </tr>
+                          );
+                        }
+                        return (
+                          <tr key={r.label}>
+                            {r.laborSpan > 0 && <td rowSpan={r.laborSpan} style={{ ...td, fontWeight: 700 }}>{r.labor}</td>}
+                            {r.funcSpan > 0 && <td rowSpan={r.funcSpan} style={{ ...td, fontWeight: 600 }}>{r.func}</td>}
+                            <td style={td}>{r.label}</td>{cells}
                           </tr>
-                        )),
-                        <tr key={`${ym}-sum`} style={{ background: "#F8FAFD", fontWeight: 700 }}>
-                          <td style={td}></td><td style={td}>รวม {monthAbbr(ym)}</td>
-                          <td style={num}>{sum.planned}</td><td style={num}>{sum.ft}</td><td style={num}>{sum.pt}</td>
-                          <td style={num}>{sum.planned - sum.ft - sum.pt}</td><td style={num}>{h.length}</td><td style={num}>{r.length}</td>
-                        </tr>,
-                      ];
-                    })}
-                  </tbody>
+                        );
+                      })}
+                    </tbody>
+                  ))}
                 </table>
               </div>
               <p style={{ fontSize: 12, color: "#6B7A99", margin: "10px 0 0" }}>
