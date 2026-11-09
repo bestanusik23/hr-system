@@ -56,13 +56,28 @@ export interface ApiEmployee {
 export interface ApiPlan { division_name: string; pos: string; qty: number }
 export interface ApiLineMap { division_name: string; position: string; line: string }
 export interface ApiExtra { employee_id: number; age: number | null; sourcing_channel: string | null; reason: string | null }
-export interface ApiData { employees: ApiEmployee[]; plan: ApiPlan[]; lineMap: ApiLineMap[]; extras: ApiExtra[] }
+/** Monthly totals per สายงาน, by the month the payroll was paid. */
+export interface ApiLaborCost { pay_month: string; line: string; regular: number; ot_shift: number; headcount: number }
+export interface ApiPayrollDept { dept_name: string; line: string }
+export interface ApiData { employees: ApiEmployee[]; plan: ApiPlan[]; lineMap: ApiLineMap[]; extras: ApiExtra[]; laborCost: ApiLaborCost[]; payrollDeptMap: ApiPayrollDept[] }
 
 export async function fetchHqData(): Promise<ApiData> {
   const r = await fetch("/api/hq-report/data");
   const d = await r.json() as { ok: boolean; error?: string } & Partial<ApiData>;
   if (!d.ok) throw new Error(d.error || "โหลดข้อมูลไม่สำเร็จ");
-  return { employees: d.employees ?? [], plan: d.plan ?? [], lineMap: d.lineMap ?? [], extras: d.extras ?? [] };
+  return { employees: d.employees ?? [], plan: d.plan ?? [], lineMap: d.lineMap ?? [], extras: d.extras ?? [], laborCost: d.laborCost ?? [], payrollDeptMap: d.payrollDeptMap ?? [] };
+}
+
+export async function saveLaborCost(months: { pay_month: string; rows: Omit<ApiLaborCost, "pay_month">[] }[]) {
+  const r = await fetch("/api/hq-report/labor-cost", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ months }) });
+  const d = await r.json() as { ok: boolean; error?: string };
+  if (!d.ok) throw new Error(d.error || "บันทึกไม่สำเร็จ");
+}
+
+export async function savePayrollDept(dept_name: string, line: string) {
+  const r = await fetch("/api/hq-report/labor-cost?dept=1", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dept_name, line }) });
+  const d = await r.json() as { ok: boolean; error?: string };
+  if (!d.ok) throw new Error(d.error || "บันทึกไม่สำเร็จ");
 }
 
 export async function saveExtra(body: { employee_id: number; age: number | null; sourcing_channel: string | null; reason: string | null }) {
@@ -136,6 +151,10 @@ export function periodMonths(year: number, p: PeriodKey): string[] {
   return Array.from({ length: n }, (_, i) => `${year}-${String(start + i).padStart(2, "0")}`);
 }
 export const monthAbbr = (ym: string) => MONTH_ABBR[Number(ym.slice(5, 7)) - 1];
+export const nextMonth = (ym: string) => {
+  const y = Number(ym.slice(0, 4)), m = Number(ym.slice(5, 7));
+  return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+};
 export const thDate = (iso: string | null) => {
   if (!iso) return "—";
   const [y, m, d] = iso.split("-").map(Number);
@@ -205,9 +224,14 @@ export interface PersonRow {
   required: boolean;
 }
 export interface UnmappedItem { division: string; position: string; employees: number; planQty: number }
+/** Expense of one month: its own payroll's regular pay + the NEXT payroll's OT/shift pay. */
+export interface LaborRow { month: string; line: Line; regular: number; otShift: number; headcount: number }
+export interface LaborStatus { month: string; hasRegular: boolean; hasOt: boolean }
 export interface HqReport {
   year: number; months: string[];
   manpower: ManpowerRow[];
+  labor: LaborRow[];
+  laborStatus: LaborStatus[];
   hires: PersonRow[];
   resigns: PersonRow[];
   unmapped: UnmappedItem[];
@@ -290,6 +314,14 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
     }
   }
 
+  const paid = new Map(data.laborCost.map(x => [`${x.pay_month}|${x.line}`, x]));
+  const paidMonths = new Set(data.laborCost.map(x => x.pay_month));
+  const labor: LaborRow[] = months.flatMap(month => LINES.map(line => {
+    const own = paid.get(`${month}|${line}`), next = paid.get(`${nextMonth(month)}|${line}`);
+    return { month, line, regular: own?.regular ?? 0, otShift: next?.ot_shift ?? 0, headcount: own?.headcount ?? 0 };
+  }));
+  const laborStatus: LaborStatus[] = months.map(month => ({ month, hasRegular: paidMonths.has(month), hasOt: paidMonths.has(nextMonth(month)) }));
+
   const toPerson = (e: ApiEmployee, line: Line, month: string): PersonRow => {
     const x = extra.get(e.id);
     const txt = norm(e.resign_reason) || null;
@@ -323,7 +355,7 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
   hires.sort(byDate("start"));
   resigns.sort(byDate("resign"));
   return {
-    year, months, manpower, hires, resigns,
+    year, months, manpower, labor, laborStatus, hires, resigns,
     unmapped: [...unmapped.values()].sort((a, b) => a.division.localeCompare(b.division) || a.position.localeCompare(b.position)),
   };
 }
@@ -332,11 +364,20 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
 // Display order follows the template's "Labor Cost" sheet. The Excel export keeps LINES.
 const SUMMARY_LINE_ORDER: Line[] = ["สายการพยาบาล", "สนับสนุนทางการแพทย์", "สายสนับสนุนบริการ", "สายบัญชีและการเงิน", "สายสำนักงาน"];
 
-export interface SummaryCounts { planned: number; ft: number; pt: number; vacant: number; hired: number; resigned: number }
+export interface SummaryCounts {
+  planned: number; ft: number; pt: number; vacant: number; hired: number; resigned: number;
+  /** Baht; costHeads = person-months on the payroll, avgCost = cost per person per month */
+  cost: number; costHeads: number; avgCost: number;
+}
 export const SUMMARY_COLUMNS: { key: keyof SummaryCounts; label: string }[] = [
   { key: "planned", label: "Planned" }, { key: "ft", label: "Existing FT" }, { key: "pt", label: "Existing PT" },
   { key: "vacant", label: "Vacant" }, { key: "hired", label: "เริ่มงาน" }, { key: "resigned", label: "ลาออก" },
+  { key: "cost", label: "Labor Cost (บาท)" }, { key: "avgCost", label: "เฉลี่ย/คน/เดือน" },
 ];
+export function summaryCell(r: SummaryCounts, key: keyof SummaryCounts, hasCost: boolean): string {
+  if (key !== "cost" && key !== "avgCost") return String(r[key]);
+  return !hasCost || (key === "avgCost" && !r.avgCost) ? "—" : Math.round(r[key]).toLocaleString("en-US");
+}
 export interface SummaryRow extends SummaryCounts {
   kind: "line" | "labor" | "total";
   /** สายงาน, or the subtotal caption */
@@ -345,12 +386,27 @@ export interface SummaryRow extends SummaryCounts {
   /** rowSpan of the merged cell; 0 = covered by the row above */
   laborSpan: number; funcSpan: number;
 }
-export interface SummaryBlock { key: string; title: string; note: string; rows: SummaryRow[] }
+export interface SummaryBlock { key: string; title: string; note: string; rows: SummaryRow[]; hasCost: boolean; costWarning: string }
 
-const addCounts = (rows: SummaryCounts[]): SummaryCounts => rows.reduce(
-  (a, r) => ({ planned: a.planned + r.planned, ft: a.ft + r.ft, pt: a.pt + r.pt, vacant: a.vacant + r.vacant, hired: a.hired + r.hired, resigned: a.resigned + r.resigned }),
-  { planned: 0, ft: 0, pt: 0, vacant: 0, hired: 0, resigned: 0 },
-);
+const addCounts = (rows: SummaryCounts[]): SummaryCounts => {
+  const s = rows.reduce(
+    (a, r) => ({ planned: a.planned + r.planned, ft: a.ft + r.ft, pt: a.pt + r.pt, vacant: a.vacant + r.vacant, hired: a.hired + r.hired, resigned: a.resigned + r.resigned, cost: a.cost + r.cost, costHeads: a.costHeads + r.costHeads, avgCost: 0 }),
+    { planned: 0, ft: 0, pt: 0, vacant: 0, hired: 0, resigned: 0, cost: 0, costHeads: 0, avgCost: 0 },
+  );
+  return { ...s, avgCost: s.costHeads ? s.cost / s.costHeads : 0 };
+};
+
+function costInfo(rep: HqReport, months: string[]): { hasCost: boolean; costWarning: string } {
+  const status = rep.laborStatus.filter(s => months.includes(s.month));
+  const hasCost = status.some(s => s.hasRegular || s.hasOt);
+  const costWarning = !hasCost ? "" : status.flatMap(s => {
+    if (s.hasRegular && s.hasOt) return [];
+    if (s.hasRegular) return [`${monthAbbr(s.month)} ยังไม่รวมค่านอกเวลา/ค่าเวร (รองวด ${monthAbbr(nextMonth(s.month))})`];
+    if (s.hasOt) return [`${monthAbbr(s.month)} มีเฉพาะค่านอกเวลา/ค่าเวร (ยังไม่มีงวด ${monthAbbr(s.month)})`];
+    return [`${monthAbbr(s.month)} ยังไม่มีข้อมูลเงินเดือน`];
+  }).join(" · ");
+  return { hasCost, costWarning };
+}
 
 /** Headcount is taken at `snapshot`; hires/resignations are summed over `flowMonths`. */
 function summaryRows(rep: HqReport, snapshot: string, flowMonths: string[]): SummaryRow[] {
@@ -358,10 +414,14 @@ function summaryRows(rep: HqReport, snapshot: string, flowMonths: string[]): Sum
   const countsOf = (line: Line): SummaryCounts => {
     const m = rep.manpower.find(x => x.month === snapshot && x.line === line);
     const planned = m?.planned ?? 0, ft = m?.ft ?? 0, pt = m?.pt ?? 0;
+    const pay = rep.labor.filter(x => x.line === line && flow.has(x.month));
+    const cost = pay.reduce((s, x) => s + x.regular + x.otShift, 0);
+    const costHeads = pay.reduce((s, x) => s + x.headcount, 0);
     return {
       planned, ft, pt, vacant: planned - ft - pt,
       hired: rep.hires.filter(p => p.line === line && flow.has(p.month)).length,
       resigned: rep.resigns.filter(p => p.line === line && flow.has(p.month)).length,
+      cost, costHeads, avgCost: costHeads ? cost / costHeads : 0,
     };
   };
   const rows: SummaryRow[] = [];
@@ -390,15 +450,16 @@ export function buildSummaryBlocks(rep: HqReport, periodLabel: string): SummaryB
   const lastMonth = rep.months[rep.months.length - 1];
   const beYear = (ym: string) => Number(ym.slice(0, 4)) + 543;
   if (rep.months.length === 1) {
-    return [{ key: lastMonth, title: `${periodLabel} ${beYear(lastMonth)}`, note: "", rows: summaryRows(rep, lastMonth, rep.months) }];
+    return [{ key: lastMonth, title: `${periodLabel} ${beYear(lastMonth)}`, note: "", rows: summaryRows(rep, lastMonth, rep.months), ...costInfo(rep, rep.months) }];
   }
   return [
     {
       key: "period",
       title: `สรุปทั้งงวด · ${periodLabel} ${rep.year + 543}`,
-      note: `Planned / Existing / Vacant ณ สิ้น ${monthAbbr(lastMonth)} · เริ่มงาน / ลาออก รวมทั้งงวด`,
+      note: `Planned / Existing / Vacant ณ สิ้น ${monthAbbr(lastMonth)} · เริ่มงาน / ลาออก / Labor Cost รวมทั้งงวด`,
       rows: summaryRows(rep, lastMonth, rep.months),
+      ...costInfo(rep, rep.months),
     },
-    ...rep.months.map(ym => ({ key: ym, title: `${monthAbbr(ym)} ${beYear(ym)}`, note: "", rows: summaryRows(rep, ym, [ym]) })),
+    ...rep.months.map(ym => ({ key: ym, title: `${monthAbbr(ym)} ${beYear(ym)}`, note: "", rows: summaryRows(rep, ym, [ym]), ...costInfo(rep, [ym]) })),
   ];
 }

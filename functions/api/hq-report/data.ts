@@ -11,8 +11,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   if (user.role !== "admin") return Response.json({ ok: false, error: "เฉพาะผู้ดูแลระบบเท่านั้น" }, { status: 403 });
 
   const db = ctx.env.HR_DB;
+  // The report must keep working before migration 0049 has been run.
+  const optional = (sql: string) => db.prepare(sql).all().catch((e: unknown) => {
+    if (e instanceof Error && e.message.includes("no such table")) return { results: [] };
+    throw e;
+  });
   try {
-    const [employees, plan, lineMap, extras] = await Promise.all([
+    const [employees, plan, lineMap, extras, laborCost, payrollDeptMap] = await Promise.all([
       db.prepare(`
         SELECT e.id, e.prefix, e.full_name, e.position, e.emp_type, e.emp_status,
                e.start_date, e.resign_date, e.resign_reason, e.resign_type,
@@ -29,6 +34,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       `).all(),
       db.prepare("SELECT division_name, position, line FROM hq_line_map").all(),
       db.prepare("SELECT employee_id, age, sourcing_channel, reason FROM hq_report_extra").all(),
+      optional("SELECT pay_month, line, regular, ot_shift, headcount FROM hq_labor_cost"),
+      optional("SELECT dept_name, line FROM hq_payroll_dept_map"),
     ]);
     return Response.json({
       ok: true,
@@ -36,6 +43,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       plan: plan.results ?? [],
       lineMap: lineMap.results ?? [],
       extras: extras.results ?? [],
+      laborCost: laborCost.results ?? [],
+      payrollDeptMap: payrollDeptMap.results ?? [],
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

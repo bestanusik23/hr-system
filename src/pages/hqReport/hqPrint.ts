@@ -1,7 +1,7 @@
 // Printable full report of รายงาน RAM GROUP (A4 landscape): summary grouped
 // Labor Cost → Function → สายงาน, the analysis tab, and the leaver / new-hire lists.
 import {
-  SUMMARY_COLUMNS, monthAbbr, thDate,
+  SUMMARY_COLUMNS, summaryCell, monthAbbr, thDate,
   type ApiData, type HqReport, type PersonRow, type SummaryBlock, type SummaryRow, type TemplateLists,
 } from "./hqReportCalc";
 import { buildAnalysisView, pct, rangeLabel, type Count } from "./hqAnalysis";
@@ -10,21 +10,26 @@ const esc = (v: string | number | null | undefined) => String(v ?? "").replace(/
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
 // ── Summary ──────────────────────────────────────────────────────────────────
-const numCells = (r: SummaryRow) => SUMMARY_COLUMNS.map(c => `<td class="n">${r[c.key]}</td>`).join("");
+const numCells = (r: SummaryRow, hasCost: boolean) => SUMMARY_COLUMNS.map(c => `<td class="n">${summaryCell(r, c.key, hasCost)}</td>`).join("");
 
-function summaryRow(r: SummaryRow): string {
-  if (r.kind !== "line") return `<tr class="${r.kind}"><td colspan="3">${r.label}</td>${numCells(r)}</tr>`;
+function summaryRow(r: SummaryRow, hasCost: boolean): string {
+  if (r.kind !== "line") return `<tr class="${r.kind}"><td colspan="3">${r.label}</td>${numCells(r, hasCost)}</tr>`;
   const labor = r.laborSpan > 0 ? `<td rowspan="${r.laborSpan}" class="group">${r.labor}</td>` : "";
   const func = r.funcSpan > 0 ? `<td rowspan="${r.funcSpan}" class="group">${r.func}</td>` : "";
-  return `<tr>${labor}${func}<td>${r.label}</td>${numCells(r)}</tr>`;
+  return `<tr>${labor}${func}<td>${r.label}</td>${numCells(r, hasCost)}</tr>`;
 }
 
-const summaryBlock = (b: SummaryBlock) => `<section class="block">
+// Half-page tables (quarter/year) are too narrow for the full count headers.
+const SHORT_LABEL: Record<string, string> = { planned: "แผน", ft: "FT", pt: "PT", vacant: "ว่าง", hired: "เข้า", resigned: "ออก" };
+const colWidth = (key: string, compact: boolean) => (key === "cost" ? (compact ? 15 : 14) : key === "avgCost" ? (compact ? 11 : 10) : compact ? 5.5 : 6);
+
+const summaryBlock = (b: SummaryBlock, compact: boolean) => `<section class="block">
   <div class="sect">${b.title}${b.note ? `<span class="note">${b.note}</span>` : ""}</div>
+  ${b.costWarning ? `<div class="cwarn">⚠ Labor Cost ยังไม่ครบ: ${b.costWarning}</div>` : ""}
   <table class="fixed">
-    <colgroup><col style="width:9%"><col style="width:16%"><col style="width:23%">${SUMMARY_COLUMNS.map(() => `<col style="width:${52 / SUMMARY_COLUMNS.length}%">`).join("")}</colgroup>
-    <thead><tr><th>Labor Cost</th><th>Function</th><th>สายงาน</th>${SUMMARY_COLUMNS.map(c => `<th class="n">${c.label}</th>`).join("")}</tr></thead>
-    <tbody>${b.rows.map(summaryRow).join("")}</tbody>
+    <colgroup><col style="width:${compact ? 10 : 8}%"><col style="width:13%"><col style="width:${compact ? 18 : 19}%">${SUMMARY_COLUMNS.map(c => `<col style="width:${colWidth(c.key, compact)}%">`).join("")}</colgroup>
+    <thead><tr><th>Labor Cost</th><th>Function</th><th>สายงาน</th>${SUMMARY_COLUMNS.map(c => `<th class="n">${(compact && SHORT_LABEL[c.key]) || c.label}</th>`).join("")}</tr></thead>
+    <tbody>${b.rows.map(r => summaryRow(r, b.hasCost)).join("")}</tbody>
   </table>
 </section>`;
 
@@ -156,6 +161,7 @@ export function printHqReport(data: ApiData, rep: HqReport, lists: TemplateLists
   .block{break-inside:avoid;page-break-inside:avoid}
   .sect{font-size:9.5pt;font-weight:800;color:#1F3864;margin-bottom:2px}
   .note{font-size:7pt;font-weight:400;color:#64748b;margin-left:6px}
+  .cwarn{font-size:7pt;font-weight:600;color:#9A6700;margin-bottom:2px}
 
   table{width:100%;border-collapse:collapse;font-size:8pt}
   table.fixed{table-layout:fixed}
@@ -196,8 +202,8 @@ export function printHqReport(data: ApiData, rep: HqReport, lists: TemplateLists
 ${missing ? `<div class="warn">ข้อมูลยังไม่ครบ: ${missing}</div>` : ""}
 <div class="tiles">${tiles}</div>
 
-<h2>1. สรุปอัตรากำลัง ตาม Labor Cost / Function / สายงาน</h2>
-<div class="blocks ${blocks.length > 1 ? "two" : ""}">${blocks.map(summaryBlock).join("")}</div>
+<h2>1. สรุปอัตรากำลัง ตาม Labor Cost / Function / สายงาน${blocks.length > 1 ? `<span class="note">แผน = Planned · FT / PT = Existing · ว่าง = Vacant · เข้า = เริ่มงาน · ออก = ลาออก</span>` : ""}</h2>
+<div class="blocks ${blocks.length > 1 ? "two" : ""}">${blocks.map(b => summaryBlock(b, blocks.length > 1)).join("")}</div>
 
 <div class="page">
   <h2>2. วิเคราะห์</h2>
@@ -209,7 +215,7 @@ ${missing ? `<div class="warn">ข้อมูลยังไม่ครบ: ${
   ${peopleTable(rep.resigns, "resign")}
   <h2>4. รายชื่อพนักงานใหม่ (${rep.hires.length} คน)</h2>
   ${peopleTable(rep.hires, "hire")}
-  <div class="foot">Planned = แผนอัตรากำลังปัจจุบัน · Existing นับ ณ สิ้นเดือน · เริ่มงาน/ลาออก นับรอบวันที่ 26 เดือนก่อน – 25 ของเดือน · ไม่นับผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม นักศึกษาฝึกงาน และตำแหน่งที่ตั้งเป็น "ไม่นับ"</div>
+  <div class="foot">Planned = แผนอัตรากำลังปัจจุบัน · Existing นับ ณ สิ้นเดือน · เริ่มงาน/ลาออก นับรอบวันที่ 26 เดือนก่อน – 25 ของเดือน · ไม่นับผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม นักศึกษาฝึกงาน และตำแหน่งที่ตั้งเป็น "ไม่นับ" · Labor Cost = รายได้รวมจากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง โดยค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย</div>
 </div>
 <div class="btns noprint"><button onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button></div>
 </body></html>`);

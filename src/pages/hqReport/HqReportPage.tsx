@@ -2,20 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import {
-  LINES, EXCLUDED_LINE, PERIOD_LABEL, MONTH_PERIODS, RANGE_PERIODS, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, monthAbbr, thDate, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
+  LINES, EXCLUDED_LINE, PERIOD_LABEL, MONTH_PERIODS, RANGE_PERIODS, TRACK_FROM, TRACK_FROM_LABEL, SUMMARY_COLUMNS, summaryCell, monthAbbr, thDate, fetchHqData, saveExtra, saveLineMap, deleteLineMap,
   loadTemplate, readTemplateLists, buildReport, buildSummaryBlocks,
   type ApiData, type PeriodKey, type PersonRow, type TemplateLists,
 } from "./hqReportCalc";
 import { exportHqDashboard } from "./hqExport";
 import { printHqReport } from "./hqPrint";
 import AnalysisTab from "./AnalysisTab";
+import SalaryTab from "./SalaryTab";
 
 // เมนู "รายงาน RAM GROUP" (รายงานส่งสำนักงานใหญ่) — admin only.
 // สรุป HR Dashboard รายเดือน/รายไตรมาส/รายปี จากข้อมูลพนักงาน + แผนอัตรากำลัง แล้ว export เป็น
 // xlsx ตามแม่แบบที่ส่งสำนักงานใหญ่ ช่องที่ระบบไม่มี (อายุผู้ลาออก ช่องทางสรรหา หมวดเหตุผล)
 // ให้ผู้ดูแลกรอกในแท็บของแต่ละกลุ่ม
 
-type Tab = "summary" | "analysis" | "resign" | "hire" | "map";
+type Tab = "summary" | "analysis" | "resign" | "hire" | "salary" | "map";
 
 const card: React.CSSProperties = { background: "#fff", border: "1px solid #E6EBF5", borderRadius: 12, padding: 16, boxShadow: "0 4px 14px rgba(20,40,90,.05)", marginBottom: 14 };
 const th: React.CSSProperties = { textAlign: "left", padding: "8px 10px", background: "#F2F5FB", fontWeight: 700, fontSize: 12.5, color: "#334155", borderBottom: "1px solid #E6EBF5", whiteSpace: "nowrap" };
@@ -89,6 +90,7 @@ export default function HqReportPage() {
     { key: "analysis", label: "📈 วิเคราะห์" },
     { key: "resign", label: "🚪 ผู้ลาออก", badge: missingAge + missingReason },
     { key: "hire", label: "🆕 พนักงานใหม่", badge: missingChannel },
+    { key: "salary", label: "💰 เงินเดือน" },
     { key: "map", label: "🧭 จับคู่สายงาน", badge: rep?.unmapped.length },
   ];
 
@@ -158,7 +160,7 @@ export default function HqReportPage() {
           {tab === "summary" && (
             <div style={card}>
               <div style={{ overflowX: "auto" }}>
-                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 860 }}>
+                <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 1040 }}>
                   <thead><tr>
                     <th style={th}>Labor Cost</th><th style={th}>Function</th><th style={th}>สายงาน</th>
                     {SUMMARY_COLUMNS.map(c => <th key={c.key} style={{ ...th, textAlign: "right" }}>{c.label}</th>)}
@@ -169,10 +171,11 @@ export default function HqReportPage() {
                         <td colSpan={3 + SUMMARY_COLUMNS.length} style={{ ...td, background: "#DDE6F5", color: "#1F3864", fontWeight: 800 }}>
                           {b.title}
                           {b.note && <span style={{ marginLeft: 10, fontSize: 11.5, fontWeight: 400, color: "#6B7A99" }}>{b.note}</span>}
+                          {b.costWarning && <div style={{ fontSize: 11.5, fontWeight: 600, color: "#9A6700" }}>⚠ Labor Cost ยังไม่ครบ: {b.costWarning}</div>}
                         </td>
                       </tr>
                       {b.rows.map(r => {
-                        const cells = SUMMARY_COLUMNS.map(c => <td key={c.key} style={num}>{r[c.key]}</td>);
+                        const cells = SUMMARY_COLUMNS.map(c => <td key={c.key} style={num}>{summaryCell(r, c.key, b.hasCost)}</td>);
                         if (r.kind !== "line") {
                           return (
                             <tr key={r.label} style={{ background: r.kind === "total" ? "#EEF2F8" : "#F8FAFD", fontWeight: r.kind === "total" ? 800 : 700 }}>
@@ -194,7 +197,8 @@ export default function HqReportPage() {
               </div>
               <p style={{ fontSize: 12, color: "#6B7A99", margin: "10px 0 0" }}>
                 Planned = แผนอัตรากำลังปัจจุบัน (เมนู Manpower) · Existing นับ ณ สิ้นเดือน · เริ่มงาน/ลาออก นับรอบวันที่ 26 เดือนก่อน – 25 ของเดือน ·
-                ไม่นับผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม นักศึกษาฝึกงาน และตำแหน่งที่ตั้งเป็น "ไม่นับ"
+                ไม่นับผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม นักศึกษาฝึกงาน และตำแหน่งที่ตั้งเป็น "ไม่นับ" ·
+                Labor Cost = รายได้รวมจากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง โดยค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย (อัพโหลดที่แท็บเงินเดือน)
               </p>
             </div>
           )}
@@ -212,6 +216,8 @@ export default function HqReportPage() {
               <PeopleTable rows={rep.hires} kind="hire" lists={lists} onChange={patchExtra} />
             </div>
           )}
+
+          {tab === "salary" && data && <SalaryTab data={data} onSaved={reload} />}
 
           {tab === "map" && data && <LineMapTab data={data} unmapped={rep.unmapped} onSaved={reload} />}
         </>
