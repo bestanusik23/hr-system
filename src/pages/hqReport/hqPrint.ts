@@ -39,6 +39,8 @@ export function printHqReport(rep: HqReport, summary: SummaryBlock, periodLabel:
   *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   body{font-family:'Sarabun',Arial,sans-serif;font-size:9pt;color:#222;margin:0;line-height:1.25}
   .hdr{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;border-bottom:3px solid #1F3864;padding-bottom:5px;margin-bottom:6px}
+  .brand{display:flex;align-items:center;gap:10px}
+  .brand img{height:40px;object-fit:contain;display:block}
   .sub{font-size:8.5pt;color:#64748b}
   h1{font-size:14pt;color:#1F3864;margin:0;font-weight:800}
   h2{font-size:11pt;color:#1F3864;margin:8px 0 4px;font-weight:800;border-left:4px solid #1F3864;padding-left:6px}
@@ -62,9 +64,12 @@ export function printHqReport(rep: HqReport, summary: SummaryBlock, periodLabel:
   @media screen{body{padding:16px;max-width:297mm;margin:0 auto}}
 </style></head><body>
 <div class="hdr">
-  <div>
-    <div class="sub">โรงพยาบาลเชียงราย ราม · HR Dashboard (RAM Group)</div>
-    <h1>รายงาน RAM GROUP · ${period}</h1>
+  <div class="brand">
+    <img src="/logo.png" alt="โรงพยาบาลเชียงราย ราม">
+    <div>
+      <div class="sub">โรงพยาบาลเชียงราย ราม · HR Dashboard (RAM Group)</div>
+      <h1>รายงาน RAM GROUP · ${period}</h1>
+    </div>
   </div>
   <div class="sub">พิมพ์เมื่อ ${new Date().toLocaleString("th-TH")}</div>
 </div>
@@ -80,5 +85,9 @@ ${compare || `<div class="empty">ยังไม่มีข้อมูลเ�
 <div class="btns noprint"><button onclick="window.print()">🖨️ พิมพ์ / บันทึก PDF</button></div>
 </body></html>`);
   win.document.close();
-  setTimeout(() => win.print(), 800);
+  // Wait for the logo so it is not missing from the printed page.
+  const logo = win.document.querySelector("img");
+  void Promise.race([logo?.decode(), new Promise(r => setTimeout(r, 2000))])
+    .catch(() => undefined)
+    .then(() => setTimeout(() => win.print(), 500));
 }
