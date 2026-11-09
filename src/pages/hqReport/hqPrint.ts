@@ -5,6 +5,20 @@ import { laborCompareHtml } from "./hqCharts";
 
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
+// Position levels, senior first. The system has no level field, so it is read from the title.
+const TIERS = ["ผู้บริหาร", "หัวหน้างาน", "วิชาชีพ / เจ้าหน้าที่", "ผู้ช่วย / พนักงาน"];
+const OFFICER_TIER = 2;
+const LEVELS: { tier: number; re: RegExp }[] = [
+  { tier: 0, re: /^ผู้อำนวยการ/ }, { tier: 0, re: /^รองผู้อำนวยการ/ }, { tier: 0, re: /^ผู้ช่วย(รอง)?ผู้อำนวยการ/ },
+  { tier: 0, re: /^(ผู้จัดการ|สมุห์บัญชี)/ }, { tier: 0, re: /^ผู้ช่วยผู้จัดการ/ },
+  { tier: 1, re: /^หัวหน้า/ }, { tier: 1, re: /^รองหัวหน้า/ },
+  { tier: 3, re: /^(ผู้ช่วย|พนักงาน|แม่บ้าน)/ },
+];
+const levelOf = (position: string) => {
+  const index = LEVELS.findIndex(l => l.re.test(position));
+  return index < 0 ? { tier: OFFICER_TIER, index: LEVELS.length } : { tier: LEVELS[index].tier, index };
+};
+
 /** Back-of-page reference: each Function's positions, from the จับคู่สายงาน table (ไม่นับ left out). */
 function positionNote(lineMap: ApiLineMap[]): string {
   const byLine = new Map<Line, Set<string>>();
@@ -15,7 +29,13 @@ function positionNote(lineMap: ApiLineMap[]): string {
     if (!byLine.has(line)) byLine.set(line, new Set());
     byLine.get(line)!.add(pos);
   }
-  const listOf = (line: Line) => `<ul>${[...byLine.get(line)!].sort((a, b) => a.localeCompare(b, "th")).map(p => `<li>${esc(p)}</li>`).join("")}</ul>`;
+  const listOf = (line: Line) => {
+    const sorted = [...byLine.get(line)!].sort((a, b) => levelOf(a).index - levelOf(b).index || a.localeCompare(b, "th"));
+    return TIERS.map((label, tier) => {
+      const items = sorted.filter(p => levelOf(p).tier === tier);
+      return items.length ? `<div class="lv">${label}</div><ul>${items.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : "";
+    }).join("");
+  };
   const sections = ["Nursing", "Ancillary", "Support Service", "Back Office"].flatMap(func => {
     const lines = SUMMARY_LINE_ORDER.filter(l => LINE_FUNC[l] === func && byLine.has(l));
     if (!lines.length) return [];
@@ -83,11 +103,12 @@ export function printHqReport(rep: HqReport, summary: SummaryBlock, periodLabel:
   .empty{color:#64748b;font-size:8.5pt;padding:2px 0}
   .foot{font-size:7pt;color:#64748b;margin-top:4px}
   .page{break-before:page;page-break-before:always;padding-top:2mm}
-  .posnote{columns:4;column-gap:14px;font-size:8pt;color:#334155;line-height:1.3}
+  .posnote{columns:4;column-gap:14px;font-size:7.5pt;color:#334155;line-height:1.22}
   .pf{background:#1F3864;color:#fff;font-weight:800;font-size:9pt;padding:3px 7px;margin:0 0 3px;break-inside:avoid;break-after:avoid}
   .pf span{display:block;font-weight:400;font-size:7pt}
-  .posnote ul+.pf{margin-top:9px}
+  .posnote ul+.pf{margin-top:7px}
   .pl{font-weight:700;color:#1F3864;border-bottom:1px solid #D5DCEB;margin:5px 0 2px;break-after:avoid}
+  .lv{font-weight:700;font-size:7pt;color:#2F5597;margin-top:2px;break-after:avoid}
   .posnote ul{list-style:none;margin:0;padding:0}
   .posnote li{padding-left:9px;text-indent:-9px;break-inside:avoid}
   .posnote li::before{content:"• ";color:#2F5597}
