@@ -1,25 +1,30 @@
 // One-page printable summary of รายงาน RAM GROUP (A4 landscape): the period summary grouped
 // Labor Cost → Function → สายงาน, and % of people against % of pay. Figures only — no staff names.
-import { LINE_FUNC, SUMMARY_COLUMNS, summaryCell, type ApiLineMap, type HqReport, type Line, type SummaryBlock, type SummaryRow } from "./hqReportCalc";
+import { LINE_FUNC, LINE_LABOR, SUMMARY_COLUMNS, SUMMARY_LINE_ORDER, summaryCell, type ApiLineMap, type HqReport, type Line, type SummaryBlock, type SummaryRow } from "./hqReportCalc";
 import { laborCompareHtml } from "./hqCharts";
 
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
-/** Footnote listing each Function's positions, straight from the จับคู่สายงาน table (ไม่นับ left out). */
+/** Back-of-page reference: each Function's positions, from the จับคู่สายงาน table (ไม่นับ left out). */
 function positionNote(lineMap: ApiLineMap[]): string {
-  const byFunc = new Map<string, Set<string>>();
+  const byLine = new Map<Line, Set<string>>();
   for (const m of lineMap) {
-    const func = LINE_FUNC[m.line as Line];
+    const line = m.line as Line;
     const pos = m.position.replace(/\s+/g, " ").trim();
-    if (!func || !pos) continue;
-    if (!byFunc.has(func)) byFunc.set(func, new Set());
-    byFunc.get(func)!.add(pos);
+    if (!LINE_FUNC[line] || !pos) continue;
+    if (!byLine.has(line)) byLine.set(line, new Set());
+    byLine.get(line)!.add(pos);
   }
-  const rows = ["Nursing", "Ancillary", "Support Service", "Back Office"].flatMap(func => {
-    const list = [...(byFunc.get(func) ?? [])].sort((a, b) => a.localeCompare(b, "th"));
-    return list.length ? [`<div><b>${func}:</b> ${list.map(esc).join(", ")}</div>`] : [];
+  const listOf = (line: Line) => `<ul>${[...byLine.get(line)!].sort((a, b) => a.localeCompare(b, "th")).map(p => `<li>${esc(p)}</li>`).join("")}</ul>`;
+  const sections = ["Nursing", "Ancillary", "Support Service", "Back Office"].flatMap(func => {
+    const lines = SUMMARY_LINE_ORDER.filter(l => LINE_FUNC[l] === func && byLine.has(l));
+    if (!lines.length) return [];
+    const count = lines.reduce((s, l) => s + byLine.get(l)!.size, 0);
+    const detail = lines.length === 1 ? `${lines[0]} · ` : "";
+    const body = lines.map(l => (lines.length > 1 ? `<div class="pl">${l} (${byLine.get(l)!.size})</div>` : "") + listOf(l)).join("");
+    return [`<div class="pf">${func}<span>${LINE_LABOR[lines[0]]} · ${detail}${count} ตำแหน่ง</span></div>${body}`];
   });
-  return rows.length ? `<div class="posnote"><b class="pt">หมายเหตุ ตำแหน่งงานในแต่ละ Function</b>${rows.join("")}</div>` : "";
+  return sections.length ? `<div class="page"><h2>หมายเหตุ ตำแหน่งงานในแต่ละ Function</h2><div class="posnote">${sections.join("")}</div></div>` : "";
 }
 
 const numCells = (r: SummaryRow, hasCost: boolean) => SUMMARY_COLUMNS.map(c => `<td class="n">${summaryCell(r, c.key, hasCost)}</td>`).join("");
@@ -77,8 +82,15 @@ export function printHqReport(rep: HqReport, summary: SummaryBlock, periodLabel:
   tr.total td{background:#1F3864;color:#fff;font-weight:800}
   .empty{color:#64748b;font-size:8.5pt;padding:2px 0}
   .foot{font-size:7pt;color:#64748b;margin-top:4px}
-  .posnote{font-size:6.5pt;color:#334155;margin-top:4px;padding-top:3px;border-top:1px solid #D5DCEB;line-height:1.3}
-  .posnote .pt{color:#1F3864}
+  .page{break-before:page;page-break-before:always;padding-top:2mm}
+  .posnote{columns:4;column-gap:14px;font-size:8pt;color:#334155;line-height:1.3}
+  .pf{background:#1F3864;color:#fff;font-weight:800;font-size:9pt;padding:3px 7px;margin:0 0 3px;break-inside:avoid;break-after:avoid}
+  .pf span{display:block;font-weight:400;font-size:7pt}
+  .posnote ul+.pf{margin-top:9px}
+  .pl{font-weight:700;color:#1F3864;border-bottom:1px solid #D5DCEB;margin:5px 0 2px;break-after:avoid}
+  .posnote ul{list-style:none;margin:0;padding:0}
+  .posnote li{padding-left:9px;text-indent:-9px;break-inside:avoid}
+  .posnote li::before{content:"• ";color:#2F5597}
   .btns{margin:14px 0;text-align:center}
   .btns button{padding:9px 24px;background:#1F3864;color:#fff;border:none;border-radius:7px;cursor:pointer;font-size:12pt;font-family:inherit}
   @media print{.noprint{display:none}}
