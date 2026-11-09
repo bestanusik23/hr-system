@@ -57,7 +57,7 @@ export interface ApiPlan { division_name: string; pos: string; qty: number }
 export interface ApiLineMap { division_name: string; position: string; line: string }
 export interface ApiExtra { employee_id: number; age: number | null; sourcing_channel: string | null; reason: string | null }
 /** Monthly totals per สายงาน, by the month the payroll was paid. */
-export interface ApiLaborCost { pay_month: string; line: string; regular: number; ot_shift: number; headcount: number }
+export interface ApiLaborCost { pay_month: string; line: string; regular: number; ot: number; shift: number; ot_shift: number; headcount: number }
 export interface ApiPayrollDept { dept_name: string; line: string }
 export interface ApiData { employees: ApiEmployee[]; plan: ApiPlan[]; lineMap: ApiLineMap[]; extras: ApiExtra[]; laborCost: ApiLaborCost[]; payrollDeptMap: ApiPayrollDept[] }
 
@@ -68,7 +68,7 @@ export async function fetchHqData(): Promise<ApiData> {
   return { employees: d.employees ?? [], plan: d.plan ?? [], lineMap: d.lineMap ?? [], extras: d.extras ?? [], laborCost: d.laborCost ?? [], payrollDeptMap: d.payrollDeptMap ?? [] };
 }
 
-export async function saveLaborCost(months: { pay_month: string; rows: Omit<ApiLaborCost, "pay_month">[] }[]) {
+export async function saveLaborCost(months: { pay_month: string; rows: Omit<ApiLaborCost, "pay_month" | "ot_shift">[] }[]) {
   const r = await fetch("/api/hq-report/labor-cost", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ months }) });
   const d = await r.json() as { ok: boolean; error?: string };
   if (!d.ok) throw new Error(d.error || "บันทึกไม่สำเร็จ");
@@ -225,7 +225,7 @@ export interface PersonRow {
 }
 export interface UnmappedItem { division: string; position: string; employees: number; planQty: number }
 /** Expense of one month: its own payroll's regular pay + the NEXT payroll's OT/shift pay. */
-export interface LaborRow { month: string; line: Line; regular: number; otShift: number; headcount: number }
+export interface LaborRow { month: string; line: Line; regular: number; ot: number; shift: number; otShift: number; headcount: number }
 export interface LaborStatus { month: string; hasRegular: boolean; hasOt: boolean }
 export interface HqReport {
   year: number; months: string[];
@@ -318,7 +318,7 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
   const paidMonths = new Set(data.laborCost.map(x => x.pay_month));
   const labor: LaborRow[] = months.flatMap(month => LINES.map(line => {
     const own = paid.get(`${month}|${line}`), next = paid.get(`${nextMonth(month)}|${line}`);
-    return { month, line, regular: own?.regular ?? 0, otShift: next?.ot_shift ?? 0, headcount: own?.headcount ?? 0 };
+    return { month, line, regular: own?.regular ?? 0, ot: next?.ot ?? 0, shift: next?.shift ?? 0, otShift: next?.ot_shift ?? 0, headcount: own?.headcount ?? 0 };
   }));
   const laborStatus: LaborStatus[] = months.map(month => ({ month, hasRegular: paidMonths.has(month), hasOt: paidMonths.has(nextMonth(month)) }));
 
@@ -362,7 +362,7 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
 
 // ── Summary grouped Labor Cost → Function → สายงาน (screen + print) ─────────────
 // Display order follows the template's "Labor Cost" sheet. The Excel export keeps LINES.
-const SUMMARY_LINE_ORDER: Line[] = ["สายการพยาบาล", "สนับสนุนทางการแพทย์", "สายสนับสนุนบริการ", "สายบัญชีและการเงิน", "สายสำนักงาน"];
+export const SUMMARY_LINE_ORDER: Line[] = ["สายการพยาบาล", "สนับสนุนทางการแพทย์", "สายสนับสนุนบริการ", "สายบัญชีและการเงิน", "สายสำนักงาน"];
 
 export interface SummaryCounts {
   planned: number; ft: number; pt: number; vacant: number; hired: number; resigned: number;
@@ -396,7 +396,7 @@ const addCounts = (rows: SummaryCounts[]): SummaryCounts => {
   return { ...s, avgCost: s.costHeads ? s.cost / s.costHeads : 0 };
 };
 
-function costInfo(rep: HqReport, months: string[]): { hasCost: boolean; costWarning: string } {
+export function costInfo(rep: HqReport, months: string[]): { hasCost: boolean; costWarning: string } {
   const status = rep.laborStatus.filter(s => months.includes(s.month));
   const hasCost = status.some(s => s.hasRegular || s.hasOt);
   const costWarning = !hasCost ? "" : status.flatMap(s => {

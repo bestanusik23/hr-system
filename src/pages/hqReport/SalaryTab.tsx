@@ -44,7 +44,7 @@ export default function SalaryTab({ data, onSaved }: { data: ApiData; onSaved: (
       f, rows,
       headcount: rows.reduce((s, r) => s + r.headcount, 0),
       regular: rows.reduce((s, r) => s + r.regular, 0),
-      otShift: rows.reduce((s, r) => s + r.ot_shift, 0),
+      otShift: rows.reduce((s, r) => s + r.ot + r.shift, 0),
       excluded: f.depts.filter(d => lineOf.get(d.name) === EXCLUDED_LINE).reduce((s, d) => s + d.regular + d.otShift, 0),
       unmappedAmount: f.depts.filter(d => !lineOf.has(d.name)).reduce((s, d) => s + d.regular + d.otShift, 0),
     };

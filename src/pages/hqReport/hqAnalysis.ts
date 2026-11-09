@@ -2,7 +2,7 @@
 // Built from HqReport (same counting rules as the HQ export), so the analysis and the
 // file sent to HQ never disagree.
 import {
-  LINES, LINE_FUNC, TENURE_BANDS, AGE_BANDS, tenureBand, ageBand, monthsBetween,
+  LINES, LINE_FUNC, LINE_LABOR, SUMMARY_LINE_ORDER, TENURE_BANDS, AGE_BANDS, tenureBand, ageBand, monthsBetween,
   buildReportForMonths, previousMonths, ytdMonths, monthAbbr,
   type ApiData, type HqReport, type Line, type TemplateLists,
 } from "./hqReportCalc";
@@ -87,6 +87,55 @@ export function analyze(rep: HqReport, lists: TemplateLists | null): Analysis {
 }
 
 export const funcOf = (l: Line) => LINE_FUNC[l];
+
+export interface LaborShare {
+  label: string; regular: number; shift: number; ot: number; cost: number;
+  /** Average people on the payroll per month in the period */
+  heads: number;
+  costShare: number; headShare: number;
+  /** cost per person per month */
+  avg: number;
+}
+
+/** Cost mix per สายงาน, and each สายงาน's share of total cost against its share of people. */
+export function laborBreakdown(rep: HqReport): { rows: LaborShare[]; total: LaborShare } {
+  const paidMonths = rep.laborStatus.filter(s => s.hasRegular).length || 1;
+  const all = rep.labor.reduce((a, x) => ({ cost: a.cost + x.regular + x.otShift, personMonths: a.personMonths + x.headcount }), { cost: 0, personMonths: 0 });
+  const build = (label: string, rows: HqReport["labor"]): LaborShare => {
+    const regular = rows.reduce((s, x) => s + x.regular, 0), shift = rows.reduce((s, x) => s + x.shift, 0), ot = rows.reduce((s, x) => s + x.ot, 0);
+    const cost = rows.reduce((s, x) => s + x.regular + x.otShift, 0), personMonths = rows.reduce((s, x) => s + x.headcount, 0);
+    return {
+      label, regular, shift, ot, cost, heads: personMonths / paidMonths,
+      costShare: all.cost ? cost / all.cost : 0, headShare: all.personMonths ? personMonths / all.personMonths : 0,
+      avg: personMonths ? cost / personMonths : 0,
+    };
+  };
+  return { rows: SUMMARY_LINE_ORDER.map(line => build(line, rep.labor.filter(x => x.line === line))), total: build("รวมทั้งหมด", rep.labor) };
+}
+
+/** Within this many percentage points, % cost and % people count as "close". */
+export const NEAR_POINTS = 2;
+export type Verdict = "above" | "below" | "near";
+export const VERDICT_TEXT: Record<Verdict, string> = {
+  above: "▲ เงินเดือนสูงกว่าสัดส่วนคน", below: "▼ เงินเดือนต่ำกว่าสัดส่วนคน", near: "● ใกล้เคียงกัน",
+};
+export interface CompareRow { label: string; headShare: number; costShare: number; gap: number; verdict: Verdict }
+
+/** % of people against % of pay, by Labor Cost group and by Function. */
+export function laborCompare(rep: HqReport): { byLabor: CompareRow[]; byFunc: CompareRow[] } {
+  const totalCost = rep.labor.reduce((s, x) => s + x.regular + x.otShift, 0);
+  const totalHeads = rep.labor.reduce((s, x) => s + x.headcount, 0);
+  const build = (label: string, rows: HqReport["labor"]): CompareRow => {
+    const costShare = totalCost ? rows.reduce((s, x) => s + x.regular + x.otShift, 0) / totalCost : 0;
+    const headShare = totalHeads ? rows.reduce((s, x) => s + x.headcount, 0) / totalHeads : 0;
+    const gap = (costShare - headShare) * 100;
+    return { label, headShare, costShare, gap, verdict: Math.abs(gap) <= NEAR_POINTS ? "near" : gap > 0 ? "above" : "below" };
+  };
+  return {
+    byLabor: ["Services", "Admin"].map(g => build(g, rep.labor.filter(x => LINE_LABOR[x.line] === g))),
+    byFunc: ["Nursing", "Support Service", "Back Office", "Ancillary"].map(g => build(g, rep.labor.filter(x => LINE_FUNC[x.line] === g))),
+  };
+}
 
 export const rangeLabel = (r: HqReport) => r.months.length === 1
   ? `${monthAbbr(r.months[0])} ${r.year}`

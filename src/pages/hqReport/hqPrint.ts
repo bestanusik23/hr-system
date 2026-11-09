@@ -1,10 +1,11 @@
 // Printable full report of รายงาน RAM GROUP (A4 landscape): summary grouped
 // Labor Cost → Function → สายงาน, and the analysis tab. Figures only — no staff names.
 import {
-  LINES, SUMMARY_COLUMNS, summaryCell, monthAbbr,
+  SUMMARY_COLUMNS, summaryCell, monthAbbr,
   type ApiData, type HqReport, type SummaryBlock, type SummaryRow, type TemplateLists,
 } from "./hqReportCalc";
-import { buildAnalysisView, pct, rangeLabel, type Count } from "./hqAnalysis";
+import { buildAnalysisView, laborBreakdown, pct, rangeLabel, type Count, type LaborShare } from "./hqAnalysis";
+import { laborCompareHtml } from "./hqCharts";
 
 const esc = (v: string | number | null | undefined) => String(v ?? "").replace(/[&<>"']/g, c =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -57,21 +58,21 @@ const panel = (title: string, sub: string, body: string, cls = "") => `<div clas
 </div>`;
 
 function laborPanel(rep: HqReport, warning: string): string {
-  const title = "Labor Cost แยกสายงาน";
+  const title = "Labor Cost แยกสายงาน — สัดส่วนเงินเดือน / ค่าเวร / ค่านอกเวลา และสัดส่วนเทียบจำนวนคน";
   if (!rep.laborStatus.some(s => s.hasRegular || s.hasOt)) return panel(title, "", `<div class="empty">ยังไม่มีข้อมูลเงินเดือนในงวดนี้</div>`, "wide");
   const baht = (v: number) => Math.round(v).toLocaleString("en-US");
-  const row = (label: string, regular: number, otShift: number, heads: number, cls = "") => {
-    const cost = regular + otShift;
-    return `<tr class="${cls}"><td>${label}</td><td class="n">${baht(regular)}</td><td class="n">${baht(otShift)}</td><td class="n">${baht(cost)}</td><td class="n">${heads ? baht(cost / heads) : "—"}</td></tr>`;
+  const part = (v: number, cost: number) => `${baht(v)} <span class="sh">(${cost ? pct(v / cost) : "—"})</span>`;
+  const row = (r: LaborShare, cls = "") => {
+    const gap = (r.costShare - r.headShare) * 100;
+    return `<tr class="${cls}"><td>${r.label}</td><td class="n">${part(r.regular, r.cost)}</td><td class="n">${part(r.shift, r.cost)}</td><td class="n">${part(r.ot, r.cost)}</td><td class="n">${baht(r.cost)}</td>
+      <td class="n">${pct(r.costShare)}</td><td class="n">${r.heads.toFixed(r.heads % 1 ? 1 : 0)}</td><td class="n">${pct(r.headShare)}</td>
+      <td class="n">${cls ? "" : `${gap >= 0 ? "+" : ""}${gap.toFixed(1)} จุด`}</td><td class="n">${r.avg ? baht(r.avg) : "—"}</td></tr>`;
   };
-  const sumOf = (rows: typeof rep.labor) => ({
-    regular: rows.reduce((s, x) => s + x.regular, 0), otShift: rows.reduce((s, x) => s + x.otShift, 0), heads: rows.reduce((s, x) => s + x.headcount, 0),
-  });
-  const body = LINES.map(line => { const s = sumOf(rep.labor.filter(x => x.line === line)); return row(line, s.regular, s.otShift, s.heads); }).join("");
-  const all = sumOf(rep.labor);
-  const table = `<table><thead><tr><th>สายงาน</th><th class="n">เงินเดือน + รายได้ประจำ</th><th class="n">ค่านอกเวลา + ค่าเวร</th><th class="n">Labor Cost รวม (บาท)</th><th class="n">เฉลี่ย/คน/เดือน</th></tr></thead>
-    <tbody>${body}${row("รวมทั้งหมด", all.regular, all.otShift, all.heads, "total")}</tbody></table>`;
-  return panel(title, `รายได้จากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง · ค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย${warning ? ` · <span class="cwarn">⚠ ยังไม่ครบ: ${warning}</span>` : ""}`, table, "wide");
+  const { rows, total } = laborBreakdown(rep);
+  const table = `<table><thead><tr><th>สายงาน</th><th class="n">เงินเดือน + รายได้ประจำ</th><th class="n">ค่าเวร</th><th class="n">ค่านอกเวลา</th><th class="n">Labor Cost รวม (บาท)</th>
+      <th class="n">สัดส่วนเงิน</th><th class="n">จำนวนคน</th><th class="n">สัดส่วนคน</th><th class="n">ส่วนต่าง</th><th class="n">เฉลี่ย/คน/เดือน</th></tr></thead>
+    <tbody>${rows.map(r => row(r)).join("")}${row(total, "total")}</tbody></table>`;
+  return panel(title, `(%) ในช่องเงิน = สัดส่วนต่อ Labor Cost ของสายงานนั้น · ส่วนต่าง = สัดส่วนเงิน − สัดส่วนคน · ค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย${warning ? ` · <span class="cwarn">⚠ ยังไม่ครบ: ${warning}</span>` : ""}`, table, "wide");
 }
 
 function analysisHtml(view: ReturnType<typeof buildAnalysisView>, rep: HqReport, costWarning: string): { tiles: string; panels: string } {
@@ -100,12 +101,14 @@ function analysisHtml(view: ReturnType<typeof buildAnalysisView>, rep: HqReport,
       return `<tr><td>${h.line}</td><td class="n">${h.hires}</td><td class="n">${h.resigns}</td><td class="n"><b>${d > 0 ? `▲ +${d}` : d < 0 ? `▼ ${d}` : "0"}</b></td></tr>`;
     }).join("")}</tbody></table>`;
 
+  const compare = laborCompareHtml(rep);
   const panels = [
+    laborPanel(rep, costWarning),
+    compare ? panel("เทียบสัดส่วนจำนวนคนกับสัดส่วนค่าใช้จ่ายเงินเดือน", costWarning ? `<span class="cwarn">⚠ ยังไม่ครบ: ${costWarning}</span>` : "", compare, "wide") : "",
     panel("Turnover รายปี แยกสายงาน", `อัตราลาออกงวดนี้ ปรับเป็นรายปี · เส้นประ = เป้า ${pct(target, 0)}`,
       bars(cur.byLine.map(b => ({ label: b.line, value: b.annualized, text: pct(b.annualized) })), target)),
     panel("รายเดือน", "คน ณ สิ้นเดือน · เริ่มงาน/ลาออกตามรอบ 26–25", monthly),
     panel("รับเข้า vs ลาออก แยกสายงาน", `สุทธิทั้งงวด ${net >= 0 ? "+" : ""}${net} คน (รับเข้า ${cur.hires} · ลาออก ${cur.total.resigns})`, flows),
-    laborPanel(rep, costWarning),
     panel("แนวโน้มอัตรากำลัง — % บรรจุเทียบแผน แยกสายงาน", "มีคน ÷ แผน ณ สิ้นเดือน", trend, "wide"),
     panel("ผู้ลาออกตามอายุงาน",
       `ลาออกช่วงทดลองงาน (&lt; 4 เดือน) ${cur.probationLeavers} คน${cur.total.resigns ? ` (${pct(cur.probationLeavers / cur.total.resigns, 0)} ของผู้ลาออก)` : ""}`,
@@ -166,6 +169,7 @@ export function printHqReport(data: ApiData, rep: HqReport, lists: TemplateLists
   .sect{font-size:9.5pt;font-weight:800;color:#1F3864;margin-bottom:2px}
   .note{font-size:7pt;font-weight:400;color:#64748b;margin-left:6px}
   .cwarn{font-size:7pt;font-weight:600;color:#9A6700;margin-bottom:2px}
+  .sh{font-size:7pt;opacity:.75}
 
   table{width:100%;border-collapse:collapse;font-size:8pt}
   table.fixed{table-layout:fixed}
@@ -209,7 +213,7 @@ ${missing ? `<div class="warn">ข้อมูลยังไม่ครบ: ${
 <h2>1. สรุปอัตรากำลัง ตาม Labor Cost / Function / สายงาน${blocks.length > 1 ? `<span class="note">แผน = Planned · FT / PT = Existing · ว่าง = Vacant · เข้า = เริ่มงาน · ออก = ลาออก</span>` : ""}</h2>
 <div class="blocks ${blocks.length > 1 ? "two" : ""}">${blocks.map(b => summaryBlock(b, blocks.length > 1)).join("")}</div>
 
-<div class="page">
+<div class="${blocks.length > 1 ? "page" : ""}">
   <h2>2. วิเคราะห์</h2>
   <div class="panels">${panels}</div>
   <div class="foot">Planned = แผนอัตรากำลังปัจจุบัน · Existing นับ ณ สิ้นเดือน · เริ่มงาน/ลาออก นับรอบวันที่ 26 เดือนก่อน – 25 ของเดือน · ไม่นับผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม นักศึกษาฝึกงาน และตำแหน่งที่ตั้งเป็น "ไม่นับ" · Labor Cost = รายได้รวมจากไฟล์เงินเดือน หักลาไม่รับค่าจ้าง โดยค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย</div>

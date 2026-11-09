@@ -1,7 +1,7 @@
 import type { Env } from "../../lib/types";
 import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
-// PUT /api/hq-report/labor-cost  { months: [{ pay_month, rows: [{ line, regular, ot_shift, headcount }] }] }
+// PUT /api/hq-report/labor-cost  { months: [{ pay_month, rows: [{ line, regular, ot, shift, headcount }] }] }
 // Replaces the per-สายงาน totals of each pay month. Per-person pay never reaches the server:
 // the payroll file is read in the browser and only these totals are sent. Admin only.
 //
@@ -10,12 +10,15 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 const LINES = ["สายการพยาบาล", "สายบัญชีและการเงิน", "สายสนับสนุนบริการ", "สายสำนักงาน", "สนับสนุนทางการแพทย์"];
 const EXCLUDED = "ไม่นับ";
 
-interface Row { line?: string; regular?: number; ot_shift?: number; headcount?: number }
+interface Row { line?: string; regular?: number; ot?: number; shift?: number; headcount?: number }
 interface Body { months?: { pay_month?: string; rows?: Row[] }[]; dept_name?: string; line?: string }
 
 const migrationError = (e: unknown) => {
   const msg = e instanceof Error ? e.message : String(e);
-  return Response.json({ ok: false, error: msg.includes("no such table") ? "ยังไม่ได้รัน migration 0049_hq_labor_cost.sql ใน D1 Console" : msg }, { status: 500 });
+  const error = msg.includes("no such table") ? "ยังไม่ได้รัน migration 0049_hq_labor_cost.sql ใน D1 Console"
+    : /no column named|no such column/.test(msg) ? "ยังไม่ได้รัน migration 0050_hq_labor_cost_split.sql ใน D1 Console"
+    : msg;
+  return Response.json({ ok: false, error }, { status: 500 });
 };
 
 export const onRequestPut: PagesFunction<Env> = async (ctx) => {
@@ -50,12 +53,12 @@ export const onRequestPut: PagesFunction<Env> = async (ctx) => {
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(m.pay_month ?? "")) return Response.json({ ok: false, error: "งวดเงินเดือนไม่ถูกต้อง" }, { status: 400 });
     stmts.push(db.prepare("DELETE FROM hq_labor_cost WHERE pay_month = ?").bind(m.pay_month));
     for (const r of m.rows ?? []) {
-      const valid = LINES.includes(r.line ?? "") && [r.regular, r.ot_shift, r.headcount].every(v => typeof v === "number" && Number.isFinite(v));
+      const valid = LINES.includes(r.line ?? "") && [r.regular, r.ot, r.shift, r.headcount].every(v => typeof v === "number" && Number.isFinite(v));
       if (!valid) return Response.json({ ok: false, error: "ข้อมูลเงินเดือนไม่ถูกต้อง" }, { status: 400 });
       stmts.push(db.prepare(`
-        INSERT INTO hq_labor_cost (pay_month, line, regular, ot_shift, headcount, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-      `).bind(m.pay_month, r.line, r.regular, r.ot_shift, r.headcount, user.full_name));
+        INSERT INTO hq_labor_cost (pay_month, line, regular, ot, shift, ot_shift, headcount, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      `).bind(m.pay_month, r.line, r.regular, r.ot, r.shift, (r.ot ?? 0) + (r.shift ?? 0), r.headcount, user.full_name));
     }
   }
   try {

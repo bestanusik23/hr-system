@@ -4,7 +4,7 @@
 import * as XLSX from "xlsx";
 import { LINES, type ApiLaborCost, type ApiPayrollDept, type Line } from "./hqReportCalc";
 
-export interface PayrollDept { name: string; headcount: number; regular: number; otShift: number }
+export interface PayrollDept { name: string; headcount: number; regular: number; ot: number; shift: number; otShift: number }
 export interface PayrollFile { fileName: string; payMonth: string; depts: PayrollDept[] }
 
 const t = (v: unknown) => String(v ?? "").trim();
@@ -31,16 +31,21 @@ export function parsePayroll(buf: ArrayBuffer, fileName: string): PayrollFile {
   const firstDeduction = labels.findIndex((l, i) => i > salaryCol && /^หัก/.test(l));
   if (firstDeduction < 0) throw new Error(`${fileName}: ไม่พบคอลัมน์รายการหัก`);
   const income = labels.flatMap((l, i) => (l && i >= salaryCol && i < firstDeduction ? [i] : []));
-  const otCols = income.filter(i => /นอกเวลา|ค่าเวร/.test(labels[i]));
-  const regularCols = income.filter(i => !otCols.includes(i));
+  const otCols = income.filter(i => /นอกเวลา/.test(labels[i]));
+  const shiftCols = income.filter(i => /ค่าเวร/.test(labels[i]));
+  const regularCols = income.filter(i => !otCols.includes(i) && !shiftCols.includes(i));
   const leaveCol = labels.findIndex(l => /ลาไม่รับค่าจ้าง/.test(l));
 
-  const toDept = (name: string, r: unknown[]): PayrollDept => ({
-    name: normalizeDept(name),
-    headcount: parseInt(r.map(t).find(v => /^\d+\s*คน$/.test(v)) ?? "", 10) || 0,
-    regular: round2(regularCols.reduce((s, c) => s + num(r[c]), 0) - (leaveCol >= 0 ? num(r[leaveCol]) : 0)),
-    otShift: round2(otCols.reduce((s, c) => s + num(r[c]), 0)),
-  });
+  const sumCols = (r: unknown[], cols: number[]) => cols.reduce((s, c) => s + num(r[c]), 0);
+  const toDept = (name: string, r: unknown[]): PayrollDept => {
+    const ot = round2(sumCols(r, otCols)), shift = round2(sumCols(r, shiftCols));
+    return {
+      name: normalizeDept(name),
+      headcount: parseInt(r.map(t).find(v => /^\d+\s*คน$/.test(v)) ?? "", 10) || 0,
+      regular: round2(sumCols(r, regularCols) - (leaveCol >= 0 ? num(r[leaveCol]) : 0)),
+      ot, shift, otShift: round2(ot + shift),
+    };
+  };
 
   const depts: PayrollDept[] = [];
   const isSummary = t(rows[h][0]) === "แผนก";
@@ -71,14 +76,10 @@ export function parsePayroll(buf: ArrayBuffer, fileName: string): PayrollFile {
 export const deptLineMap = (map: ApiPayrollDept[]) => new Map(map.map(m => [m.dept_name, m.line]));
 
 /** Per-สายงาน totals to store for one payroll. Departments set to ไม่นับ are left out. */
-export function linesOf(file: PayrollFile, lineOf: Map<string, string>): Omit<ApiLaborCost, "pay_month">[] {
+export function linesOf(file: PayrollFile, lineOf: Map<string, string>): Omit<ApiLaborCost, "pay_month" | "ot_shift">[] {
   return LINES.map((line: Line) => {
     const depts = file.depts.filter(d => lineOf.get(d.name) === line);
-    return {
-      line,
-      regular: round2(depts.reduce((s, d) => s + d.regular, 0)),
-      ot_shift: round2(depts.reduce((s, d) => s + d.otShift, 0)),
-      headcount: depts.reduce((s, d) => s + d.headcount, 0),
-    };
+    const total = (k: "regular" | "ot" | "shift") => round2(depts.reduce((s, d) => s + d[k], 0));
+    return { line, regular: total("regular"), ot: total("ot"), shift: total("shift"), headcount: depts.reduce((s, d) => s + d.headcount, 0) };
   });
 }

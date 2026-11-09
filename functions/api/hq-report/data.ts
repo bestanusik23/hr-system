@@ -34,7 +34,8 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       `).all(),
       db.prepare("SELECT division_name, position, line FROM hq_line_map").all(),
       db.prepare("SELECT employee_id, age, sourcing_channel, reason FROM hq_report_extra").all(),
-      optional("SELECT pay_month, line, regular, ot_shift, headcount FROM hq_labor_cost"),
+      // SELECT * so the report keeps working before migration 0050 adds the ot / shift columns.
+      optional("SELECT * FROM hq_labor_cost"),
       optional("SELECT dept_name, line FROM hq_payroll_dept_map"),
     ]);
     return Response.json({

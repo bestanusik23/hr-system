@@ -1,6 +1,7 @@
 import { useMemo } from "react";
-import { monthAbbr, type ApiData, type HqReport, type TemplateLists } from "./hqReportCalc";
-import { buildAnalysisView, pct, rangeLabel as range, type Count } from "./hqAnalysis";
+import { costInfo, monthAbbr, type ApiData, type HqReport, type TemplateLists } from "./hqReportCalc";
+import { buildAnalysisView, laborBreakdown, pct, rangeLabel as range, type Count, type LaborShare } from "./hqAnalysis";
+import { laborCompareHtml } from "./hqCharts";
 
 // แท็บ "วิเคราะห์" — turnover เทียบเป้า, แนวโน้มอัตรากำลัง, เจาะลึกผู้ลาออก, การสรรหา
 // One hue for all bars (single-series charts); status is shown with an icon + label,
@@ -66,6 +67,57 @@ const countBars = (c: Count[], total: number) => (
     format={v => `${v}`} />
 );
 
+function LaborShareCard({ rep }: { rep: HqReport }) {
+  const { rows, total } = useMemo(() => laborBreakdown(rep), [rep]);
+  const { hasCost, costWarning } = useMemo(() => costInfo(rep, rep.months), [rep]);
+  if (!hasCost) return null;
+  const baht = (v: number) => Math.round(v).toLocaleString("en-US");
+  const part = (v: number, cost: number) => <>{baht(v)} <span style={{ fontSize: 11.5, color: MUTED }}>({cost ? pct(v / cost) : "—"})</span></>;
+  const line = (r: LaborShare, isTotal: boolean) => {
+    const gap = (r.costShare - r.headShare) * 100;
+    return (
+      <tr key={r.label} style={isTotal ? { background: "#F8FAFD", fontWeight: 700 } : undefined}>
+        <td style={{ ...td, whiteSpace: "nowrap" }}>{r.label}</td>
+        <td style={num}>{part(r.regular, r.cost)}</td><td style={num}>{part(r.shift, r.cost)}</td><td style={num}>{part(r.ot, r.cost)}</td>
+        <td style={{ ...num, fontWeight: 700 }}>{baht(r.cost)}</td>
+        <td style={num}>{pct(r.costShare)}</td><td style={num}>{r.heads.toFixed(r.heads % 1 ? 1 : 0)}</td><td style={num}>{pct(r.headShare)}</td>
+        <td style={num}>{isTotal ? "" : `${gap >= 0 ? "+" : ""}${gap.toFixed(1)} จุด`}</td>
+        <td style={num}>{r.avg ? baht(r.avg) : "—"}</td>
+      </tr>
+    );
+  };
+  const heads = ["เงินเดือน + รายได้ประจำ", "ค่าเวร", "ค่านอกเวลา", "Labor Cost รวม (บาท)", "สัดส่วนเงิน", "จำนวนคน", "สัดส่วนคน", "ส่วนต่าง", "เฉลี่ย/คน/เดือน"];
+  return (
+    <div style={card}>
+      <h3 style={h3}>Labor Cost แยกสายงาน — สัดส่วนเงินเดือน / ค่าเวร / ค่านอกเวลา และสัดส่วนเทียบจำนวนคน</h3>
+      <p style={sub}>
+        (%) ในช่องเงิน = สัดส่วนต่อ Labor Cost ของสายงานนั้น · ส่วนต่าง = สัดส่วนเงิน − สัดส่วนคน · ค่านอกเวลาและค่าเวรลงเป็นค่าใช้จ่ายของเดือนก่อนงวดจ่าย
+        {costWarning && <span style={{ display: "block", color: "#9A6700", fontWeight: 600 }}>⚠ ยังไม่ครบ: {costWarning}</span>}
+      </p>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 980 }}>
+          <thead><tr><th style={th}>สายงาน</th>{heads.map(h => <th key={h} style={{ ...th, textAlign: "right" }}>{h}</th>)}</tr></thead>
+          <tbody>{rows.map(r => line(r, false))}{line(total, true)}</tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function LaborCompareCard({ rep }: { rep: HqReport }) {
+  const html = useMemo(() => laborCompareHtml(rep), [rep]);
+  const { costWarning } = useMemo(() => costInfo(rep, rep.months), [rep]);
+  if (!html) return null;
+  return (
+    <div style={card}>
+      <h3 style={h3}>เทียบสัดส่วนจำนวนคนกับสัดส่วนค่าใช้จ่ายเงินเดือน</h3>
+      {costWarning && <p style={{ ...sub, color: "#9A6700", fontWeight: 600 }}>⚠ ยังไม่ครบ: {costWarning}</p>}
+      {/* Built only from fixed labels and computed numbers (see hqCharts.ts). */}
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </div>
+  );
+}
+
 export default function AnalysisTab({ data, rep, lists }: { data: ApiData; rep: HqReport; lists: TemplateLists | null }) {
   const { target, cur, prev, prevRep, ytd, ytdRep, lastMonth, delta, vacancy, net } =
     useMemo(() => buildAnalysisView(data, rep, lists), [data, rep, lists]);
@@ -85,6 +137,9 @@ export default function AnalysisTab({ data, rep, lists }: { data: ApiData; rep: 
         <Tile label={`ตำแหน่งว่าง ณ สิ้น ${lastMonth ? monthAbbr(lastMonth.month) : "—"}`} value={pct(vacancy)}
           note={lastMonth ? `มีคน ${lastMonth.headcount} / แผน ${lastMonth.planned} (ว่าง ${lastMonth.planned - lastMonth.headcount})` : undefined} />
       </div>
+
+      <LaborShareCard rep={rep} />
+      <LaborCompareCard rep={rep} />
 
       <div style={grid}>
         <div style={card}>
