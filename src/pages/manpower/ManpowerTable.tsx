@@ -216,10 +216,12 @@ interface RowMeta {
   isFirstInGroup: boolean;  // first row of this position group
 }
 
-// Apply custom ordering: reorder position groups within each consecutive slot-block.
-// Blocks the user has not reordered with ▲▼ are listed senior-first (managers, heads, staff…).
+/** Seniority of a "divId|position" key — lower is more senior. */
+const rankOf = (posKey: string) => positionLevel(posKey.slice(posKey.indexOf("|") + 1)).rank;
+
+// Order position groups within each consecutive slot-block: always senior-first (managers,
+// heads, staff…); a ▲▼ custom order only rearranges positions of the same level.
 function applyOrder(rows: AugRow[], order: Record<string, number>): AugRow[] {
-  const rankOf = (posKey: string) => positionLevel(posKey.slice(posKey.indexOf("|") + 1)).rank;
   const out: AugRow[] = [];
   let i = 0;
   while (i < rows.length) {
@@ -232,11 +234,10 @@ function applyOrder(rows: AugRow[], order: Record<string, number>): AugRow[] {
       groups.get(k)!.push(rows[i]);
       i++;
     }
-    const bySeniority = [...origSeq].sort((a, b) => rankOf(a) - rankOf(b) || origSeq.indexOf(a) - origSeq.indexOf(b));
     const sorted = [...origSeq].sort((a, b) => {
-      const ai = a in order ? order[a] : bySeniority.indexOf(a) * 100;
-      const bi = b in order ? order[b] : bySeniority.indexOf(b) * 100;
-      return ai - bi;
+      const ai = a in order ? order[a] : origSeq.indexOf(a) * 100;
+      const bi = b in order ? order[b] : origSeq.indexOf(b) * 100;
+      return rankOf(a) - rankOf(b) || ai - bi;
     });
     for (const k of sorted) out.push(...groups.get(k)!);
   }
@@ -562,7 +563,7 @@ export default function ManpowerTable() {
       }
       return true;
     });
-  }, [augRows, q, filterDiv, vacOnly]);
+  }, [orderedRows, q, filterDiv, vacOnly]);
 
   const display = useMemo(() => {
     if (!sortVac) return filtered;
@@ -971,8 +972,10 @@ export default function ManpowerTable() {
                                 const meta = blockMeta[i];
                                 if (!meta || !meta.isFirstInGroup) return null;
                                 const posIdx = meta.blockPosKeys.indexOf(meta.posKey);
-                                const canUp = posIdx > 0;
-                                const canDown = posIdx < meta.blockPosKeys.length - 1;
+                                // Only positions of the same level can swap; seniority order is fixed.
+                                const sameLevel = (j: number) => j >= 0 && j < meta.blockPosKeys.length && rankOf(meta.blockPosKeys[j]) === rankOf(meta.posKey);
+                                const canUp = sameLevel(posIdx - 1);
+                                const canDown = sameLevel(posIdx + 1);
                                 const btnStyle = (active: boolean): React.CSSProperties => ({
                                   background: "none", border: "1px solid #e2e8f0", borderRadius: 3,
                                   padding: "1px 5px", lineHeight: 1, fontSize: 9,
