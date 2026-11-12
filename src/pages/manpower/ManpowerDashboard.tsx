@@ -2,6 +2,11 @@ import { useEffect, useState } from "react";
 import { daysUntil, formatThaiDate } from "../../utils/date";
 import { useAuth, hasRole } from "../../context/AuthContext";
 import ExitChecklistModal from "./ExitChecklistModal";
+import { MANPOWER_ROWS } from "../../data/manpowerPlan";
+
+// Positions in the manpower plan — the same list the new-hire form offers.
+const PLAN_POSITIONS = [...new Set(MANPOWER_ROWS.filter(r => r.type === "slot" && r.pos.trim()).map(r => r.pos.trim()))]
+  .sort((a, b) => a.localeCompare(b, "th"));
 
 /* ── Inline Onboarding Checklist (renders inside the modal, no overlay) ── */
 interface CheckItem { key: string; label: string; completed: boolean; completed_at: string | null; note: string | null; }
@@ -239,6 +244,39 @@ export default function ManpowerDashboard() {
   const [editResignDraft, setEditResignDraft]   = useState<{ resign_date: string; resign_reason: string }>({ resign_date: "", resign_reason: "" });
   const [editResignSaving, setEditResignSaving] = useState(false);
   const [editResignErr, setEditResignErr]       = useState("");
+
+  const [editHireId, setEditHireId]             = useState<number | null>(null);
+  const [editHirePos, setEditHirePos]           = useState("");
+  const [editHireSaving, setEditHireSaving]     = useState(false);
+  const [editHireErr, setEditHireErr]           = useState("");
+
+  function startEditHire(e: NewHireRow) {
+    setEditHireId(e.id);
+    setEditHirePos(e.position ?? "");
+    setEditHireErr("");
+  }
+
+  async function saveEditHire(e: NewHireRow) {
+    const position = editHirePos.replace(/\s+/g, " ").trim();
+    if (!position) { setEditHireErr("กรุณาระบุตำแหน่ง"); return; }
+    if (position === (e.position ?? "")) { setEditHireId(null); return; }
+    setEditHireSaving(true); setEditHireErr("");
+    try {
+      const r = await fetch(`/api/manpower/employees/${e.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position }),
+      });
+      const d = await r.json() as { ok: boolean; error?: string };
+      if (!d.ok) { setEditHireErr(d.error ?? "บันทึกไม่สำเร็จ"); setEditHireSaving(false); return; }
+      const patch = (row: NewHireRow) => row.id === e.id ? { ...row, position } : row;
+      if (isHist) setHistHireList(prev => prev.map(patch));
+      else setData(prev => prev && { ...prev, new_hire_list: prev.new_hire_list.map(patch) });
+      setEditHireId(null);
+    } catch {
+      setEditHireErr("เกิดข้อผิดพลาดในการเชื่อมต่อ");
+    }
+    setEditHireSaving(false);
+  }
 
   function startEditResign(e: ResignRow) {
     setEditResignId(e.id);
@@ -553,6 +591,8 @@ export default function ManpowerDashboard() {
         </div>
       )}
 
+      <datalist id="hire-position-options">{PLAN_POSITIONS.map(p => <option key={p} value={p} />)}</datalist>
+
       {/* ── Employee Detail Modal ─────────────────────────────────────── */}
       {modal && (
         <div onClick={() => { setModal(null); setInModalChecklist(null); }} style={{
@@ -583,20 +623,59 @@ export default function ManpowerDashboard() {
                   ? <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>ไม่มีพนักงานเข้าใหม่ในรอบนี้</div>
                   : <table style={{ width: "100%", borderCollapse: "collapse" }}>
                       <thead><tr style={{ background: "#f8fafc" }}>
-                        {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","ประเภท","วันที่เริ่มงาน","Onboarding"].map(h => (
-                          <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
+                        {["#","ชื่อ-นามสกุล","ตำแหน่ง","ฝ่าย","ประเภท","วันที่เริ่มงาน", canSave ? "" : null,"Onboarding"].filter(h => h !== null).map((h, hi) => (
+                          <th key={h || `_${hi}`} style={{ padding: "9px 12px", textAlign: "left", fontSize: 12,
                             fontWeight: 700, color: "#475569", borderBottom: "2px solid #e2e8f0" }}>{h}</th>
                         ))}
                       </tr></thead>
                       <tbody>
-                        {(isHist ? histHireList : data.new_hire_list).map((e, i) => (
+                        {(isHist ? histHireList : data.new_hire_list).map((e, i) => {
+                          const isEditing = editHireId === e.id;
+                          return (
                           <tr key={e.id} style={{ background: i % 2 === 0 ? "#fafbff" : "#fff", borderBottom: "1px solid #f1f5f9" }}>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#94a3b8" }}>{i + 1}</td>
                             <td style={{ padding: "9px 12px", fontSize: 13, fontWeight: 600, color: "#0a1628" }}>{e.full_name}</td>
-                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#475569" }}>{e.position}</td>
+                            <td style={{ padding: "9px 12px", fontSize: 12, color: "#475569" }}>
+                              {isEditing
+                                ? <input value={editHirePos} onChange={ev => setEditHirePos(ev.target.value)}
+                                    list="hire-position-options" placeholder="เลือกหรือพิมพ์ตำแหน่ง…" autoFocus
+                                    style={{ padding: "5px 8px", borderRadius: 6, border: "1.5px solid #c4cfee",
+                                      fontSize: 12, fontFamily: "inherit", outline: "none", width: 190 }} />
+                                : e.position}
+                            </td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.division_name}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#64748b" }}>{e.emp_type || "—"}</td>
                             <td style={{ padding: "9px 12px", fontSize: 12, color: "#0891b2", fontWeight: 600 }}>{formatThaiDate(e.start_date)}</td>
+                            {canSave && (
+                              <td style={{ padding: "9px 12px" }}>
+                                {isEditing ? (
+                                  <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                                    <button onClick={() => saveEditHire(e)} disabled={editHireSaving}
+                                      style={{ padding: "5px 10px", borderRadius: 8, border: "none",
+                                        background: "#0038c6", color: "#fff", fontSize: 11, fontWeight: 700,
+                                        cursor: editHireSaving ? "not-allowed" : "pointer", fontFamily: "inherit",
+                                        whiteSpace: "nowrap" }}>
+                                      {editHireSaving ? "…" : "บันทึก"}
+                                    </button>
+                                    <button onClick={() => setEditHireId(null)} disabled={editHireSaving}
+                                      style={{ padding: "5px 10px", borderRadius: 8, border: "1.5px solid #e2e8f0",
+                                        background: "#fff", color: "#64748b", fontSize: 11, fontWeight: 600,
+                                        cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                      ยกเลิก
+                                    </button>
+                                    {editHireErr && <span style={{ fontSize: 11, color: "#dc2626" }}>{editHireErr}</span>}
+                                  </div>
+                                ) : (
+                                  <button onClick={() => startEditHire(e)} title="แก้ไขตำแหน่ง"
+                                    style={{ padding: "5px 10px", borderRadius: 8, border: "1.5px solid #c4cfee",
+                                      background: "#fff", fontSize: 11, cursor: "pointer",
+                                      color: "#0038c6", fontWeight: 700, fontFamily: "inherit",
+                                      whiteSpace: "nowrap" }}>
+                                    ✏️ แก้ไข
+                                  </button>
+                                )}
+                              </td>
+                            )}
                             <td style={{ padding: "9px 12px" }}>
                               <button onClick={() => setInModalChecklist({ id: e.id, name: e.full_name })}
                                 style={{ padding: "5px 12px", borderRadius: 8, border: "1.5px solid #c4cfee",
@@ -607,7 +686,8 @@ export default function ManpowerDashboard() {
                               </button>
                             </td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
               )}
