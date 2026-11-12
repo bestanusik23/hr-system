@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { MANPOWER_ROWS, type ManpowerRow } from "../../data/manpowerPlan";
+import { positionLevel } from "../../utils/positionLevel";
 
 interface LiveEmp {
   id: number;
@@ -216,7 +217,9 @@ interface RowMeta {
 }
 
 // Apply custom ordering: reorder position groups within each consecutive slot-block.
+// Blocks the user has not reordered with ▲▼ are listed senior-first (managers, heads, staff…).
 function applyOrder(rows: AugRow[], order: Record<string, number>): AugRow[] {
+  const rankOf = (posKey: string) => positionLevel(posKey.slice(posKey.indexOf("|") + 1)).rank;
   const out: AugRow[] = [];
   let i = 0;
   while (i < rows.length) {
@@ -229,9 +232,10 @@ function applyOrder(rows: AugRow[], order: Record<string, number>): AugRow[] {
       groups.get(k)!.push(rows[i]);
       i++;
     }
+    const bySeniority = [...origSeq].sort((a, b) => rankOf(a) - rankOf(b) || origSeq.indexOf(a) - origSeq.indexOf(b));
     const sorted = [...origSeq].sort((a, b) => {
-      const ai = a in order ? order[a] : origSeq.indexOf(a) * 100;
-      const bi = b in order ? order[b] : origSeq.indexOf(b) * 100;
+      const ai = a in order ? order[a] : bySeniority.indexOf(a) * 100;
+      const bi = b in order ? order[b] : bySeniority.indexOf(b) * 100;
       return ai - bi;
     });
     for (const k of sorted) out.push(...groups.get(k)!);

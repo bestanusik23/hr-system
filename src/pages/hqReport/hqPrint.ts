@@ -2,22 +2,10 @@
 // Labor Cost → Function → สายงาน, and % of people against % of pay. Figures only — no staff names.
 import { LINE_FUNC, LINE_LABOR, SUMMARY_COLUMNS, SUMMARY_LINE_ORDER, summaryCell, type ApiLineMap, type HqReport, type Line, type SummaryBlock, type SummaryRow } from "./hqReportCalc";
 import { laborCompareHtml } from "./hqCharts";
+import { POSITION_TIERS, positionLevel } from "../../utils/positionLevel";
 
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
-// Position levels, senior first. The system has no level field, so it is read from the title.
-const TIERS = ["ผู้บริหาร", "หัวหน้างาน", "วิชาชีพ / เจ้าหน้าที่", "ผู้ช่วย / พนักงาน"];
-const OFFICER_TIER = 2;
-const LEVELS: { tier: number; re: RegExp }[] = [
-  { tier: 0, re: /^ผู้อำนวยการ/ }, { tier: 0, re: /^รองผู้อำนวยการ/ }, { tier: 0, re: /^ผู้ช่วย(รอง)?ผู้อำนวยการ/ },
-  { tier: 0, re: /^(ผู้จัดการ|สมุห์บัญชี)/ }, { tier: 0, re: /^ผู้ช่วยผู้จัดการ/ },
-  { tier: 1, re: /^หัวหน้า/ }, { tier: 1, re: /^รองหัวหน้า/ },
-  { tier: 3, re: /^(ผู้ช่วย|พนักงาน|แม่บ้าน)/ },
-];
-const levelOf = (position: string) => {
-  const index = LEVELS.findIndex(l => l.re.test(position));
-  return index < 0 ? { tier: OFFICER_TIER, index: LEVELS.length } : { tier: LEVELS[index].tier, index };
-};
 
 /** Back-of-page reference: each Function's positions, from the จับคู่สายงาน table (ไม่นับ left out). */
 function positionNote(lineMap: ApiLineMap[]): string {
@@ -30,9 +18,9 @@ function positionNote(lineMap: ApiLineMap[]): string {
     byLine.get(line)!.add(pos);
   }
   const listOf = (line: Line) => {
-    const sorted = [...byLine.get(line)!].sort((a, b) => levelOf(a).index - levelOf(b).index || a.localeCompare(b, "th"));
-    return TIERS.map((label, tier) => {
-      const items = sorted.filter(p => levelOf(p).tier === tier);
+    const sorted = [...byLine.get(line)!].sort((a, b) => positionLevel(a).rank - positionLevel(b).rank || a.localeCompare(b, "th"));
+    return POSITION_TIERS.map((label, tier) => {
+      const items = sorted.filter(p => positionLevel(p).tier === tier);
       return items.length ? `<div class="lv">${label}</div><ul>${items.map(p => `<li>${esc(p)}</li>`).join("")}</ul>` : "";
     }).join("");
   };
