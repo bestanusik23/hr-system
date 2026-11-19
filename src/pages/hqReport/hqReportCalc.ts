@@ -59,13 +59,15 @@ export interface ApiExtra { employee_id: number; age: number | null; sourcing_ch
 /** Monthly totals per สายงาน, by the month the payroll was paid. */
 export interface ApiLaborCost { pay_month: string; line: string; regular: number; ot: number; shift: number; ot_shift: number; headcount: number }
 export interface ApiPayrollDept { dept_name: string; line: string }
-export interface ApiData { employees: ApiEmployee[]; plan: ApiPlan[]; lineMap: ApiLineMap[]; extras: ApiExtra[]; laborCost: ApiLaborCost[]; payrollDeptMap: ApiPayrollDept[] }
+/** Actual OT/shift pay from เมนู ประมาณการ OT และจ่ายจริง. year_month is พ.ศ. ("2569-10") = the month the work was done. */
+export interface ApiOtActual { year_month: string; category: string; amount: number }
+export interface ApiData { employees: ApiEmployee[]; plan: ApiPlan[]; lineMap: ApiLineMap[]; extras: ApiExtra[]; laborCost: ApiLaborCost[]; payrollDeptMap: ApiPayrollDept[]; otActual: ApiOtActual[] }
 
 export async function fetchHqData(): Promise<ApiData> {
   const r = await fetch("/api/hq-report/data");
   const d = await r.json() as { ok: boolean; error?: string } & Partial<ApiData>;
   if (!d.ok) throw new Error(d.error || "โหลดข้อมูลไม่สำเร็จ");
-  return { employees: d.employees ?? [], plan: d.plan ?? [], lineMap: d.lineMap ?? [], extras: d.extras ?? [], laborCost: d.laborCost ?? [], payrollDeptMap: d.payrollDeptMap ?? [] };
+  return { employees: d.employees ?? [], plan: d.plan ?? [], lineMap: d.lineMap ?? [], extras: d.extras ?? [], laborCost: d.laborCost ?? [], payrollDeptMap: d.payrollDeptMap ?? [], otActual: d.otActual ?? [] };
 }
 
 export async function saveLaborCost(months: { pay_month: string; rows: Omit<ApiLaborCost, "pay_month" | "ot_shift">[] }[]) {
@@ -226,7 +228,17 @@ export interface PersonRow {
 export interface UnmappedItem { division: string; position: string; employees: number; planQty: number }
 /** Expense of one month: its own payroll's regular pay + the NEXT payroll's OT/shift pay. */
 export interface LaborRow { month: string; line: Line; regular: number; ot: number; shift: number; otShift: number; headcount: number }
-export interface LaborStatus { month: string; hasRegular: boolean; hasOt: boolean }
+/** otFromMenu: OT/shift pay came from เมนู OT because the next month's payroll is not uploaded yet. */
+export interface LaborStatus { month: string; hasRegular: boolean; hasOt: boolean; otFromMenu: boolean }
+
+/** OT menu category (ot_categories.name) → สายงาน. Unknown categories fall back to สายการพยาบาล. */
+const OT_CATEGORY_LINE: Record<string, Line> = {
+  "RN": "สายการพยาบาล", "Na": "สายการพยาบาล", "On call": "สายการพยาบาล", "SUPERVISOR": "สายการพยาบาล", "ผ่าตัดกระเพาะ": "สายการพยาบาล",
+  "ผช.": "สนับสนุนทางการแพทย์", "ภก.": "สนับสนุนทางการแพทย์", "ภก. (PT)": "สนับสนุนทางการแพทย์",
+  "X-ray": "สนับสนุนทางการแพทย์", "Lab": "สนับสนุนทางการแพทย์", "ตึกรังสีรักษา": "สนับสนุนทางการแพทย์", "ออกหน่วย": "สนับสนุนทางการแพทย์",
+  "cash.": "สายบัญชีและการเงิน", "บัญชี/IT": "สายบัญชีและการเงิน",
+  "Reg.": "สายสนับสนุนบริการ", "อื่นๆ": "สายสนับสนุนบริการ",
+};
 export interface HqReport {
   year: number; months: string[];
   manpower: ManpowerRow[];
@@ -316,11 +328,31 @@ export function buildReportForMonths(data: ApiData, months: string[], lists: Tem
 
   const paid = new Map(data.laborCost.map(x => [`${x.pay_month}|${x.line}`, x]));
   const paidMonths = new Set(data.laborCost.map(x => x.pay_month));
+  // OT menu actuals per month (CE "YYYY-MM") and สายงาน, used only when the next payroll is missing.
+  const menuOt = new Map<string, number>();
+  for (const o of data.otActual) {
+    const amount = Number(o.amount) || 0;
+    if (!amount) continue;
+    const ceMonth = `${Number(o.year_month.slice(0, 4)) - 543}${o.year_month.slice(4, 7)}`;
+    const line = OT_CATEGORY_LINE[norm(o.category)] ?? "สายการพยาบาล";
+    menuOt.set(`${ceMonth}|${line}`, (menuOt.get(`${ceMonth}|${line}`) ?? 0) + amount);
+  }
+  const menuMonths = new Set(data.otActual.filter(o => Number(o.amount) > 0).map(o => `${Number(o.year_month.slice(0, 4)) - 543}${o.year_month.slice(4, 7)}`));
+  const useMenu = (month: string) => !paidMonths.has(nextMonth(month)) && menuMonths.has(month);
   const labor: LaborRow[] = months.flatMap(month => LINES.map(line => {
     const own = paid.get(`${month}|${line}`), next = paid.get(`${nextMonth(month)}|${line}`);
-    return { month, line, regular: own?.regular ?? 0, ot: next?.ot ?? 0, shift: next?.shift ?? 0, otShift: next?.ot_shift ?? 0, headcount: own?.headcount ?? 0 };
+    const base = { month, line, regular: own?.regular ?? 0, headcount: own?.headcount ?? 0 };
+    if (useMenu(month)) {
+      // The OT menu records ค่าเวร (shift pay); it has no separate นอกเวลา figure.
+      const shift = menuOt.get(`${month}|${line}`) ?? 0;
+      return { ...base, ot: 0, shift, otShift: shift };
+    }
+    return { ...base, ot: next?.ot ?? 0, shift: next?.shift ?? 0, otShift: next?.ot_shift ?? 0 };
   }));
-  const laborStatus: LaborStatus[] = months.map(month => ({ month, hasRegular: paidMonths.has(month), hasOt: paidMonths.has(nextMonth(month)) }));
+  const laborStatus: LaborStatus[] = months.map(month => ({
+    month, hasRegular: paidMonths.has(month),
+    hasOt: paidMonths.has(nextMonth(month)) || useMenu(month), otFromMenu: useMenu(month),
+  }));
 
   const toPerson = (e: ApiEmployee, line: Line, month: string): PersonRow => {
     const x = extra.get(e.id);

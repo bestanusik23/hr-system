@@ -17,7 +17,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     throw e;
   });
   try {
-    const [employees, plan, lineMap, extras, laborCost, payrollDeptMap] = await Promise.all([
+    const [employees, plan, lineMap, extras, laborCost, payrollDeptMap, otActual] = await Promise.all([
       db.prepare(`
         SELECT e.id, e.prefix, e.full_name, e.position, e.emp_type, e.emp_status,
                e.start_date, e.resign_date, e.resign_reason, e.resign_type,
@@ -37,6 +37,13 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       // SELECT * so the report keeps working before migration 0050 adds the ot / shift columns.
       optional("SELECT * FROM hq_labor_cost"),
       optional("SELECT dept_name, line FROM hq_payroll_dept_map"),
+      // Actual OT/shift pay keyed in เมนู ประมาณการ OT และจ่ายจริง (year_month is พ.ศ., e.g. 2569-10).
+      // Used for a month whose OT payroll (the next month's) has not been uploaded yet.
+      optional(`
+        SELECT m.year_month, c.name AS category, m.actual_amount AS amount
+        FROM ot_monthly m JOIN ot_categories c ON c.id = m.category_id
+        WHERE m.actual_amount > 0
+      `),
     ]);
     return Response.json({
       ok: true,
@@ -46,6 +53,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
       extras: extras.results ?? [],
       laborCost: laborCost.results ?? [],
       payrollDeptMap: payrollDeptMap.results ?? [],
+      otActual: otActual.results ?? [],
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
