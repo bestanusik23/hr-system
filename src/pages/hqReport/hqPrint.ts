@@ -7,14 +7,37 @@ import { POSITION_TIERS, positionLevel } from "../../utils/positionLevel";
 const esc = (v: string) => v.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
 
 
+// Unit/ward qualifiers dropped from nurse and assistant titles so one role shows once,
+// e.g. ผู้ช่วยเหลือคนไข้ผู้ป่วยใน / ผู้ช่วยเหลือคนไข้ Sleep test → ผู้ช่วยเหลือคนไข้.
+const ROLE_BASES = ["หัวหน้าพยาบาล", "ผู้ช่วยพยาบาล", "ผู้ช่วยเหลือคนไข้", "พยาบาล"];
+const UNIT_SUFFIX = /^(แผนก)?\s*(ผู้ป่วยใน|ผู้ป่วยนอก|อุบัติเหตุและฉุกเฉิน|ฉุกเฉินและอุบัติเหตุ|ห้องผ่าตัด|ห้องคลอด|(ห้อง)?ผู้ป่วยหนัก|(ห้อง)?ผู้ป่วยเด็ก|(ประจำ)?ศูนย์.*|sleep\s*test|opd|ipd|er|icu)?\s*$/i;
+
+/** Same-role spelling: doubled tone marks (ผู้ช่่วย), เเ for แ, stray spaces. */
+const cleanTitle = (pos: string) => pos
+  .replace(/เ[เแ]/g, "แ")
+  .replace(/([ั-ฺ็-๎]{1,2})+/g, "$1")
+  .replace(/\s+/g, " ").trim();
+
+/** One label per role: unit variants of nurse/assistant titles collapse to the base title. */
+function mergedTitle(pos: string): string {
+  const p = cleanTitle(pos);
+  const base = ROLE_BASES.find(b => p.startsWith(b) && UNIT_SUFFIX.test(p.slice(b.length)));
+  return base ?? p;
+}
+
 /** Back-of-page reference: each Function's positions, from the จับคู่สายงาน table (ไม่นับ left out). */
 function positionNote(lineMap: ApiLineMap[]): string {
   const byLine = new Map<Line, Set<string>>();
+  const seen = new Map<Line, Set<string>>();
   for (const m of lineMap) {
     const line = m.line as Line;
-    const pos = m.position.replace(/\s+/g, " ").trim();
+    const pos = mergedTitle(m.position);
     if (!LINE_FUNC[line] || !pos) continue;
-    if (!byLine.has(line)) byLine.set(line, new Set());
+    if (!byLine.has(line)) { byLine.set(line, new Set()); seen.set(line, new Set()); }
+    // Titles differing only by spacing count as the same position.
+    const key = pos.replace(/\s+/g, "").toLowerCase();
+    if (seen.get(line)!.has(key)) continue;
+    seen.get(line)!.add(key);
     byLine.get(line)!.add(pos);
   }
   const listOf = (line: Line) => {
