@@ -138,15 +138,27 @@ export function readTemplateLists(wb: XLSX.WorkBook): TemplateLists {
 }
 
 // ── Period helpers ────────────────────────────────────────────────────────────
-export type PeriodKey = "Q1" | "Q2" | "Q3" | "Q4" | "Y" | `M${number}`; // M01 … M12 = single month
+export type PeriodKey = "Q1" | "Q2" | "Q3" | "Q4" | "Y" | "R" | `M${number}`; // M01 … M12 = single month, R = chosen month range
 const THAI_MONTHS = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
 export const MONTH_PERIODS = THAI_MONTHS.map((_, i) => `M${String(i + 1).padStart(2, "0")}` as PeriodKey);
 export const RANGE_PERIODS: PeriodKey[] = ["Q1", "Q2", "Q3", "Q4", "Y"];
 export const PERIOD_LABEL: Record<PeriodKey, string> = {
-  Q1: "ไตรมาส 1 (ม.ค.–มี.ค.)", Q2: "ไตรมาส 2 (เม.ย.–มิ.ย.)", Q3: "ไตรมาส 3 (ก.ค.–ก.ย.)", Q4: "ไตรมาส 4 (ต.ค.–ธ.ค.)", Y: "ทั้งปี (ม.ค.–ธ.ค.)",
+  Q1: "ไตรมาส 1 (ม.ค.–มี.ค.)", Q2: "ไตรมาส 2 (เม.ย.–มิ.ย.)", Q3: "ไตรมาส 3 (ก.ค.–ก.ย.)", Q4: "ไตรมาส 4 (ต.ค.–ธ.ค.)", Y: "ทั้งปี (ม.ค.–ธ.ค.)", R: "กำหนดเดือนเอง",
   ...Object.fromEntries(MONTH_PERIODS.map((k, i) => [k, THAI_MONTHS[i]])),
 };
+const THAI_MONTH_ABBR = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+/** Months from..to (1–12, either order) of one year, for period "R". */
+export function rangeMonths(year: number, from: number, to: number): string[] {
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  return Array.from({ length: b - a + 1 }, (_, i) => `${year}-${String(a + i).padStart(2, "0")}`);
+}
+export const rangeLabel = (from: number, to: number) => {
+  const [a, b] = from <= to ? [from, to] : [to, from];
+  return a === b ? THAI_MONTHS[a - 1] : `${THAI_MONTH_ABBR[a - 1]}–${THAI_MONTH_ABBR[b - 1]}`;
+};
+export const MONTH_NAMES = THAI_MONTHS;
 export function periodMonths(year: number, p: PeriodKey): string[] {
+  if (p === "R") return periodMonths(year, "Y");
   if (p[0] === "M") return [`${year}-${p.slice(1)}`];
   const start = p === "Y" ? 1 : (Number(p[1]) - 1) * 3 + 1;
   const n = p === "Y" ? 12 : 3;
