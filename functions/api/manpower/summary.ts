@@ -71,10 +71,12 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   `).bind(...sp).all<{ status: string; n: number }>();
 
   // --- By tenure (อายุงาน นับจากวันเริ่มงาน, non-resigned) ---
+  // กลุ่ม "ไม่นับ" (k=0): ผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม + ไม่ระบุวันเริ่มงาน — ไม่รวมในสัดส่วน %
   const yrs = "(julianday('now') - julianday(e.start_date)) / 365.25";
   const byTenure = await db.prepare(`
     SELECT CASE
-             WHEN e.start_date IS NULL OR TRIM(e.start_date) = '' OR julianday(e.start_date) IS NULL THEN 6
+             WHEN COALESCE(TRIM(e.emp_type),'') = 'ผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม' THEN 0
+             WHEN e.start_date IS NULL OR TRIM(e.start_date) = '' OR julianday(e.start_date) IS NULL THEN 0
              WHEN ${yrs} < 1  THEN 1
              WHEN ${yrs} < 3  THEN 2
              WHEN ${yrs} < 5  THEN 3
@@ -86,9 +88,11 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     GROUP BY k ORDER BY k
   `).bind(...sp).all<{ k: number; n: number }>();
   const TENURE_LABEL: Record<number, string> = {
-    1: "น้อยกว่า 1 ปี", 2: "1 – 3 ปี", 3: "3 – 5 ปี", 4: "5 – 10 ปี", 5: "10 ปีขึ้นไป", 6: "ไม่ระบุวันเริ่มงาน",
+    1: "น้อยกว่า 1 ปี", 2: "1 – 3 ปี", 3: "3 – 5 ปี", 4: "5 – 10 ปี", 5: "10 ปีขึ้นไป",
   };
-  const by_tenure = (byTenure.results ?? []).map(r => ({ tenure: TENURE_LABEL[r.k] ?? "ไม่ระบุ", n: r.n }));
+  const tenureRows = byTenure.results ?? [];
+  const by_tenure = tenureRows.filter(r => r.k !== 0).map(r => ({ tenure: TENURE_LABEL[r.k] ?? "ไม่ระบุ", n: r.n }));
+  const tenure_excluded = tenureRows.find(r => r.k === 0)?.n ?? 0;
 
   // --- Monthly trend (last 6 months): new hires vs resignations ---
   const hires = await db.prepare(`
@@ -150,6 +154,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     by_type: byType.results,
     by_status: byStatus.results,
     by_tenure,
+    tenure_excluded,
     trend: { hires: hires.results, resigns: resigns.results },
     near_probation: nearProb.results,
     new_hire_list: newHireList.results,

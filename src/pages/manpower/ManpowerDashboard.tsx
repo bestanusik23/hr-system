@@ -123,6 +123,7 @@ interface Summary {
   by_type: { type: string; n: number }[];
   by_status: { status: string; n: number }[];
   by_tenure?: { tenure: string; n: number }[];
+  tenure_excluded?: number;
   trend: { hires: { m: string; n: number }[]; resigns: { m: string; n: number }[] };
   near_probation: {
     id: number; emp_code: string; full_name: string; position: string;
@@ -450,6 +451,7 @@ export default function ManpowerDashboard() {
   const byTenure    = isHist ? [] : (data?.by_tenure ?? []);
   const tenureSum   = byTenure.reduce((s, t) => s + t.n, 0);
   const tenureTotal = Math.max(1, tenureSum);
+  const tenureExcl  = isHist ? 0 : (data?.tenure_excluded ?? 0);
   const totalRow = (n: number) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12,
       paddingTop: 10, borderTop: "1.5px solid #e2e8f0", fontSize: 13 }}>
@@ -1033,6 +1035,12 @@ export default function ManpowerDashboard() {
               ))}
             </div>
             {totalRow(tenureSum)}
+            {tenureExcl > 0 && (
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: "#94a3b8", marginTop: 6 }}>
+                <span>ไม่นับ (ผู้เช่าสถานที่ประกอบวิชาชีพเวชกรรม / ไม่ระบุวันเริ่มงาน)</span>
+                <span>{tenureExcl} คน</span>
+              </div>
+            )}
           </div>
           )}
         </div>
