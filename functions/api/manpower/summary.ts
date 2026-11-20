@@ -70,6 +70,26 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     GROUP BY e.emp_status ORDER BY n DESC
   `).bind(...sp).all<{ status: string; n: number }>();
 
+  // --- By tenure (อายุงาน นับจากวันเริ่มงาน, non-resigned) ---
+  const yrs = "(julianday('now') - julianday(e.start_date)) / 365.25";
+  const byTenure = await db.prepare(`
+    SELECT CASE
+             WHEN e.start_date IS NULL OR TRIM(e.start_date) = '' OR julianday(e.start_date) IS NULL THEN 6
+             WHEN ${yrs} < 1  THEN 1
+             WHEN ${yrs} < 3  THEN 2
+             WHEN ${yrs} < 5  THEN 3
+             WHEN ${yrs} < 10 THEN 4
+             ELSE 5
+           END AS k, COUNT(*) AS n
+    FROM employees e
+    WHERE e.emp_status != 'resigned'${scope}
+    GROUP BY k ORDER BY k
+  `).bind(...sp).all<{ k: number; n: number }>();
+  const TENURE_LABEL: Record<number, string> = {
+    1: "น้อยกว่า 1 ปี", 2: "1 – 3 ปี", 3: "3 – 5 ปี", 4: "5 – 10 ปี", 5: "10 ปีขึ้นไป", 6: "ไม่ระบุวันเริ่มงาน",
+  };
+  const by_tenure = (byTenure.results ?? []).map(r => ({ tenure: TENURE_LABEL[r.k] ?? "ไม่ระบุ", n: r.n }));
+
   // --- Monthly trend (last 6 months): new hires vs resignations ---
   const hires = await db.prepare(`
     SELECT strftime('%Y-%m', e.start_date) AS m, COUNT(*) AS n
@@ -129,6 +149,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     by_division: byDivision.results,
     by_type: byType.results,
     by_status: byStatus.results,
+    by_tenure,
     trend: { hires: hires.results, resigns: resigns.results },
     near_probation: nearProb.results,
     new_hire_list: newHireList.results,

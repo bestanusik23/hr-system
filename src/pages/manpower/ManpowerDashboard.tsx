@@ -122,6 +122,7 @@ interface Summary {
   by_division: { division: string; n: number }[];
   by_type: { type: string; n: number }[];
   by_status: { status: string; n: number }[];
+  by_tenure?: { tenure: string; n: number }[];
   trend: { hires: { m: string; n: number }[]; resigns: { m: string; n: number }[] };
   near_probation: {
     id: number; emp_code: string; full_name: string; position: string;
@@ -445,6 +446,10 @@ export default function ManpowerDashboard() {
   const divSum      = byDivision.reduce((s, d) => s + d.n, 0);
   const typeSum     = byType.reduce((s, t) => s + t.n, 0);
   const statusSum   = byStatus.reduce((s, t) => s + t.n, 0);
+  // อายุงาน: มีเฉพาะข้อมูลปัจจุบัน (สแนปช็อตย้อนหลังไม่ได้เก็บไว้)
+  const byTenure    = isHist ? [] : (data?.by_tenure ?? []);
+  const tenureSum   = byTenure.reduce((s, t) => s + t.n, 0);
+  const tenureTotal = Math.max(1, tenureSum);
   const totalRow = (n: number) => (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12,
       paddingTop: 10, borderTop: "1.5px solid #e2e8f0", fontSize: 13 }}>
@@ -1007,6 +1012,29 @@ export default function ManpowerDashboard() {
             </div>
             {byType.length > 0 && totalRow(typeSum)}
           </div>
+
+          {byTenure.length > 0 && (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800, color: "#0a1628", marginBottom: 12 }}>สัดส่วนอายุงาน</div>
+            <div style={{ display: "flex", height: 14, borderRadius: 6, overflow: "hidden", marginBottom: 12 }}>
+              {byTenure.map((t, i) => (
+                <div key={t.tenure} title={`${t.tenure}: ${t.n}`}
+                  style={{ width: `${(t.n / tenureTotal) * 100}%`, background: PALETTE[i % PALETTE.length] }} />
+              ))}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {byTenure.map((t, i) => (
+                <div key={t.tenure} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: PALETTE[i % PALETTE.length] }} />
+                  <span style={{ color: "#475569", flex: 1 }}>{t.tenure}</span>
+                  <span style={{ fontWeight: 700, color: "#0a1628" }}>{t.n}</span>
+                  <span style={{ color: "#94a3b8", width: 38, textAlign: "right" }}>{Math.round((t.n / tenureTotal) * 100)}%</span>
+                </div>
+              ))}
+            </div>
+            {totalRow(tenureSum)}
+          </div>
+          )}
         </div>
       </div>
       )}
