@@ -83,18 +83,18 @@ interface AugRow extends ManpowerRow {
   liveEmpObj: LiveEmp | null;
   isOverflow?: boolean;
   isUnknownPos?: boolean;
-  /** slot under a section/subdept marked ยังไม่เปิด: counts as 0 planned, 0 vacant */
+  /** slot marked ยังไม่เปิด, or under a section/subdept that is: counts as 0 planned, 0 vacant */
   inClosed?: boolean;
 }
 
-/** For each row, whether it sits under a closed (ยังไม่เปิด) section or subdept. */
+/** For each row, whether it is closed (ยังไม่เปิด) itself or sits under a closed section or subdept. */
 function closedFlags(rows: ManpowerRow[]): boolean[] {
   let subClosed = false, secClosed = false;
   return rows.map(r => {
     if (r.type === "division") { subClosed = false; secClosed = false; return false; }
     if (r.type === "subdept") { subClosed = !!r.closed; secClosed = false; return subClosed; }
     if (r.type === "section") { secClosed = !!r.closed; return subClosed || secClosed; }
-    return subClosed || secClosed;
+    return subClosed || secClosed || !!r.closed;
   });
 }
 
@@ -410,7 +410,7 @@ export default function ManpowerTable() {
     }
   }
 
-  /** Mark a section/subdept as not yet opened (or reopen it). */
+  /** Mark a section/subdept or a single position as not yet opened (or reopen it). */
   async function setSectionClosed(rowIdx: number, closed: boolean) {
     const prevVal = !!planRows[rowIdx]?.closed;
     setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, closed } : r));
@@ -880,8 +880,14 @@ export default function ManpowerTable() {
                         {/* อัตราตั้งไว้ — แสดง effective plan พร้อม +/- (หรือฟอร์ม "ตั้งอัตรา" ถ้ายังไม่มีในแผน) */}
                         <td style={{ ...td, textAlign: "center", position: "relative" }}>
                           {r.inClosed ? (
-                            <span title="แผนกยังไม่เปิด จึงไม่นับอัตรานี้" style={{ fontSize: 11, color: "#92400e" }}>
+                            <span title={r.closed ? "ตำแหน่งนี้ยังไม่เปิด จึงไม่นับอัตรา" : "แผนกยังไม่เปิด จึงไม่นับอัตรานี้"} style={{ fontSize: 11, color: "#92400e", whiteSpace: "nowrap" }}>
                               <s style={{ color: "#94a3b8" }}>{r.plan}</s> ยังไม่เปิด
+                              {canEdit && r.closed && r._rowIdx >= 0 && (
+                                <button onClick={() => setSectionClosed(r._rowIdx, false)} title="เปิดตำแหน่งนี้: นับอัตราและตำแหน่งว่าง"
+                                  style={{ marginLeft: 4, fontSize: 10, padding: "0 6px", borderRadius: 8, border: "1px solid #f59e0b", background: "#fff", color: "#92400e", cursor: "pointer" }}>
+                                  เปิด
+                                </button>
+                              )}
                             </span>
                           ) : canEdit && r._rowIdx >= 0 ? (
                             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
@@ -902,6 +908,12 @@ export default function ManpowerTable() {
                                   borderRadius:4, background:"#fff", color:"#64748b",
                                   cursor:"pointer", fontSize:11, fontWeight:700 }}>
                                 ＋
+                              </button>
+                              <button onClick={() => setSectionClosed(r._rowIdx, true)}
+                                title="ตำแหน่งนี้ยังไม่เปิด: ไม่นับอัตราและตำแหน่งว่างจนกว่าจะเปิด"
+                                style={{ width:18, height:18, lineHeight:"1", padding:0, border:"1px solid #e2e8f0",
+                                  borderRadius:4, background:"#fff", cursor:"pointer", fontSize:10 }}>
+                                🚧
                               </button>
                             </div>
                           ) : canEdit && r._rowIdx === -1 ? (

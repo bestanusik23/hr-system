@@ -77,7 +77,7 @@ function sumPlanBySection(rows: PlanRowLike[]): Map<string, number> {
     if (r.type === "subdept") { subClosed = !!r.is_closed; secClosed = false; }
     if (r.type === "section") secClosed = !!r.is_closed;
     if (r.type === "section" || r.type === "subdept") { curSection = r.name.trim(); continue; }
-    if (r.type !== "slot" || !curSection || subClosed || secClosed) continue;
+    if (r.type !== "slot" || !curSection || subClosed || secClosed || r.is_closed) continue;
     totals.set(curSection, (totals.get(curSection) ?? 0) + (r.plan_qty || 0));
   }
   return totals;

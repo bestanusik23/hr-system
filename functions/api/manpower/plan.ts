@@ -119,7 +119,7 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   if (typeof body.note   === "string")  { sets.push("note = ?");     vals.push(body.note); }
   if (typeof body.name   === "string")  { sets.push("name = ?");     vals.push(body.name); }
   if (typeof body.pos    === "string" && body.pos.trim()) { sets.push("pos = ?"); vals.push(body.pos.trim()); }
-  // แผนกที่ยังไม่เปิด: set on a section/subdept header; its posts leave Planned and vacancies until reopened.
+  // ยังไม่เปิด: on a section/subdept header (all its posts) or a single slot; leaves Planned and vacancies until reopened.
   if (typeof body.is_closed === "boolean") { sets.push("is_closed = ?"); vals.push(body.is_closed ? 1 : 0); }
 
   if (sets.length === 2) return Response.json({ ok: false, error: "Nothing to update" }, { status: 400 });

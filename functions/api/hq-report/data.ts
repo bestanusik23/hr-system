@@ -7,7 +7,7 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 
 interface PlanRow { type: string; pos: string | null; plan_qty: number | null; is_closed?: number | null; division_name: string }
 
-/** plan_qty per division + position, skipping slots under a closed (ยังไม่เปิด) section or subdept. */
+/** plan_qty per division + position, skipping closed (ยังไม่เปิด) slots and slots under a closed section or subdept. */
 function openPlanByPosition(rows: PlanRow[]): { division_name: string; pos: string; qty: number }[] {
   const totals = new Map<string, { division_name: string; pos: string; qty: number }>();
   let subClosed = false, secClosed = false;
@@ -15,7 +15,7 @@ function openPlanByPosition(rows: PlanRow[]): { division_name: string; pos: stri
     if (r.type === "division") { subClosed = false; secClosed = false; continue; }
     if (r.type === "subdept") { subClosed = !!r.is_closed; secClosed = false; continue; }
     if (r.type === "section") { secClosed = !!r.is_closed; continue; }
-    if (r.type !== "slot" || subClosed || secClosed) continue;
+    if (r.type !== "slot" || subClosed || secClosed || r.is_closed) continue;
     const qty = Number(r.plan_qty) || 0;
     const pos = (r.pos ?? "").trim();
     if (qty <= 0 || !pos) continue;
