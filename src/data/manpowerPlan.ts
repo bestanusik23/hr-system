@@ -6,6 +6,8 @@ export type RowType = 'division' | 'subdept' | 'section' | 'slot';
 export interface ManpowerRow {
   type: RowType; name: string; pos: string; divId: number;
   plan: number; filled: number; vac: number; emp: string; note: string;
+  /** section/subdept header: แผนกที่ยังไม่เปิด — its posts are left out of Planned and vacancies */
+  closed?: boolean;
 }
 
 export const MANPOWER_ROWS: ManpowerRow[] = [

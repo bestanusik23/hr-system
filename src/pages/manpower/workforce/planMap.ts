@@ -13,7 +13,7 @@
 
 import { MANPOWER_ROWS } from "../../../data/manpowerPlan";
 
-interface PlanRowLike { type: string; name: string; plan_qty: number }
+interface PlanRowLike { type: string; name: string; plan_qty: number; is_closed?: number | null }
 
 /**
  * Payroll แผนก name → org-chart section/subdept name(s) whose plan_qty feeds it.
@@ -71,9 +71,13 @@ const SECTION_SHARE_COUNT: Map<string, number> = (() => {
 function sumPlanBySection(rows: PlanRowLike[]): Map<string, number> {
   const totals = new Map<string, number>();
   let curSection = "";
+  let subClosed = false, secClosed = false; // แผนกที่ยังไม่เปิด adds nothing to the bar
   for (const r of rows) {
+    if (r.type === "division") { subClosed = false; secClosed = false; }
+    if (r.type === "subdept") { subClosed = !!r.is_closed; secClosed = false; }
+    if (r.type === "section") secClosed = !!r.is_closed;
     if (r.type === "section" || r.type === "subdept") { curSection = r.name.trim(); continue; }
-    if (r.type !== "slot" || !curSection) continue;
+    if (r.type !== "slot" || !curSection || subClosed || secClosed) continue;
     totals.set(curSection, (totals.get(curSection) ?? 0) + (r.plan_qty || 0));
   }
   return totals;

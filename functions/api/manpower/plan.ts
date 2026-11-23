@@ -6,9 +6,9 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
 
+  // SELECT * so the plan still loads before migration 0051 adds is_closed (แผนกที่ยังไม่เปิด).
   const rows = await ctx.env.HR_DB.prepare(
-    `SELECT id, row_idx, type, name, pos, div_id, plan_qty, note, sort_order, is_active
-     FROM manpower_plan WHERE is_active = 1 ORDER BY sort_order`
+    `SELECT * FROM manpower_plan WHERE is_active = 1 ORDER BY sort_order`
   ).all();
 
   return Response.json({ ok: true, plan: rows.results });
@@ -110,7 +110,7 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   const rowIdx = parseInt(url.searchParams.get("row_idx") ?? "");
   if (isNaN(rowIdx)) return Response.json({ ok: false, error: "row_idx required" }, { status: 400 });
 
-  const body = await ctx.request.json() as { plan_qty?: number; note?: string; name?: string; pos?: string };
+  const body = await ctx.request.json() as { plan_qty?: number; note?: string; name?: string; pos?: string; is_closed?: boolean };
 
   const sets: string[] = ["updated_at = datetime('now')", "updated_by = ?"];
   const vals: (string | number)[] = [user.full_name ?? user.username ?? ""];
@@ -119,13 +119,22 @@ export const onRequestPatch: PagesFunction<Env> = async (ctx) => {
   if (typeof body.note   === "string")  { sets.push("note = ?");     vals.push(body.note); }
   if (typeof body.name   === "string")  { sets.push("name = ?");     vals.push(body.name); }
   if (typeof body.pos    === "string" && body.pos.trim()) { sets.push("pos = ?"); vals.push(body.pos.trim()); }
+  // แผนกที่ยังไม่เปิด: set on a section/subdept header; its posts leave Planned and vacancies until reopened.
+  if (typeof body.is_closed === "boolean") { sets.push("is_closed = ?"); vals.push(body.is_closed ? 1 : 0); }
 
   if (sets.length === 2) return Response.json({ ok: false, error: "Nothing to update" }, { status: 400 });
 
   vals.push(rowIdx);
-  await ctx.env.HR_DB.prepare(
-    `UPDATE manpower_plan SET ${sets.join(", ")} WHERE row_idx = ?`
-  ).bind(...vals).run();
+  try {
+    await ctx.env.HR_DB.prepare(
+      `UPDATE manpower_plan SET ${sets.join(", ")} WHERE row_idx = ?`
+    ).bind(...vals).run();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/no such column: is_closed|no column named is_closed/.test(msg))
+      return Response.json({ ok: false, error: "ยังไม่ได้รัน migration 0051_manpower_plan_closed.sql ใน D1 Console" }, { status: 500 });
+    throw e;
+  }
 
   try {
     await ctx.env.HR_DB.prepare(

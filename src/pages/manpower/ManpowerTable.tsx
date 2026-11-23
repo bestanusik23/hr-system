@@ -83,6 +83,19 @@ interface AugRow extends ManpowerRow {
   liveEmpObj: LiveEmp | null;
   isOverflow?: boolean;
   isUnknownPos?: boolean;
+  /** slot under a section/subdept marked ยังไม่เปิด: counts as 0 planned, 0 vacant */
+  inClosed?: boolean;
+}
+
+/** For each row, whether it sits under a closed (ยังไม่เปิด) section or subdept. */
+function closedFlags(rows: ManpowerRow[]): boolean[] {
+  let subClosed = false, secClosed = false;
+  return rows.map(r => {
+    if (r.type === "division") { subClosed = false; secClosed = false; return false; }
+    if (r.type === "subdept") { subClosed = !!r.closed; secClosed = false; return subClosed; }
+    if (r.type === "section") { secClosed = !!r.closed; return subClosed || secClosed; }
+    return subClosed || secClosed;
+  });
 }
 
 function buildAugRows(rows: ManpowerRow[], { byDivDeptPos, byDivPos, byPosAll }: LiveMaps, allEmps: LiveEmp[]): AugRow[] {
@@ -147,6 +160,12 @@ function buildAugRows(rows: ManpowerRow[], { byDivDeptPos, byDivPos, byPosAll }:
       return { ...r, _rowIdx: i, liveEmp: r.name, liveFilled: 1, liveVac: r.plan - 1, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
     }
     return { ...r, _rowIdx: i, liveEmp: "", liveFilled: 0, liveVac: r.plan, empStatus: "", liveEmpId: null, liveEmpRemark: null, liveEmpObj: null };
+  });
+
+  // Slots in a closed (ยังไม่เปิด) unit: no planned posts, so nothing vacant either.
+  const closed = closedFlags(rows);
+  result.forEach((r, i) => {
+    if (r.type === "slot" && closed[i]) { r.inClosed = true; r.liveVac = -r.liveFilled; }
   });
 
   // Pass 3 — ALL remaining active employees: overflow (known pos) + unmatched (unknown pos).
@@ -323,12 +342,13 @@ export default function ManpowerTable() {
   const fetchPlan = useCallback(() => {
     return fetch("/api/manpower/plan")
       .then(r => r.json())
-      .then((d: { ok: boolean; plan?: Array<{ row_idx: number; type: string; name: string; pos: string; div_id: number; plan_qty: number; note: string }> }) => {
+      .then((d: { ok: boolean; plan?: Array<{ row_idx: number; type: string; name: string; pos: string; div_id: number; plan_qty: number; note: string; is_closed?: number | null }> }) => {
         if (!d.ok || !d.plan?.length) return;
         setPlanRows(d.plan.map(p => ({
           type: p.type as ManpowerRow["type"],
           name: p.name, pos: p.pos, divId: p.div_id,
           plan: p.plan_qty, filled: 0, vac: 0, emp: "", note: p.note,
+          closed: !!p.is_closed,
         })));
       })
       .catch(() => { /* keep current plan */ });
@@ -387,6 +407,25 @@ export default function ManpowerTable() {
       if (!d.ok) setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, plan: cur } : r));
     } catch {
       setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, plan: cur } : r));
+    }
+  }
+
+  /** Mark a section/subdept as not yet opened (or reopen it). */
+  async function setSectionClosed(rowIdx: number, closed: boolean) {
+    const prevVal = !!planRows[rowIdx]?.closed;
+    setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, closed } : r));
+    try {
+      const res = await fetch(`/api/manpower/plan?row_idx=${rowIdx}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_closed: closed }),
+      });
+      const d = await res.json() as { ok: boolean; error?: string };
+      if (!d.ok) {
+        setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, closed: prevVal } : r));
+        alert(d.error ?? "บันทึกไม่สำเร็จ");
+      }
+    } catch {
+      setPlanRows(prev => prev.map((r, i) => i === rowIdx ? { ...r, closed: prevVal } : r));
     }
   }
 
@@ -534,7 +573,7 @@ export default function ManpowerTable() {
     const deptSet = new Set<number>();
     for (const r of augRows) {
       if (r.type === "slot") {
-        totalPlan += r.plan; totalFilled += r.liveFilled;
+        totalPlan += r.inClosed ? 0 : r.plan; totalFilled += r.liveFilled;
       }
       if (r.type === "division") deptSet.add(r.divId);
     }
@@ -756,6 +795,15 @@ export default function ManpowerTable() {
                             fontWeight: 700, fontSize: 12.5, color: "#78690a",
                             borderBottom: "1px solid #f0e000" }}>
                             {r.name}
+                            {canEdit && r._rowIdx >= 0 && (
+                              <button onClick={() => setSectionClosed(r._rowIdx, !r.closed)}
+                                title={r.closed ? "เปิดแผนกแล้ว: นับอัตราและตำแหน่งว่างของแผนกนี้" : "แผนกยังไม่เปิด: ไม่นับอัตราและตำแหน่งว่างจนกว่าจะเปิด"}
+                                style={{ marginLeft: 10, fontSize: 10.5, padding: "1px 8px", borderRadius: 10, cursor: "pointer", fontWeight: 600,
+                                  border: `1px solid ${r.closed ? "#f59e0b" : "#cbd5e1"}`, background: r.closed ? "#fef3c7" : "#fff", color: r.closed ? "#92400e" : "#64748b" }}>
+                                {r.closed ? "🚧 ยังไม่เปิดแผนก" : "เปิดอยู่"}
+                              </button>
+                            )}
+                            {!canEdit && r.closed && <span style={{ marginLeft: 10, fontSize: 10.5, color: "#92400e" }}>🚧 ยังไม่เปิดแผนก</span>}
                           </td>
                         </tr>
                       );
@@ -768,6 +816,15 @@ export default function ManpowerTable() {
                             fontWeight: 600, fontSize: 12, color: "#3b4a8f",
                             borderBottom: "1px solid #dce4f5" }}>
                             {r.name}
+                            {canEdit && r._rowIdx >= 0 && (
+                              <button onClick={() => setSectionClosed(r._rowIdx, !r.closed)}
+                                title={r.closed ? "เปิดแผนกแล้ว: นับอัตราและตำแหน่งว่างของแผนกนี้" : "แผนกยังไม่เปิด: ไม่นับอัตราและตำแหน่งว่างจนกว่าจะเปิด"}
+                                style={{ marginLeft: 10, fontSize: 10.5, padding: "1px 8px", borderRadius: 10, cursor: "pointer", fontWeight: 600,
+                                  border: `1px solid ${r.closed ? "#f59e0b" : "#cbd5e1"}`, background: r.closed ? "#fef3c7" : "#fff", color: r.closed ? "#92400e" : "#64748b" }}>
+                                {r.closed ? "🚧 ยังไม่เปิดแผนก" : "เปิดอยู่"}
+                              </button>
+                            )}
+                            {!canEdit && r.closed && <span style={{ marginLeft: 10, fontSize: 10.5, color: "#92400e" }}>🚧 ยังไม่เปิดแผนก</span>}
                           </td>
                         </tr>
                       );
@@ -775,7 +832,7 @@ export default function ManpowerTable() {
 
                     // slot row
                     slotNum++;
-                    const effPlan = r.plan;
+                    const effPlan = r.inClosed ? 0 : r.plan;
                     const effVac  = effPlan - r.liveFilled;
                     const vacColor = effVac > 0 ? "#dc2626" : effVac < 0 ? "#0891b2" : "#16a34a";
                     const badge = r.empStatus ? STATUS_BADGE[r.empStatus] : null;
@@ -822,7 +879,11 @@ export default function ManpowerTable() {
                         </td>
                         {/* อัตราตั้งไว้ — แสดง effective plan พร้อม +/- (หรือฟอร์ม "ตั้งอัตรา" ถ้ายังไม่มีในแผน) */}
                         <td style={{ ...td, textAlign: "center", position: "relative" }}>
-                          {canEdit && r._rowIdx >= 0 ? (
+                          {r.inClosed ? (
+                            <span title="แผนกยังไม่เปิด จึงไม่นับอัตรานี้" style={{ fontSize: 11, color: "#92400e" }}>
+                              <s style={{ color: "#94a3b8" }}>{r.plan}</s> ยังไม่เปิด
+                            </span>
+                          ) : canEdit && r._rowIdx >= 0 ? (
                             <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:3 }}>
                               <button onClick={() => adjustPlan(r._rowIdx, -1)}
                                 disabled={effPlan <= 0}

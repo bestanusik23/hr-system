@@ -5,6 +5,28 @@ import { getTokenFromCookie, getSessionUser } from "../../lib/auth";
 // Everything period-specific (month cycles, counts, bands) is computed on the client
 // from these rows, so one call serves any quarter/year the admin picks.
 
+interface PlanRow { type: string; pos: string | null; plan_qty: number | null; is_closed?: number | null; division_name: string }
+
+/** plan_qty per division + position, skipping slots under a closed (ยังไม่เปิด) section or subdept. */
+function openPlanByPosition(rows: PlanRow[]): { division_name: string; pos: string; qty: number }[] {
+  const totals = new Map<string, { division_name: string; pos: string; qty: number }>();
+  let subClosed = false, secClosed = false;
+  for (const r of rows) {
+    if (r.type === "division") { subClosed = false; secClosed = false; continue; }
+    if (r.type === "subdept") { subClosed = !!r.is_closed; secClosed = false; continue; }
+    if (r.type === "section") { secClosed = !!r.is_closed; continue; }
+    if (r.type !== "slot" || subClosed || secClosed) continue;
+    const qty = Number(r.plan_qty) || 0;
+    const pos = (r.pos ?? "").trim();
+    if (qty <= 0 || !pos) continue;
+    const key = `${r.division_name}|${pos}`;
+    const t = totals.get(key) ?? { division_name: r.division_name, pos, qty: 0 };
+    t.qty += qty;
+    totals.set(key, t);
+  }
+  return [...totals.values()];
+}
+
 export const onRequestGet: PagesFunction<Env> = async (ctx) => {
   const user = await getSessionUser(ctx.env.HR_DB, getTokenFromCookie(ctx.request));
   if (!user) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -25,12 +47,14 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
         FROM employees e
         LEFT JOIN divisions dv ON dv.id = e.division_id
       `).all(),
+      // Ordered rows (mp.* keeps working before migration 0051 adds is_closed); summed below,
+      // leaving out posts under a section/subdept marked ยังไม่เปิดแผนก.
       db.prepare(`
-        SELECT COALESCE(dv.name, '') AS division_name, TRIM(mp.pos) AS pos, SUM(mp.plan_qty) AS qty
+        SELECT mp.*, COALESCE(dv.name, '') AS division_name
         FROM manpower_plan mp
         LEFT JOIN divisions dv ON dv.id = mp.div_id
-        WHERE mp.type = 'slot' AND mp.is_active = 1 AND mp.plan_qty > 0
-        GROUP BY dv.name, TRIM(mp.pos)
+        WHERE mp.is_active = 1
+        ORDER BY mp.sort_order
       `).all(),
       db.prepare("SELECT division_name, position, line FROM hq_line_map").all(),
       db.prepare("SELECT employee_id, age, sourcing_channel, reason FROM hq_report_extra").all(),
@@ -48,7 +72,7 @@ export const onRequestGet: PagesFunction<Env> = async (ctx) => {
     return Response.json({
       ok: true,
       employees: employees.results ?? [],
-      plan: plan.results ?? [],
+      plan: openPlanByPosition((plan.results ?? []) as unknown as PlanRow[]),
       lineMap: lineMap.results ?? [],
       extras: extras.results ?? [],
       laborCost: laborCost.results ?? [],
